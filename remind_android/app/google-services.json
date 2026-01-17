@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "441962025628",
+    "project_id": "remind-58a16",
+    "storage_bucket": "remind-58a16.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:441962025628:android:26547f95329cfbceced359",
+        "android_client_info": {
+          "package_name": "com.example.remind"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2CJryJF0U06XALevs_FRpNuN-tDBIdn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:441962025628:android:ffc35c1fcaa3c3fdced359",
+        "android_client_info": {
+          "package_name": "com.example.remind_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2CJryJF0U06XALevs_FRpNuN-tDBIdn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
