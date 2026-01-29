@@ -10,21 +10,30 @@
   align-items: center;
   gap: 15px;
   margin-bottom: 10px;
+  position: relative;
 }
 
 .back-button {
-  background: none;
+  background-color: #f0fdf4;
   border: none;
   color: #41d17f;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 400;
   cursor: pointer;
-  padding: 5px 10px;
-  transition: color 0.3s ease;
+  padding: 10px 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .back-button:hover {
+  background-color: #e8f5e9;
   color: #2eb872;
+  transform: translateX(-4px);
 }
 
 .header-with-back h1 {
@@ -32,6 +41,7 @@
   font-weight: 700;
   color: #333;
   margin: 0;
+  flex: 1;
 }
 
 /* Sections */
@@ -205,6 +215,7 @@
   display: flex;
   gap: 12px;
   padding-top: 20px;
+  flex-wrap: wrap;
 }
 
 .action-button {
@@ -217,7 +228,8 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  width: 100%;
+  flex: 1;
+  min-width: 150px;
 }
 
 .action-button:hover:not(:disabled) {
@@ -229,6 +241,16 @@
 .action-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.action-button.logout-btn {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.action-button.logout-btn:hover:not(:disabled) {
+  background-color: #c0392b;
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
 }
 
 .action-buttons {

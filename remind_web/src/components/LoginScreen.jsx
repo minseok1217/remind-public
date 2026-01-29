@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import './AuthScreen.css';
 
-function LoginScreen({ onSwitchToSignup }) {
+function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPassword }) {
   const [accountType, setAccountType] = useState('guardian'); // 'guardian' or 'patient'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,7 +66,7 @@ function LoginScreen({ onSwitchToSignup }) {
       <div className="auth-container">
         <div className="auth-header">
           <h1>REMIND CALL</h1>
-          <p>건강한 뇌, 행복을 찾다</p>
+          <p>기억을 잇다, 마음을 잇다</p>
         </div>
 
         {/* 계정 타입 선택 */}
@@ -126,8 +126,25 @@ function LoginScreen({ onSwitchToSignup }) {
         </form>
 
         <div className="auth-footer">
-          <p>
-            계정이 없으신가요?{' '}
+          <div className="footer-links">
+            <button
+              type="button"
+              className="switch-button"
+              onClick={onSwitchToFindId}
+              disabled={loading}
+            >
+              아이디 찾기
+            </button>
+            <span className="link-divider">|</span>
+            <button
+              type="button"
+              className="switch-button"
+              onClick={onSwitchToFindPassword}
+              disabled={loading}
+            >
+              비밀번호 찾기
+            </button>
+            <span className="link-divider">|</span>
             <button
               type="button"
               className="switch-button"
@@ -136,7 +153,7 @@ function LoginScreen({ onSwitchToSignup }) {
             >
               회원가입
             </button>
-          </p>
+          </div>
         </div>
       </div>
     </div>

@@ -9,12 +9,14 @@ import PhotoManagementScreen from './components/PhotoManagementScreen';
 import StatsScreen from './components/StatsScreen';
 import LoginScreen from './components/LoginScreen';
 import SignupScreen from './components/SignupScreen';
+import FindIdScreen from './components/FindIdScreen';
+import FindPasswordScreen from './components/FindPasswordScreen';
 
 function App() {
   const [activeNav, setActiveNav] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showSignup, setShowSignup] = useState(false);
+  const [authScreen, setAuthScreen] = useState('login'); // 'login', 'signup', 'findId', 'findPassword'
 
   useEffect(() => {
     // Firebase 인증 상태 감시
@@ -48,10 +50,25 @@ function App() {
 
   // 로그인하지 않은 경우
   if (!currentUser) {
-    return showSignup ? (
-      <SignupScreen onSwitchToLogin={() => setShowSignup(false)} />
-    ) : (
-      <LoginScreen onSwitchToSignup={() => setShowSignup(true)} />
+    return (
+      <>
+        {authScreen === 'login' && (
+          <LoginScreen 
+            onSwitchToSignup={() => setAuthScreen('signup')}
+            onSwitchToFindId={() => setAuthScreen('findId')}
+            onSwitchToFindPassword={() => setAuthScreen('findPassword')}
+          />
+        )}
+        {authScreen === 'signup' && (
+          <SignupScreen onSwitchToLogin={() => setAuthScreen('login')} />
+        )}
+        {authScreen === 'findId' && (
+          <FindIdScreen onSwitchToLogin={() => setAuthScreen('login')} />
+        )}
+        {authScreen === 'findPassword' && (
+          <FindPasswordScreen onSwitchToLogin={() => setAuthScreen('login')} />
+        )}
+      </>
     );
   }
 
@@ -82,14 +99,6 @@ function App() {
             <span className="nav-label">사진등록</span>
           </button>
           <button 
-            className={`nav-item ${activeNav === 'management' ? 'active' : ''}`}
-            onClick={() => setActiveNav('management')}
-            title="사진관리"
-          >
-            <span className="nav-icon">🖼️</span>
-            <span className="nav-label">사진관리</span>
-          </button>
-          <button 
             className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
             onClick={() => setActiveNav('stats')}
             title="통계"
@@ -97,9 +106,6 @@ function App() {
             <span className="nav-icon">📊</span>
             <span className="nav-label">통계</span>
           </button>
-        </nav>
-
-        <div className="sidebar-footer">
           <button 
             className={`nav-item ${activeNav === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveNav('profile')}
@@ -108,23 +114,15 @@ function App() {
             <span className="nav-icon">👤</span>
             <span className="nav-label">내 정보</span>
           </button>
-          <button 
-            className="nav-item logout-btn"
-            onClick={handleLogout}
-            title="로그아웃"
-          >
-            <span className="nav-icon">🚪</span>
-            <span className="nav-label">로그아웃</span>
-          </button>
-        </div>
+        </nav>
       </aside>
 
       <main className="main-content">
         {activeNav === 'home' && <MainScreen currentUser={currentUser} />}
-        {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
+        {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} />}
         {activeNav === 'stats' && <StatsScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
-        {activeNav === 'profile' && <ProfileScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
+        {activeNav === 'profile' && <ProfileScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onLogout={handleLogout} />}
       </main>
     </div>
   );

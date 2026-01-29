@@ -10,21 +10,30 @@
   align-items: center;
   gap: 15px;
   margin-bottom: 10px;
+  position: relative;
 }
 
 .back-button {
-  background: none;
+  background-color: #f0fdf4;
   border: none;
   color: #41d17f;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 400;
   cursor: pointer;
-  padding: 5px 10px;
-  transition: color 0.3s ease;
+  padding: 10px 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .back-button:hover {
+  background-color: #e8f5e9;
   color: #2eb872;
+  transform: translateX(-4px);
 }
 
 .header-with-back h1 {
@@ -32,6 +41,7 @@
   font-weight: 700;
   color: #333;
   margin: 0;
+  flex: 1;
 }
 
 /* Score Card */

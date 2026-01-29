@@ -42,7 +42,7 @@ function StatsScreen({ currentUser, onBack }) {
   return (
     <div className="stats-screen">
       <div className="header-with-back">
-        <button className="back-button" onClick={onBack}>← 뒤로가기</button>
+        <button className="back-button" onClick={onBack} title="뒤로가기">←</button>
         <h1>통계 요약</h1>
       </div>
 

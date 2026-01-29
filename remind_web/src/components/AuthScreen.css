@@ -19,21 +19,85 @@
 
 .auth-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 30px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-button {
+  position: absolute;
+  left: -50px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #41d17f;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 20px;
+  transition: all 0.2s;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-button:hover {
+  color: #2eb872;
+  transform: translateY(-50%) translateX(-4px);
 }
 
 .auth-header h1 {
   font-size: 28px;
   font-weight: 700;
-  color: #41d17f;
-  margin: 0 0 8px 0;
-  letter-spacing: 1px;
+  color: #333;
+  margin: 0;
+  letter-spacing: 0.5px;
 }
 
 .auth-header p {
   font-size: 14px;
   color: #999;
   margin: 0;
+}
+
+/* 탭 선택 스타일 */
+.tab-selector {
+  display: flex;
+  gap: 0;
+  margin-bottom: 30px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  background-color: transparent;
+  border: none;
+  color: #999;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 6px;
+}
+
+.tab-button.active {
+  background-color: white;
+  color: #41d17f;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tab-button:hover:not(.active):not(:disabled) {
+  color: #666;
+}
+
+.tab-button:disabled {
+  cursor: not-allowed;
 }
 
 .account-type-selector {
@@ -236,4 +300,183 @@
 .switch-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 전화번호 인증 스타일 */
+.phone-verification-group {
+  display: flex;
+  gap: 8px;
+}
+
+.phone-verification-group input {
+  flex: 1;
+}
+
+.verification-btn {
+  padding: 12px 16px;
+  background-color: #41d17f;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.verification-btn:hover:not(:disabled) {
+  background-color: #2eb872;
+}
+
+.verification-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.verification-input {
+  background-color: #f9f9f9;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.code-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.code-input-group input {
+  flex: 1;
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 4px;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.verification-check-btn {
+  padding: 12px 16px;
+  background-color: #41d17f;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.verification-check-btn:hover:not(:disabled) {
+  background-color: #2eb872;
+}
+
+.verification-check-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.resend-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  background-color: white;
+  color: #41d17f;
+  border: 1px solid #41d17f;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resend-btn:hover:not(:disabled) {
+  background-color: #f5f5f5;
+}
+
+.resend-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.verification-success {
+  padding: 12px;
+  background-color: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+/* 결과 화면 스타일 */
+.result-container {
+  text-align: center;
+  padding: 24px;
+}
+
+.result-message {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.result-message.success {
+  color: #16a34a;
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.result-box {
+  background-color: #f9f9f9;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid #eee;
+}
+
+.result-label {
+  font-size: 12px;
+  color: #999;
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.result-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+  word-break: break-all;
+}
+
+.result-description {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.result-description p {
+  margin: 6px 0;
+}
+
+/* 푸터 링크 스타일 */
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.link-divider {
+  color: #ddd;
+  font-size: 14px;
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
+import { generateVerificationCode, saveVerificationCode, verifyCode, formatPhoneNumber, validatePhoneNumber } from '../services/verificationService';
 import './AuthScreen.css';
 
 function SignupScreen({ onSwitchToLogin }) {
@@ -10,6 +11,10 @@ function SignupScreen({ onSwitchToLogin }) {
   const [guardianPassword, setGuardianPassword] = useState('');
   const [guardianPasswordConfirm, setGuardianPasswordConfirm] = useState('');
   const [guardianName, setGuardianName] = useState('');
+  const [guardianPhoneNumber, setGuardianPhoneNumber] = useState('');
+  const [verificationStep, setVerificationStep] = useState('none'); // 'none', 'sending', 'verifying', 'verified'
+  const [verificationCode, setVerificationCode] = useState('');
+  const [inputVerificationCode, setInputVerificationCode] = useState('');
   
   // 환자 정보
   const [patientName, setPatientName] = useState('');
@@ -18,6 +23,57 @@ function SignupScreen({ onSwitchToLogin }) {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleSendVerification = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!validatePhoneNumber(guardianPhoneNumber)) {
+      setError('유효한 전화번호를 입력해주세요. (010-1234-5678 형식)');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const code = generateVerificationCode();
+      saveVerificationCode(guardianPhoneNumber, code);
+      setVerificationCode(code);
+      setVerificationStep('verifying');
+      
+      // 실제 환경에서는 여기서 SMS API를 통해 code를 전송
+      console.log(`인증번호 [${code}]를 ${guardianPhoneNumber}으로 전송했습니다.`);
+      alert(`인증번호 [${code}]를 전송했습니다.\n(테스트: 인증번호를 입력해주세요)`);
+    } catch (err) {
+      setError('인증번호 전송에 실패했습니다.');
+      console.error('인증번호 전송 오류:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!inputVerificationCode) {
+      setError('인증번호를 입력해주세요.');
+      return;
+    }
+
+    const result = verifyCode(guardianPhoneNumber, inputVerificationCode);
+    if (result.success) {
+      setVerificationStep('verified');
+      setError('');
+    } else {
+      setError(result.message);
+    }
+  };
+
+  const handleResendCode = (e) => {
+    e.preventDefault();
+    setInputVerificationCode('');
+    handleSendVerification(e);
+  };
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -39,6 +95,12 @@ function SignupScreen({ onSwitchToLogin }) {
 
     if (!guardianName.trim() || !patientName.trim()) {
       setError('이름을 모두 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    if (verificationStep !== 'verified') {
+      setError('전화번호 인증을 완료해주세요.');
       setLoading(false);
       return;
     }
@@ -77,9 +139,9 @@ function SignupScreen({ onSwitchToLogin }) {
         uid: guardianUser.uid,
         email: guardianEmail,
         name: guardianName,
+        phoneNumber: guardianPhoneNumber,
         patientId: patientUser.uid,
         createdAt: new Date(),
-        phoneNumber: '',
         relation: '보호자'
       });
 
@@ -180,6 +242,68 @@ function SignupScreen({ onSwitchToLogin }) {
                 required
               />
             </div>
+
+            <div className="form-group">
+              <label>전화번호</label>
+              <div className="phone-verification-group">
+                <input
+                  type="tel"
+                  placeholder="010-1234-5678"
+                  value={guardianPhoneNumber}
+                  onChange={(e) => setGuardianPhoneNumber(formatPhoneNumber(e.target.value))}
+                  disabled={loading || verificationStep !== 'none'}
+                  required
+                />
+                {verificationStep === 'none' && (
+                  <button
+                    type="button"
+                    className="verification-btn"
+                    onClick={handleSendVerification}
+                    disabled={loading || !guardianPhoneNumber}
+                  >
+                    {loading ? '전송 중...' : '인증 요청'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {verificationStep === 'verifying' && (
+              <div className="form-group verification-input">
+                <label>인증번호 (6자리)</label>
+                <div className="code-input-group">
+                  <input
+                    type="text"
+                    placeholder="인증번호를 입력해주세요"
+                    value={inputVerificationCode}
+                    onChange={(e) => setInputVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    maxLength="6"
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    className="verification-check-btn"
+                    onClick={handleVerifyCode}
+                    disabled={loading || inputVerificationCode.length !== 6}
+                  >
+                    {loading ? '확인 중...' : '확인'}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="resend-btn"
+                  onClick={handleResendCode}
+                  disabled={loading}
+                >
+                  재전송
+                </button>
+              </div>
+            )}
+
+            {verificationStep === 'verified' && (
+              <div className="verification-success">
+                ✅ 전화번호가 인증되었습니다.
+              </div>
+            )}
           </div>
 
           {/* 환자 정보 섹션 */}

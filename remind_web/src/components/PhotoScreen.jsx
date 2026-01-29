@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { storage, db } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { extractKeywordsFromPhoto } from '../services/geminiService';
 import './PhotoScreen.css';
 
-function PhotoScreen({ currentUser, onBack }) {
+function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [photoDescription, setPhotoDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -15,6 +16,26 @@ function PhotoScreen({ currentUser, onBack }) {
     if (file) {
       setSelectedFile(file);
       setUploadProgress(0);
+    }
+  };
+
+  // 백그라운드에서 키워드 분석 및 업데이트 (사용자를 기다리게 하지 않음)
+  const analyzeAndUpdateKeywords = async (photoDocId, imageFile, description) => {
+    try {
+      const keywords = await extractKeywordsFromPhoto(imageFile, description);
+      console.log('백그라운드 분석 완료 - 추출된 키워드:', keywords);
+      
+      // Firestore 문서 업데이트
+      const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', photoDocId);
+      await updateDoc(photoDocRef, {
+        keywords: keywords,
+        analyzed: true
+      });
+      
+      console.log('Firebase 업데이트 완료');
+    } catch (error) {
+      console.error('백그라운드 분석 실패:', error);
+      // 에러가 발생해도 무시 (사진은 이미 등록됨)
     }
   };
 
@@ -32,34 +53,36 @@ function PhotoScreen({ currentUser, onBack }) {
       const fileName = `${Date.now()}_${selectedFile.name}`;
       const storageRef = ref(storage, `users/${currentUser.uid}/photos/${fileName}`);
       
-      setUploadProgress(30);
+      setUploadProgress(50);
       
       const snapshot = await uploadBytes(storageRef, selectedFile);
-      
-      setUploadProgress(60);
-      
       const downloadURL = await getDownloadURL(snapshot.ref);
       
-      setUploadProgress(80);
+      setUploadProgress(75);
 
-      // Firestore에 메타데이터 저장 (users/{userId}/photos 컬렉션)
+      // Firestore에 메타데이터 저장 (사용자는 기다리지 않음)
+      console.log('Firestore 저장 시작:', { uid: currentUser.uid, fileName });
       const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
-      await addDoc(userPhotosRef, {
+      console.log('Collection 참조:', userPhotosRef.path);
+      
+      const docRef = await addDoc(userPhotosRef, {
         imageUrl: downloadURL,
         uploadDate: new Date(),
         fileName: fileName,
-        // 초기 정보 (사용자가 입력)
+        // 보호자가 입력한 설명
         description: photoDescription,
         date: new Date().toISOString().split('T')[0],
         tag: '통화 전',
-        // AI 분석 예약 필드
-        name: null,
+        // 초기값 (백그라운드에서 업데이트될 예정)
+        keywords: [],
         analyzed: false
       });
+      
+      console.log('Firestore 저장 완료:', docRef.id);
 
       setUploadProgress(100);
 
-      // 성공 메시지
+      // 성공 메시지 - 사용자는 바로 보임
       alert('✅ 사진이 등록되었습니다!');
       
       // 초기화
@@ -70,10 +93,15 @@ function PhotoScreen({ currentUser, onBack }) {
       // 잠깐 후 메인으로 돌아가기
       setTimeout(() => {
         onBack();
-      }, 1500);
+      }, 1000);
+
+      // 백그라운드에서 AI 분석 (비동기로 진행)
+      analyzeAndUpdateKeywords(docRef.id, selectedFile, photoDescription);
       
     } catch (error) {
       console.error('업로드 실패:', error);
+      console.error('에러 코드:', error.code);
+      console.error('에러 메시지:', error.message);
       alert(`❌ 업로드 실패: ${error.message}`);
       setIsUploading(false);
       setUploadProgress(0);
@@ -83,7 +111,7 @@ function PhotoScreen({ currentUser, onBack }) {
   return (
     <div className="photo-screen">
       <div className="header-with-back">
-        <button className="back-button" onClick={onBack}>← 뒤로가기</button>
+        <button className="back-button" onClick={onBack} title="뒤로가기">←</button>
         <h1>사진 등록</h1>
       </div>
 
@@ -148,6 +176,15 @@ function PhotoScreen({ currentUser, onBack }) {
         >
           {isUploading ? `업로드 중... ${uploadProgress}%` : '등록 하기'}
         </button>
+        {onGoToManagement && (
+          <button 
+            className="action-button secondary" 
+            onClick={onGoToManagement}
+            disabled={isUploading}
+          >
+            사진 관리하기 →
+          </button>
+        )}
       </div>
     </div>
   );

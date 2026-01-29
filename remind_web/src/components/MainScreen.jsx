@@ -16,9 +16,12 @@ function MainScreen({ currentUser }) {
 
   const loadUserInfo = async () => {
     try {
+      console.log('현재 사용자 UID:', currentUser.uid);
+      
       // 현재 사용자가 보호자인지 환자인지 확인
       const guardianDocRef = doc(db, 'guardians', currentUser.uid);
       const guardianDocSnap = await getDoc(guardianDocRef);
+      console.log('guardians/{uid} 문서 존재:', guardianDocSnap.exists());
 
       if (guardianDocSnap.exists()) {
         // 보호자 계정 - 환자 정보 로드
@@ -36,12 +39,21 @@ function MainScreen({ currentUser }) {
         // 환자 계정인 경우
         const patientDocRef = doc(db, 'patients', currentUser.uid);
         const patientDocSnap = await getDoc(patientDocRef);
+        console.log('patients/{uid} 문서 존재:', patientDocSnap.exists());
         if (patientDocSnap.exists()) {
           setPatientInfo(patientDocSnap.data());
         }
       }
     } catch (error) {
       console.error('사용자 정보 로드 실패:', error);
+      console.error('에러 코드:', error.code);
+      console.error('에러 메시지:', error.message);
+      // 사용자에게 문제 원인을 간단히 안내
+      alert(
+        `사용자 정보 로드 실패: ${error.code} - ${error.message}\n\n` +
+        '원인: Firestore 보안 규칙 또는 인증(로그인) 문제일 수 있습니다.\n' +
+        '해결: Firebase 콘솔의 Firestore 규칙에서 `guardians/{uid}` 및 `patients/{uid}` 읽기 권한을 확인하세요.'
+      );
     } finally {
       setLoading(false);
     }

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
+import { signOut } from 'firebase/auth';
+import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import './ProfileScreen.css';
 
-function ProfileScreen({ currentUser, onBack }) {
+function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [guardianData, setGuardianData] = useState({
     name: '',
     email: '',
@@ -120,6 +121,20 @@ function ProfileScreen({ currentUser, onBack }) {
     }));
   };
 
+  const handleLogout = async () => {
+    if (window.confirm('로그아웃 하시겠습니까?')) {
+      try {
+        await signOut(auth);
+        if (onLogout) {
+          onLogout();
+        }
+      } catch (error) {
+        console.error('로그아웃 실패:', error);
+        alert('로그아웃 실패: ' + error.message);
+      }
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -166,7 +181,7 @@ function ProfileScreen({ currentUser, onBack }) {
   return (
     <div className="profile-screen">
       <div className="header-with-back">
-        <button className="back-button" onClick={onBack}>← 뒤로가기</button>
+        <button className="back-button" onClick={onBack} title="뒤로가기">←</button>
         <h1>계정 관리 및 설정</h1>
       </div>
 
@@ -379,12 +394,20 @@ function ProfileScreen({ currentUser, onBack }) {
       {/* Action Button */}
       <div className="action-section">
         {!isEditing ? (
-          <button 
-            className="action-button"
-            onClick={handleEditClick}
-          >
-            수정 하기
-          </button>
+          <>
+            <button 
+              className="action-button"
+              onClick={handleEditClick}
+            >
+              수정 하기
+            </button>
+            <button 
+              className="action-button logout-btn"
+              onClick={handleLogout}
+            >
+              로그아웃
+            </button>
+          </>
         ) : (
           <div className="action-buttons">
             <button 
