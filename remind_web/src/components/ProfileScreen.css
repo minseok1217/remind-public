@@ -1,0 +1,251 @@
+.profile-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  padding-bottom: 50px;
+}
+
+.header-with-back {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #41d17f;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 10px;
+  transition: color 0.3s ease;
+}
+
+.back-button:hover {
+  color: #2eb872;
+}
+
+.header-with-back h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+/* Sections */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+/* Info Cards */
+.info-card {
+  background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.icon {
+  font-size: 20px;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+/* Setting Cards */
+.setting-card {
+  background-color: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #f0f0f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.setting-description {
+  font-size: 13px;
+  color: #999;
+  margin-left: 32px;
+}
+
+.time-selector {
+  margin-left: 32px;
+  margin-top: 10px;
+}
+
+.time-selector input {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  background-color: #f9f9f9;
+}
+
+.time-selector input:focus {
+  outline: none;
+  border-color: #41d17f;
+  background-color: white;
+}
+
+.time-display {
+  margin-left: 32px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #41d17f;
+}
+
+.info-input {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  background-color: #f9f9f9;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.info-input:focus {
+  outline: none;
+  border-color: #41d17f;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(65, 209, 127, 0.1);
+}
+
+.gender-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.gender-btn {
+  flex: 1;
+  padding: 8px;
+  background-color: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gender-btn:hover:not(:disabled) {
+  background-color: #eee;
+}
+
+.gender-btn.active {
+  background-color: #41d17f;
+  color: white;
+  border-color: #41d17f;
+}
+
+.gender-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Action Section */
+.action-section {
+  display: flex;
+  gap: 12px;
+  padding-top: 20px;
+}
+
+.action-button {
+  background-color: #41d17f;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.action-button:hover:not(:disabled) {
+  background-color: #2eb872;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(65, 209, 127, 0.3);
+}
+
+.action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.action-buttons .action-button {
+  flex: 1;
+}
+
+.cancel-btn {
+  background-color: #e0e0e0;
+  color: #666;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background-color: #d0d0d0;
+}

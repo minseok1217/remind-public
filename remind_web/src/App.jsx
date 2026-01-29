@@ -1,57 +1,131 @@
-import DummyDataGenerator from './DummyDataGenerator';
 import { useState, useEffect } from 'react';
-import { db } from './firebase';
-import { collection, addDoc, getDocs } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import './App.css';
+import MainScreen from './components/MainScreen';
+import ProfileScreen from './components/ProfileScreen';
+import PhotoScreen from './components/PhotoScreen';
+import PhotoManagementScreen from './components/PhotoManagementScreen';
+import StatsScreen from './components/StatsScreen';
+import LoginScreen from './components/LoginScreen';
+import SignupScreen from './components/SignupScreen';
 
 function App() {
-  const [status, setStatus] = useState("데이터베이스 연결 시도 중...");
-  const [dataList, setDataList] = useState([]);
+  const [activeNav, setActiveNav] = useState('home');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
-    const testDB = async () => {
-      try {
-        await addDoc(collection(db, "connection_test"), {
-          message: "Hello Firebase!",
-          timestamp: new Date()
-        });
-        console.log("✅ 데이터 쓰기 성공!");
-        const querySnapshot = await getDocs(collection(db, "connection_test"));
-        
-        const loadedData = [];
-        querySnapshot.forEach((doc) => {
-          loadedData.push({ id: doc.id, ...doc.data() });
-        });
-        
-        console.log("✅ 데이터 읽기 성공!", loadedData);
-        setDataList(loadedData);
-        setStatus("🎉 DB 연결 성공! (콘솔창도 확인해보세요)");
+    // Firebase 인증 상태 감시
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setLoading(false);
+    });
 
-      } catch (error) {
-        console.error("❌ 에러 발생:", error);
-        setStatus(`연결 실패: ${error.message}`);
-      }
-    };
-
-    testDB();
+    return unsubscribe;
   }, []);
 
-  return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Remind Web DB 테스트</h1>
-      <h2>상태: {status}</h2>
-      
-      <h3>불러온 데이터 목록:</h3>
-      <ul>
-        {dataList.map((item) => (
-          <li key={item.id}>
-            <strong>ID:</strong> {item.id} <br/>
-            <strong>메시지:</strong> {item.message}
-          </li>
-        ))}
-      </ul>
+  const handleLogout = async () => {
+    if (window.confirm('로그아웃 하시겠습니까?')) {
+      try {
+        await signOut(auth);
+        setActiveNav('home');
+      } catch (error) {
+        console.error('로그아웃 실패:', error);
+      }
+    }
+  };
 
-      {/* 👇 더미 데이터 생성기 */}
-      <DummyDataGenerator />
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>로딩 중...</p>
+      </div>
+    );
+  }
+
+  // 로그인하지 않은 경우
+  if (!currentUser) {
+    return showSignup ? (
+      <SignupScreen onSwitchToLogin={() => setShowSignup(false)} />
+    ) : (
+      <LoginScreen onSwitchToSignup={() => setShowSignup(true)} />
+    );
+  }
+
+  // 로그인된 경우
+  return (
+    <div className="app-container">
+      <aside className="sidebar">
+        <div className="app-logo">
+          <div className="logo-icon">R</div>
+          <span className="logo-text">REMIND CALL</span>
+        </div>
+        
+        <nav className="nav-menu">
+          <button 
+            className={`nav-item ${activeNav === 'home' ? 'active' : ''}`}
+            onClick={() => setActiveNav('home')}
+            title="홈"
+          >
+            <span className="nav-icon">🏠</span>
+            <span className="nav-label">홈</span>
+          </button>
+          <button 
+            className={`nav-item ${activeNav === 'photo' ? 'active' : ''}`}
+            onClick={() => setActiveNav('photo')}
+            title="사진등록"
+          >
+            <span className="nav-icon">📸</span>
+            <span className="nav-label">사진등록</span>
+          </button>
+          <button 
+            className={`nav-item ${activeNav === 'management' ? 'active' : ''}`}
+            onClick={() => setActiveNav('management')}
+            title="사진관리"
+          >
+            <span className="nav-icon">🖼️</span>
+            <span className="nav-label">사진관리</span>
+          </button>
+          <button 
+            className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
+            onClick={() => setActiveNav('stats')}
+            title="통계"
+          >
+            <span className="nav-icon">📊</span>
+            <span className="nav-label">통계</span>
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <button 
+            className={`nav-item ${activeNav === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveNav('profile')}
+            title="내 정보"
+          >
+            <span className="nav-icon">👤</span>
+            <span className="nav-label">내 정보</span>
+          </button>
+          <button 
+            className="nav-item logout-btn"
+            onClick={handleLogout}
+            title="로그아웃"
+          >
+            <span className="nav-icon">🚪</span>
+            <span className="nav-label">로그아웃</span>
+          </button>
+        </div>
+      </aside>
+
+      <main className="main-content">
+        {activeNav === 'home' && <MainScreen currentUser={currentUser} />}
+        {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
+        {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} />}
+        {activeNav === 'stats' && <StatsScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
+        {activeNav === 'profile' && <ProfileScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
+      </main>
     </div>
   );
 }
