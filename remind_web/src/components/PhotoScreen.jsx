@@ -21,20 +21,28 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
   // 백그라운드에서 키워드 분석 및 업데이트 (사용자를 기다리게 하지 않음)
   const analyzeAndUpdateKeywords = async (photoDocId, imageFile, description) => {
+    console.log('🔍 백그라운드 키워드 분석 시작:', { photoDocId, fileName: imageFile.name });
     try {
-      const keywords = await extractKeywordsFromPhoto(imageFile, description);
-      console.log('백그라운드 분석 완료 - 추출된 키워드:', keywords);
+      const analysisResult = await extractKeywordsFromPhoto(imageFile, description);
+      console.log('✅ 백그라운드 분석 완료 - 결과:', analysisResult);
       
       // Firestore 문서 업데이트
-      const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', photoDocId);
+      const photoDocRef = doc(db, 'guardians', currentUser.uid, 'photos', photoDocId);
       await updateDoc(photoDocRef, {
-        keywords: keywords,
+        keywords: analysisResult.keywords || [],
+        detailedDescription: analysisResult.detailedDescription || '',
+        people: analysisResult.people || [],
+        location: analysisResult.location || '',
+        emotion: analysisResult.emotion || '',
+        situation: analysisResult.situation || '',
+        conversationStarters: analysisResult.conversationStarters || [],
         analyzed: true
       });
       
-      console.log('Firebase 업데이트 완료');
+      console.log('✅ Firebase 업데이트 완료 - 키워드 저장됨');
     } catch (error) {
-      console.error('백그라운드 분석 실패:', error);
+      console.error('❌ 백그라운드 분석 실패:', error);
+      console.error('❌ 에러 상세:', error.message, error.stack);
       // 에러가 발생해도 무시 (사진은 이미 등록됨)
     }
   };
@@ -61,24 +69,27 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       setUploadProgress(75);
 
       // Firestore에 메타데이터 저장 (사용자는 기다리지 않음)
-      console.log('Firestore 저장 시작:', { uid: currentUser.uid, fileName });
-      const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
-      console.log('Collection 참조:', userPhotosRef.path);
+      console.log('📝 Firestore 저장 시작:', { uid: currentUser.uid, fileName });
+      const userPhotosRef = collection(db, 'guardians', currentUser.uid, 'photos');
+      console.log('📝 Collection 참조:', userPhotosRef.path);
       
       const docRef = await addDoc(userPhotosRef, {
         imageUrl: downloadURL,
+        photoURL: downloadURL,
         uploadDate: new Date(),
+        createdAt: new Date(),
         fileName: fileName,
         // 보호자가 입력한 설명
         description: photoDescription,
         date: new Date().toISOString().split('T')[0],
         tag: '통화 전',
+        callStatus: '통화전',
         // 초기값 (백그라운드에서 업데이트될 예정)
         keywords: [],
         analyzed: false
       });
       
-      console.log('Firestore 저장 완료:', docRef.id);
+      console.log('✅ Firestore 저장 완료:', docRef.id);
 
       setUploadProgress(100);
 
@@ -96,6 +107,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       }, 1000);
 
       // 백그라운드에서 AI 분석 (비동기로 진행)
+      console.log('🚀 백그라운드 분석 호출:', { docId: docRef.id, fileSize: selectedFile.size });
       analyzeAndUpdateKeywords(docRef.id, selectedFile, photoDescription);
       
     } catch (error) {

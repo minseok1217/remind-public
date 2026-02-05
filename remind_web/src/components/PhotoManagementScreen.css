@@ -73,6 +73,12 @@
   color: #856404;
 }
 
+.status-badge.completed {
+  background-color: #e8f5e9;
+  border-color: #4caf50;
+  color: #2e7d32;
+}
+
 .status-icon {
   font-size: 16px;
   animation: pulse 2s infinite;
@@ -177,7 +183,39 @@
 }
 
 .photo-card.pre-call {
+  border: 2px solid #fff3cd;
+}
+
+.photo-card.completed {
   border: 2px solid #e8f5e9;
+}
+
+.call-status-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.photo-emotion {
+  font-size: 12px;
+  color: #888;
+  margin: 5px 0;
+}
+
+.completed-tag {
+  background-color: #e8f5e9 !important;
+  color: #2e7d32 !important;
+}
+
+.pre-call-tag {
+  background-color: #fff3cd !important;
+  color: #856404 !important;
 }
 
 .photo-image-container {

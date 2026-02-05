@@ -20,7 +20,7 @@ function PhotoManagementScreen({ currentUser }) {
     setIsLoading(true);
     try {
       // Firestore에서 사진 메타데이터 불러오기 (사용자별)
-      const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
+      const userPhotosRef = collection(db, 'guardians', currentUser.uid, 'photos');
       const snapshot = await getDocs(userPhotosRef);
       
       const photoList = snapshot.docs.map(doc => ({
@@ -43,7 +43,7 @@ function PhotoManagementScreen({ currentUser }) {
     setDeletingId(photoId);
     try {
       // Firestore에서 삭제
-      const photoRef = doc(db, 'users', currentUser.uid, 'photos', photoId);
+      const photoRef = doc(db, 'guardians', currentUser.uid, 'photos', photoId);
       await deleteDoc(photoRef);
 
       // Storage에서 삭제 (필요한 경우)
@@ -59,11 +59,22 @@ function PhotoManagementScreen({ currentUser }) {
 
   const filteredPhotos = selectedTag === 'all' 
     ? photos 
-    : photos.filter(p => p.tag && p.tag === selectedTag);
+    : photos.filter(p => {
+        const status = p.callStatus || p.tag;
+        return status === selectedTag;
+      });
 
-  const tags = [...new Set(photos.filter(p => p.tag).map(p => p.tag))];
-  const analyzedPhotos = photos.filter(p => p.name && p.analyzed);
-  const preCallPhotos = photos.filter(p => !p.name && p.tag === '통화 전');
+  const tags = ['통화전', '통화후'];
+  
+  // 통화전 사진 (callStatus가 '통화전'이거나 tag가 '통화 전'인 경우)
+  const preCallPhotos = photos.filter(p => 
+    p.callStatus === '통화전' || (p.tag === '통화 전' && !p.callStatus)
+  );
+  
+  // 통화후 사진
+  const postCallPhotos = photos.filter(p => 
+    p.callStatus === '통화후' || p.tag === '통화 후'
+  );
 
   return (
     <div className="photo-management-screen">
@@ -81,52 +92,63 @@ function PhotoManagementScreen({ currentUser }) {
       </div>
 
       {/* Analysis Status */}
-      {preCallPhotos.length > 0 && (
-        <div className="analysis-status">
-          <div className="status-badge">
-            <span className="status-icon">⏳</span>
-            <span className="status-text">통화 대기 중: {preCallPhotos.length}개</span>
-          </div>
+      <div className="analysis-status">
+        <div className="status-badge">
+          <span className="status-icon">📞</span>
+          <span className="status-text">통화 전: {preCallPhotos.length}개</span>
         </div>
-      )}
+        <div className="status-badge completed">
+          <span className="status-icon">✅</span>
+          <span className="status-text">통화 후: {postCallPhotos.length}개</span>
+        </div>
+      </div>
 
       {/* Tags Filter */}
-      {analyzedPhotos.length > 0 && (
-        <div className="tags-container">
-          <button 
-            className={`tag-btn ${selectedTag === 'all' ? 'active' : ''}`}
-            onClick={() => setSelectedTag('all')}
-          >
-            전체
-          </button>
-          {tags.map(tag => (
-            <button
-              key={tag}
-              className={`tag-btn ${selectedTag === tag ? 'active' : ''}`}
-              onClick={() => setSelectedTag(tag)}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="tags-container">
+        <button 
+          className={`tag-btn ${selectedTag === 'all' ? 'active' : ''}`}
+          onClick={() => setSelectedTag('all')}
+        >
+          전체 ({photos.length})
+        </button>
+        <button 
+          className={`tag-btn ${selectedTag === '통화전' ? 'active' : ''}`}
+          onClick={() => setSelectedTag('통화전')}
+        >
+          통화 전 ({preCallPhotos.length})
+        </button>
+        <button 
+          className={`tag-btn ${selectedTag === '통화후' ? 'active' : ''}`}
+          onClick={() => setSelectedTag('통화후')}
+        >
+          통화 후 ({postCallPhotos.length})
+        </button>
+      </div>
 
-      {/* Photos Grid - AI 분석 완료된 사진 */}
-      {analyzedPhotos.length > 0 && (
+      {/* Photos Grid - 전체 사진 */}
+      {photos.length > 0 && (
         <div className="photos-grid">
-          {filteredPhotos.map(photo => (
-            <div key={photo.id} className="photo-card">
+          {(selectedTag === 'all' ? photos : selectedTag === '통화전' ? preCallPhotos : postCallPhotos).map(photo => (
+            <div key={photo.id} className={`photo-card ${photo.callStatus === '통화후' || photo.tag === '통화 후' ? 'completed' : 'pre-call'}`}>
               <div className="photo-image-container">
                 <img 
-                  src={photo.imageUrl} 
-                  alt={photo.name || '분석 중...'}
+                  src={photo.photoURL || photo.imageUrl} 
+                  alt={photo.description || '사진'}
                   className="photo-image"
                 />
+                <div className="call-status-badge">
+                  {photo.callStatus === '통화후' || photo.tag === '통화 후' ? '✅ 통화 완료' : '📞 통화 대기'}
+                </div>
               </div>
               <div className="photo-info">
-                <h3 className="photo-name">{photo.name}</h3>
+                <h3 className="photo-name">{photo.description || photo.name || '사진'}</h3>
+                {photo.keywords?.emotion && (
+                  <p className="photo-emotion">분위기: {photo.keywords.emotion}</p>
+                )}
                 <div className="photo-meta">
-                  <span className="photo-tag">{photo.tag}</span>
+                  <span className={`photo-tag ${photo.callStatus === '통화후' || photo.tag === '통화 후' ? 'completed-tag' : 'pre-call-tag'}`}>
+                    {photo.callStatus === '통화후' || photo.tag === '통화 후' ? '통화 후' : '통화 전'}
+                  </span>
                   <button
                     className={`delete-btn ${deletingId === photo.id ? 'deleting' : ''}`}
                     onClick={() => handleDeletePhoto(photo.id)}
@@ -140,43 +162,6 @@ function PhotoManagementScreen({ currentUser }) {
             </div>
           ))}
         </div>
-      )}
-
-      {/* Photos Grid - 통화 전 사진 */}
-      {preCallPhotos.length > 0 && (
-        <>
-          <div className="section-title">통화 대기 중</div>
-          <div className="photos-grid">
-            {preCallPhotos.map(photo => (
-              <div key={photo.id} className="photo-card pre-call">
-                <div className="photo-image-container">
-                  <img 
-                    src={photo.imageUrl} 
-                    alt="통화 전"
-                    className="photo-image"
-                  />
-                </div>
-                <div className="photo-info">
-                  <h3 className="photo-name">{photo.name || '사진'}</h3>
-                  {photo.description && (
-                    <p className="photo-description">{photo.description}</p>
-                  )}
-                  <div className="photo-meta">
-                    <span className="photo-tag pre-call-tag">통화 전</span>
-                    <button
-                      className={`delete-btn ${deletingId === photo.id ? 'deleting' : ''}`}
-                      onClick={() => handleDeletePhoto(photo.id)}
-                      disabled={deletingId === photo.id}
-                      title="삭제"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
       )}
 
       {/* Empty State */}

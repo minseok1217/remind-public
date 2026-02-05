@@ -11,6 +11,7 @@ import LoginScreen from './components/LoginScreen';
 import SignupScreen from './components/SignupScreen';
 import FindIdScreen from './components/FindIdScreen';
 import FindPasswordScreen from './components/FindPasswordScreen';
+import VoiceChatScreen from './components/VoiceChatScreen';
 
 function App() {
   const [activeNav, setActiveNav] = useState('home');
@@ -99,6 +100,14 @@ function App() {
             <span className="nav-label">사진등록</span>
           </button>
           <button 
+            className={`nav-item ${activeNav === 'voice' ? 'active' : ''}`}
+            onClick={() => setActiveNav('voice')}
+            title="음성대화"
+          >
+            <span className="nav-icon">🎙️</span>
+            <span className="nav-label">음성대화</span>
+          </button>
+          <button 
             className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
             onClick={() => setActiveNav('stats')}
             title="통계"
@@ -121,6 +130,7 @@ function App() {
         {activeNav === 'home' && <MainScreen currentUser={currentUser} />}
         {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} />}
+        {activeNav === 'voice' && <VoiceChatScreen onBack={() => setActiveNav('home')} />}
         {activeNav === 'stats' && <StatsScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
         {activeNav === 'profile' && <ProfileScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onLogout={handleLogout} />}
       </main>
