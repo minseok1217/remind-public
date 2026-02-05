@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import './ProfileScreen.css';
 
 function ProfileScreen({ currentUser, onBack, onLogout }) {
@@ -14,9 +14,11 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [patientData, setPatientData] = useState({
     name: '',
     birthdate: '',
-    gender: ''
+    gender: '',
+    phoneNumber: ''
   });
   
+  const [familyLink, setFamilyLink] = useState(null); // 가족 연결 정보
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editGuardianData, setEditGuardianData] = useState(guardianData);
@@ -32,60 +34,83 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
 
   const loadUserData = async () => {
     try {
-      // 현재 사용자가 보호자인지 환자인지 확인
-      const guardianDocRef = doc(db, 'guardians', currentUser.uid);
-      const guardianDocSnap = await getDoc(guardianDocRef);
+      // Users 컬렉션에서 역할 확인
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
 
-      if (guardianDocSnap.exists()) {
-        // 보호자 계정
-        setUserType('guardian');
-        const gData = guardianDocSnap.data();
-        setGuardianData({
-          name: gData.name || '',
-          email: gData.email || '',
-          phoneNumber: gData.phoneNumber || ''
-        });
-        setEditGuardianData({
-          name: gData.name || '',
-          email: gData.email || '',
-          phoneNumber: gData.phoneNumber || ''
-        });
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        
+        if (userData.role === '보호자') {
+          // 보호자 계정
+          setUserType('guardian');
+          setGuardianData({
+            name: userData.name || '',
+            email: userData.login_id || '',
+            phoneNumber: userData.phone_number || ''
+          });
+          setEditGuardianData({
+            name: userData.name || '',
+            email: userData.login_id || '',
+            phoneNumber: userData.phone_number || ''
+          });
 
-        // 환자 정보 로드
-        if (gData.patientId) {
-          const patientDocRef = doc(db, 'patients', gData.patientId);
+          // FamilyLinks에서 연결된 환자 찾기
+          const familyLinksRef = collection(db, 'family_links');
+          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+          const familySnapshot = await getDocs(familyQuery);
+          
+          if (!familySnapshot.empty) {
+            const linkData = familySnapshot.docs[0].data();
+            setFamilyLink(linkData);
+            
+            const patientUserId = linkData.patient_id;
+            
+            // 환자 Users 정보
+            const patientUserRef = doc(db, 'users', patientUserId);
+            const patientUserSnap = await getDoc(patientUserRef);
+            
+            // 환자 Patients 정보
+            const patientDocRef = doc(db, 'patients', patientUserId);
+            const patientDocSnap = await getDoc(patientDocRef);
+            
+            if (patientUserSnap.exists()) {
+              const pUserData = patientUserSnap.data();
+              const pData = patientDocSnap.exists() ? patientDocSnap.data() : {};
+              setPatientData({
+                name: pUserData.name || '',
+                birthdate: pData.birth_date || '',
+                gender: pData.gender || '',
+                phoneNumber: pUserData.phone_number || ''
+              });
+              setEditPatientData({
+                name: pUserData.name || '',
+                birthdate: pData.birth_date || '',
+                gender: pData.gender || '',
+                phoneNumber: pUserData.phone_number || ''
+              });
+            }
+          }
+        } else {
+          // 환자 계정
+          setUserType('patient');
+          const patientDocRef = doc(db, 'patients', currentUser.uid);
           const patientDocSnap = await getDoc(patientDocRef);
           if (patientDocSnap.exists()) {
             const pData = patientDocSnap.data();
             setPatientData({
-              name: pData.name || '',
-              birthdate: pData.birthdate || '',
-              gender: pData.gender || ''
+              name: userData.name || '',
+              birthdate: pData.birth_date || '',
+              gender: pData.gender || '',
+              phoneNumber: userData.phone_number || ''
             });
             setEditPatientData({
-              name: pData.name || '',
-              birthdate: pData.birthdate || '',
-              gender: pData.gender || ''
+              name: userData.name || '',
+              birthdate: pData.birth_date || '',
+              gender: pData.gender || '',
+              phoneNumber: userData.phone_number || ''
             });
           }
-        }
-      } else {
-        // 환자 계정
-        setUserType('patient');
-        const patientDocRef = doc(db, 'patients', currentUser.uid);
-        const patientDocSnap = await getDoc(patientDocRef);
-        if (patientDocSnap.exists()) {
-          const pData = patientDocSnap.data();
-          setPatientData({
-            name: pData.name || '',
-            birthdate: pData.birthdate || '',
-            gender: pData.gender || ''
-          });
-          setEditPatientData({
-            name: pData.name || '',
-            birthdate: pData.birthdate || '',
-            gender: pData.gender || ''
-          });
         }
       }
     } catch (error) {
@@ -139,29 +164,43 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     setIsSaving(true);
     try {
       if (userType === 'guardian') {
-        // 보호자 정보 저장
-        const guardianDocRef = doc(db, 'guardians', currentUser.uid);
-        await updateDoc(guardianDocRef, {
+        // Users 컬렉션의 보호자 정보 저장
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userDocRef, {
           name: editGuardianData.name,
-          phoneNumber: editGuardianData.phoneNumber
+          phone_number: editGuardianData.phoneNumber
         });
 
         // 환자 정보 저장 (보호자가 수정한 환자 정보)
+        const guardianDocRef = doc(db, 'guardians', currentUser.uid);
         const guardianDocSnap = await getDoc(guardianDocRef);
-        if (guardianDocSnap.data().patientId) {
-          const patientDocRef = doc(db, 'patients', guardianDocSnap.data().patientId);
+        
+        if (guardianDocSnap.data().patient_id) {
+          const patientUserId = guardianDocSnap.data().patient_id;
+          
+          // Users 컬렉션의 환자 정보 업데이트
+          const patientUserRef = doc(db, 'users', patientUserId);
+          await updateDoc(patientUserRef, {
+            name: editPatientData.name
+          });
+          
+          // Patients 컬렉션의 환자 정보 업데이트
+          const patientDocRef = doc(db, 'patients', patientUserId);
           await updateDoc(patientDocRef, {
-            name: editPatientData.name,
-            birthdate: editPatientData.birthdate,
+            birth_date: editPatientData.birthdate,
             gender: editPatientData.gender
           });
         }
       } else {
         // 환자 정보만 저장
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userDocRef, {
+          name: editPatientData.name
+        });
+        
         const patientDocRef = doc(db, 'patients', currentUser.uid);
         await updateDoc(patientDocRef, {
-          name: editPatientData.name,
-          birthdate: editPatientData.birthdate,
+          birth_date: editPatientData.birthdate,
           gender: editPatientData.gender
         });
       }

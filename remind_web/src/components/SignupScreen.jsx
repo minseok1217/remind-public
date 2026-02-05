@@ -18,8 +18,12 @@ function SignupScreen({ onSwitchToLogin }) {
   
   // 환자 정보
   const [patientName, setPatientName] = useState('');
+  const [patientPhone, setPatientPhone] = useState('');
   const [patientBirthdate, setPatientBirthdate] = useState('');
-  const [patientGender, setPatientGender] = useState('');
+  const [patientGender, setPatientGender] = useState('남성');
+  const [patientId, setPatientId] = useState('');
+  const [patientPassword, setPatientPassword] = useState('');
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -111,6 +115,18 @@ function SignupScreen({ onSwitchToLogin }) {
       return;
     }
 
+    if (!patientId.trim() || !patientPassword.trim()) {
+      setError('환자용 아이디와 비밀번호를 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    if (!agreeTerms) {
+      setError('개인정보 수집 및 이용에 동의해주세요.');
+      setLoading(false);
+      return;
+    }
+
     try {
       // 1. 보호자 계정 생성 (Firebase Auth)
       const guardianCredential = await createUserWithEmailAndPassword(auth, guardianEmail, guardianPassword);
@@ -121,9 +137,8 @@ function SignupScreen({ onSwitchToLogin }) {
         displayName: guardianName
       });
 
-      // 3. 환자 계정 생성 (Firebase Auth)
-      const patientEmail = `${guardianEmail.split('@')[0]}-patient@remind.local`;
-      const patientPassword = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+      // 3. 환자 계정 생성 (Firebase Auth) - 유효한 이메일 형식 사용
+      const patientEmail = `${patientId}@patient.app`;
       
       const patientCredential = await createUserWithEmailAndPassword(auth, patientEmail, patientPassword);
       const patientUser = patientCredential.user;
@@ -133,39 +148,73 @@ function SignupScreen({ onSwitchToLogin }) {
         displayName: patientName
       });
 
-      // 5. Firestore에 보호자 정보 저장 (guardians 컬렉션)
+      // ========== 새로운 DB 구조 ==========
+      
+      // 5. Users 컬렉션에 보호자 정보 저장
+      const guardianUserDocRef = doc(db, 'users', guardianUser.uid);
+      await setDoc(guardianUserDocRef, {
+        user_id: guardianUser.uid,
+        login_id: guardianEmail,
+        name: guardianName,
+        phone_number: guardianPhoneNumber,
+        role: '보호자',
+        created_at: new Date(),
+        notification_enabled: true,
+        personal_information: agreeTerms
+      });
+
+      // 6. Users 컬렉션에 환자 정보 저장
+      const patientUserDocRef = doc(db, 'users', patientUser.uid);
+      await setDoc(patientUserDocRef, {
+        user_id: patientUser.uid,
+        login_id: patientId,
+        name: patientName,
+        phone_number: patientPhone,
+        role: '환자',
+        created_at: new Date(),
+        notification_enabled: true,
+        personal_information: agreeTerms
+      });
+
+      // 7. Guardians 컬렉션에 보호자 추가 정보 저장
       const guardianDocRef = doc(db, 'guardians', guardianUser.uid);
       await setDoc(guardianDocRef, {
-        uid: guardianUser.uid,
-        email: guardianEmail,
-        name: guardianName,
-        phoneNumber: guardianPhoneNumber,
-        patientId: patientUser.uid,
-        createdAt: new Date(),
-        relation: '보호자'
+        user_id: guardianUser.uid,
+        relationship: '보호자',
+        patient_id: patientUser.uid
       });
 
-      // 6. Firestore에 환자 정보 저장 (patients 컬렉션)
+      // 8. Patients 컬렉션에 환자 추가 정보 저장
       const patientDocRef = doc(db, 'patients', patientUser.uid);
       await setDoc(patientDocRef, {
-        uid: patientUser.uid,
-        email: patientEmail,
-        password: patientPassword, // 참고: 실제로는 저장하면 안 됨 (보안상)
-        name: patientName,
-        birthdate: patientBirthdate,
+        user_id: patientUser.uid,
+        birth_date: patientBirthdate,
         gender: patientGender,
-        guardianId: guardianUser.uid,
-        createdAt: new Date(),
-        // AI 통화 설정
-        callTime: '03:00',
-        // 통계 초기값
-        cognitiveScore: 75
+        guardian_id: guardianUser.uid
       });
 
-      // 회원가입 성공
+      // 9. FamilyLinks 컬렉션에 가족 연결 정보 저장
+      const linkId = `${guardianUser.uid}_${patientUser.uid}`;
+      const familyLinkDocRef = doc(db, 'family_links', linkId);
+      await setDoc(familyLinkDocRef, {
+        link_id: linkId,
+        patient_id: patientUser.uid,
+        guardian_id: guardianUser.uid,
+        status: '연결됨',
+        created_at: new Date()
+      });
+
+      // 회원가입 성공 - 로그아웃 후 로그인 화면으로
       console.log('보호자 회원가입 성공:', guardianUser.uid);
       console.log('환자 계정 자동 생성:', patientUser.uid);
-      alert(`✅ 회원가입이 완료되었습니다!\n환자 계정도 자동으로 생성되었습니다.\n(로그인하시면 계정이 자동으로 전환됩니다)`);
+      
+      // 현재 로그인된 계정 로그아웃
+      await auth.signOut();
+      
+      alert('✅ 회원가입이 완료되었습니다!\n환자 계정도 자동으로 생성되었습니다.\n로그인 화면에서 로그인해주세요.');
+      
+      // 로그인 화면으로 이동
+      onSwitchToLogin();
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
         setError('유효하지 않은 이메일입니다.');
@@ -307,17 +356,32 @@ function SignupScreen({ onSwitchToLogin }) {
           </div>
 
           {/* 환자 정보 섹션 */}
-          <div className="form-section">
-            <h3 className="section-subtitle">👤 환자 정보 (자동 생성)</h3>
-            <p className="section-description">환자 계정이 자동으로 생성됩니다</p>
+          <div className="form-section patient-section">
+            <h3 className="section-subtitle">➕ 환자 정보</h3>
+            <div className="info-box">
+              <span className="info-icon">ℹ️</span>
+              <p>가입 완료 시, 입력하신 환자 정보로 <strong>환자 전용 계정</strong>이 자동 생성됩니다.</p>
+            </div>
             
             <div className="form-group">
               <label>환자 이름</label>
               <input
                 type="text"
-                placeholder="환자 이름을 입력해주세요"
+                placeholder="환자 성함을 입력하세요"
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>환자 전화번호</label>
+              <input
+                type="tel"
+                placeholder="환자 전화번호를 입력하세요"
+                value={patientPhone}
+                onChange={(e) => setPatientPhone(formatPhoneNumber(e.target.value))}
                 disabled={loading}
                 required
               />
@@ -339,21 +403,59 @@ function SignupScreen({ onSwitchToLogin }) {
               <div className="gender-selector">
                 <button
                   type="button"
-                  className={`gender-btn ${patientGender === 'M' ? 'active' : ''}`}
-                  onClick={() => setPatientGender('M')}
+                  className={`gender-btn ${patientGender === '남성' ? 'active' : ''}`}
+                  onClick={() => setPatientGender('남성')}
                   disabled={loading}
                 >
                   남성
                 </button>
                 <button
                   type="button"
-                  className={`gender-btn ${patientGender === 'F' ? 'active' : ''}`}
-                  onClick={() => setPatientGender('F')}
+                  className={`gender-btn ${patientGender === '여성' ? 'active' : ''}`}
+                  onClick={() => setPatientGender('여성')}
                   disabled={loading}
                 >
                   여성
                 </button>
               </div>
+            </div>
+
+            <div className="form-group">
+              <label>환자용 아이디</label>
+              <input
+                type="text"
+                placeholder="아이디를 입력하세요"
+                value={patientId}
+                onChange={(e) => setPatientId(e.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>환자용 비밀번호</label>
+              <input
+                type="password"
+                placeholder="비밀번호를 입력하세요"
+                value={patientPassword}
+                onChange={(e) => setPatientPassword(e.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+
+            <div className="terms-checkbox">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
+                  disabled={loading}
+                />
+                <span className="checkbox-text">
+                  개인정보 수집 및 이용, 환자 정보 제공 서비스 이용 약관에 동의합니다. <strong>(필수)</strong>
+                </span>
+              </label>
             </div>
           </div>
 

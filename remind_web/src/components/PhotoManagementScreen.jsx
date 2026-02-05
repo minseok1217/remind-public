@@ -20,7 +20,7 @@ function PhotoManagementScreen({ currentUser }) {
     setIsLoading(true);
     try {
       // Firestore에서 사진 메타데이터 불러오기 (사용자별)
-      const userPhotosRef = collection(db, 'guardians', currentUser.uid, 'photos');
+      const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
       const snapshot = await getDocs(userPhotosRef);
       
       const photoList = snapshot.docs.map(doc => ({
@@ -43,7 +43,7 @@ function PhotoManagementScreen({ currentUser }) {
     setDeletingId(photoId);
     try {
       // Firestore에서 삭제
-      const photoRef = doc(db, 'guardians', currentUser.uid, 'photos', photoId);
+      const photoRef = doc(db, 'users', currentUser.uid, 'photos', photoId);
       await deleteDoc(photoRef);
 
       // Storage에서 삭제 (필요한 경우)

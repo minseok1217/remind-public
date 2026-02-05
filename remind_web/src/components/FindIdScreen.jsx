@@ -31,9 +31,9 @@ function FindIdScreen({ onSwitchToLogin }) {
     try {
       setLoading(true);
       
-      // Firestore에서 해당 전화번호와 이름으로 계정 검색
-      const guardiansRef = collection(db, 'guardians');
-      const q = query(guardiansRef, where('phoneNumber', '==', phoneNumber), where('name', '==', name));
+      // Users 컬렉션에서 해당 전화번호와 이름으로 계정 검색
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('phone_number', '==', phoneNumber), where('name', '==', name));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
@@ -72,13 +72,13 @@ function FindIdScreen({ onSwitchToLogin }) {
       
       if (result.success) {
         // 계정 정보 조회
-        const guardiansRef = collection(db, 'guardians');
-        const q = query(guardiansRef, where('phoneNumber', '==', phoneNumber), where('name', '==', name));
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('phone_number', '==', phoneNumber), where('name', '==', name));
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-          const guardianData = querySnapshot.docs[0].data();
-          setFoundEmail(guardianData.email);
+          const userData = querySnapshot.docs[0].data();
+          setFoundEmail(userData.login_id);
           setVerificationStep('found');
         } else {
           setError('계정을 찾을 수 없습니다.');

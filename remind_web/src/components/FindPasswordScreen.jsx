@@ -39,13 +39,13 @@ function FindPasswordScreen({ onSwitchToLogin }) {
     try {
       setLoading(true);
 
-      // Firestore에서 해당 정보로 계정 검색
-      const guardiansRef = collection(db, 'guardians');
+      // Users 컬렉션에서 해당 정보로 계정 검색
+      const usersRef = collection(db, 'users');
       const q = query(
-        guardiansRef,
-        where('phoneNumber', '==', phoneNumber),
+        usersRef,
+        where('phone_number', '==', phoneNumber),
         where('name', '==', name),
-        where('email', '==', email)
+        where('login_id', '==', email)
       );
       const querySnapshot = await getDocs(q);
 

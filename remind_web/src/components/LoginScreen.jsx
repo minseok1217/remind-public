@@ -21,30 +21,28 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Firestore에서 사용자 타입 확인
-      if (accountType === 'guardian') {
-        const guardianDocRef = doc(db, 'guardians', user.uid);
-        const guardianDocSnap = await getDoc(guardianDocRef);
-        
-        if (!guardianDocSnap.exists()) {
-          setError('보호자 계정이 존재하지 않습니다.');
-          await auth.signOut();
-          setLoading(false);
-          return;
-        }
-      } else {
-        const patientDocRef = doc(db, 'patients', user.uid);
-        const patientDocSnap = await getDoc(patientDocRef);
-        
-        if (!patientDocSnap.exists()) {
-          setError('환자 계정이 존재하지 않습니다.');
-          await auth.signOut();
-          setLoading(false);
-          return;
-        }
+      // Users 컬렉션에서 사용자 역할 확인
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (!userDocSnap.exists()) {
+        setError('사용자 정보가 존재하지 않습니다.');
+        await auth.signOut();
+        setLoading(false);
+        return;
+      }
+      
+      const userData = userDocSnap.data();
+      const expectedRole = accountType === 'guardian' ? '보호자' : '환자';
+      
+      if (userData.role !== expectedRole) {
+        setError(`${expectedRole} 계정이 아닙니다.`);
+        await auth.signOut();
+        setLoading(false);
+        return;
       }
 
-      console.log(`${accountType === 'guardian' ? '보호자' : '환자'} 로그인 성공`);
+      console.log(`${userData.role} 로그인 성공`);
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
         setError('유효하지 않은 이메일입니다.');

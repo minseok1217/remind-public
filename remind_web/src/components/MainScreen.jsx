@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import './MainScreen.css';
 
 function MainScreen({ currentUser }) {
   const [guardianInfo, setGuardianInfo] = useState(null);
   const [patientInfo, setPatientInfo] = useState(null);
+  const [familyLink, setFamilyLink] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,41 +19,67 @@ function MainScreen({ currentUser }) {
     try {
       console.log('현재 사용자 UID:', currentUser.uid);
       
-      // 현재 사용자가 보호자인지 환자인지 확인
-      const guardianDocRef = doc(db, 'guardians', currentUser.uid);
-      const guardianDocSnap = await getDoc(guardianDocRef);
-      console.log('guardians/{uid} 문서 존재:', guardianDocSnap.exists());
+      // Users 컬렉션에서 사용자 정보 조회
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      console.log('users/{uid} 문서 존재:', userDocSnap.exists());
 
-      if (guardianDocSnap.exists()) {
-        // 보호자 계정 - 환자 정보 로드
-        const guardianData = guardianDocSnap.data();
-        setGuardianInfo(guardianData);
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        
+        if (userData.role === '보호자') {
+          // 보호자인 경우 - guardians 추가 정보 로드
+          const guardianDocRef = doc(db, 'guardians', currentUser.uid);
+          const guardianDocSnap = await getDoc(guardianDocRef);
+          
+          if (guardianDocSnap.exists()) {
+            const guardianData = guardianDocSnap.data();
+            setGuardianInfo({ ...userData, ...guardianData });
 
-        if (guardianData.patientId) {
-          const patientDocRef = doc(db, 'patients', guardianData.patientId);
-          const patientDocSnap = await getDoc(patientDocRef);
-          if (patientDocSnap.exists()) {
-            setPatientInfo(patientDocSnap.data());
+            // FamilyLinks에서 연결된 환자 찾기
+            const familyLinksRef = collection(db, 'family_links');
+            const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+            const familySnapshot = await getDocs(familyQuery);
+            
+            if (!familySnapshot.empty) {
+              const linkData = familySnapshot.docs[0].data();
+              setFamilyLink(linkData);
+              console.log('가족 연결 정보:', linkData);
+              
+              const patientUserId = linkData.patient_id;
+              
+              // 연결된 환자 정보 로드
+              const patientUserRef = doc(db, 'users', patientUserId);
+              const patientUserSnap = await getDoc(patientUserRef);
+              const patientDocRef = doc(db, 'patients', patientUserId);
+              const patientDocSnap = await getDoc(patientDocRef);
+              
+              if (patientUserSnap.exists()) {
+                const pUserData = patientUserSnap.data();
+                const pData = patientDocSnap.exists() ? patientDocSnap.data() : {};
+                setPatientInfo({ ...pUserData, ...pData });
+                console.log('환자 정보 로드 완료:', pUserData.name);
+              }
+            }
           }
-        }
-      } else {
-        // 환자 계정인 경우
-        const patientDocRef = doc(db, 'patients', currentUser.uid);
-        const patientDocSnap = await getDoc(patientDocRef);
-        console.log('patients/{uid} 문서 존재:', patientDocSnap.exists());
-        if (patientDocSnap.exists()) {
-          setPatientInfo(patientDocSnap.data());
+        } else if (userData.role === '환자') {
+          // 환자인 경우 - patients 추가 정보 로드
+          const patientDocRef = doc(db, 'patients', currentUser.uid);
+          const patientDocSnap = await getDoc(patientDocRef);
+          console.log('patients/{uid} 문서 존재:', patientDocSnap.exists());
+          if (patientDocSnap.exists()) {
+            setPatientInfo({ ...userData, ...patientDocSnap.data() });
+          }
         }
       }
     } catch (error) {
       console.error('사용자 정보 로드 실패:', error);
       console.error('에러 코드:', error.code);
       console.error('에러 메시지:', error.message);
-      // 사용자에게 문제 원인을 간단히 안내
       alert(
         `사용자 정보 로드 실패: ${error.code} - ${error.message}\n\n` +
         '원인: Firestore 보안 규칙 또는 인증(로그인) 문제일 수 있습니다.\n' +
-        '해결: Firebase 콘솔의 Firestore 규칙에서 `guardians/{uid}` 및 `patients/{uid}` 읽기 권한을 확인하세요.'
+        '해결: Firebase 콘솔의 Firestore 규칙에서 `users/{uid}`, `guardians/{uid}`, `patients/{uid}`, `family_links` 읽기 권한을 확인하세요.'
       );
     } finally {
       setLoading(false);

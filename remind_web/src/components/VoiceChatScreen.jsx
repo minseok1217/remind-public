@@ -41,7 +41,7 @@ function VoiceChatScreen({ onBack }) {
       }
 
       // 사진 가져오기 (callStatus 또는 tag로 필터링)
-      const photosRef = collection(db, 'guardians', user.uid, 'photos');
+      const photosRef = collection(db, 'users', user.uid, 'photos');
       const snapshot = await getDocs(photosRef);
       
       // 클라이언트에서 통화전 상태 필터링 (callStatus 또는 tag 확인)
@@ -158,7 +158,7 @@ function VoiceChatScreen({ onBack }) {
       }
       
       console.log('📝 사진 상태 업데이트 시도:', photoId);
-      const photoRef = doc(db, 'guardians', user.uid, 'photos', photoId);
+      const photoRef = doc(db, 'users', user.uid, 'photos', photoId);
       await updateDoc(photoRef, {
         callStatus: '통화후',
         tag: '통화 후',

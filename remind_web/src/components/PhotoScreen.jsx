@@ -27,7 +27,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       console.log('✅ 백그라운드 분석 완료 - 결과:', analysisResult);
       
       // Firestore 문서 업데이트
-      const photoDocRef = doc(db, 'guardians', currentUser.uid, 'photos', photoDocId);
+      const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', photoDocId);
       await updateDoc(photoDocRef, {
         keywords: analysisResult.keywords || [],
         detailedDescription: analysisResult.detailedDescription || '',
@@ -70,7 +70,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
       // Firestore에 메타데이터 저장 (사용자는 기다리지 않음)
       console.log('📝 Firestore 저장 시작:', { uid: currentUser.uid, fileName });
-      const userPhotosRef = collection(db, 'guardians', currentUser.uid, 'photos');
+      const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
       console.log('📝 Collection 참조:', userPhotosRef.path);
       
       const docRef = await addDoc(userPhotosRef, {
