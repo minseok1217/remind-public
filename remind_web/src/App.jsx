@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import './App.css';
+
+// 컴포넌트들 (기존과 동일)
 import MainScreen from './components/MainScreen';
 import ProfileScreen from './components/ProfileScreen';
 import PhotoScreen from './components/PhotoScreen';
@@ -14,18 +17,14 @@ import FindPasswordScreen from './components/FindPasswordScreen';
 import VoiceChatScreen from './components/VoiceChatScreen';
 
 function App() {
-  const [activeNav, setActiveNav] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authScreen, setAuthScreen] = useState('login'); // 'login', 'signup', 'findId', 'findPassword'
 
   useEffect(() => {
-    // Firebase 인증 상태 감시
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
     });
-
     return unsubscribe;
   }, []);
 
@@ -33,7 +32,6 @@ function App() {
     if (window.confirm('로그아웃 하시겠습니까?')) {
       try {
         await signOut(auth);
-        setActiveNav('home');
       } catch (error) {
         console.error('로그아웃 실패:', error);
       }
@@ -49,31 +47,40 @@ function App() {
     );
   }
 
-  // 로그인하지 않은 경우
-  if (!currentUser) {
-    return (
-      <>
-        {authScreen === 'login' && (
-          <LoginScreen 
-            onSwitchToSignup={() => setAuthScreen('signup')}
-            onSwitchToFindId={() => setAuthScreen('findId')}
-            onSwitchToFindPassword={() => setAuthScreen('findPassword')}
-          />
+  return (
+    <Router>
+      <Routes>
+        {/* 1. 로그인 전용 경로들 */}
+        {!currentUser ? (
+          <>
+            <Route path="/login" element={<LoginScreen />} />
+            <Route path="/signup" element={<SignupScreen />} />
+            <Route path="/find-id" element={<FindIdScreen />} />
+            <Route path="/find-pw" element={<FindPasswordScreen />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </>
+        ) : (
+          /* 2. 로그인 후 레이아웃 (Sidebar 포함) */
+          <Route path="/" element={<AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} />}>
+            <Route index element={<MainScreen currentUser={currentUser} />} />
+            <Route path="photo" element={<PhotoScreen currentUser={currentUser} />} />
+            <Route path="management" element={<PhotoManagementScreen currentUser={currentUser} />} />
+            <Route path="voice" element={<VoiceChatScreen />} />
+            <Route path="stats" element={<StatsScreen currentUser={currentUser} />} />
+            <Route path="profile" element={<ProfileScreen currentUser={currentUser} onLogout={handleLogout} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
         )}
-        {authScreen === 'signup' && (
-          <SignupScreen onSwitchToLogin={() => setAuthScreen('login')} />
-        )}
-        {authScreen === 'findId' && (
-          <FindIdScreen onSwitchToLogin={() => setAuthScreen('login')} />
-        )}
-        {authScreen === 'findPassword' && (
-          <FindPasswordScreen onSwitchToLogin={() => setAuthScreen('login')} />
-        )}
-      </>
-    );
-  }
+      </Routes>
+    </Router>
+  );
+}
 
-  // 로그인된 경우
+// 로그인한 사용자용 레이아웃 컴포넌트 (사이드바 포함)
+function AuthenticatedLayout({ currentUser, onLogout }) {
+  const location = useLocation();
+  const path = location.pathname;
+
   return (
     <div className="app-container">
       <aside className="sidebar">
@@ -83,59 +90,34 @@ function App() {
         </div>
         
         <nav className="nav-menu">
-          <button 
-            className={`nav-item ${activeNav === 'home' ? 'active' : ''}`}
-            onClick={() => setActiveNav('home')}
-            title="홈"
-          >
-            <span className="nav-icon">🏠</span>
-            <span className="nav-label">홈</span>
-          </button>
-          <button 
-            className={`nav-item ${activeNav === 'photo' ? 'active' : ''}`}
-            onClick={() => setActiveNav('photo')}
-            title="사진등록"
-          >
-            <span className="nav-icon">📸</span>
-            <span className="nav-label">사진등록</span>
-          </button>
-          <button 
-            className={`nav-item ${activeNav === 'voice' ? 'active' : ''}`}
-            onClick={() => setActiveNav('voice')}
-            title="음성대화"
-          >
-            <span className="nav-icon">🎙️</span>
-            <span className="nav-label">음성대화</span>
-          </button>
-          <button 
-            className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
-            onClick={() => setActiveNav('stats')}
-            title="통계"
-          >
-            <span className="nav-icon">📊</span>
-            <span className="nav-label">통계</span>
-          </button>
-          <button 
-            className={`nav-item ${activeNav === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveNav('profile')}
-            title="내 정보"
-          >
-            <span className="nav-icon">👤</span>
-            <span className="nav-label">내 정보</span>
-          </button>
+          {/* Link 컴포넌트를 사용하여 URL 이동 */}
+          <Link to="/" className={`nav-item ${path === '/' ? 'active' : ''}`}>
+            <span className="nav-icon">🏠</span><span className="nav-label">홈</span>
+          </Link>
+          <Link to="/photo" className={`nav-item ${path === '/photo' ? 'active' : ''}`}>
+            <span className="nav-icon">📸</span><span className="nav-label">사진등록</span>
+          </Link>
+          <Link to="/voice" className={`nav-item ${path === '/voice' ? 'active' : ''}`}>
+            <span className="nav-icon">🎙️</span><span className="nav-label">음성대화</span>
+          </Link>
+          <Link to="/stats" className={`nav-item ${path === '/stats' ? 'active' : ''}`}>
+            <span className="nav-icon">📊</span><span className="nav-label">통계</span>
+          </Link>
+          <Link to="/profile" className={`nav-item ${path === '/profile' ? 'active' : ''}`}>
+            <span className="nav-icon">👤</span><span className="nav-label">내 정보</span>
+          </Link>
         </nav>
       </aside>
 
       <main className="main-content">
-        {activeNav === 'home' && <MainScreen currentUser={currentUser} />}
-        {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
-        {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} />}
-        {activeNav === 'voice' && <VoiceChatScreen onBack={() => setActiveNav('home')} />}
-        {activeNav === 'stats' && <StatsScreen currentUser={currentUser} onBack={() => setActiveNav('home')} />}
-        {activeNav === 'profile' && <ProfileScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onLogout={handleLogout} />}
+        {/* 실제 페이지 내용이 렌더링되는 곳 */}
+        <Outlet context={{ currentUser }} />
       </main>
     </div>
   );
 }
+
+// Outlet 사용을 위해 import 추가 필요
+import { Outlet } from 'react-router-dom';
 
 export default App;

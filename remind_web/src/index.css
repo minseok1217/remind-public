@@ -50,7 +50,6 @@ button:hover {
   background-color: #2eb872;
   transform: translateY(-1px);
 }
-}
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
