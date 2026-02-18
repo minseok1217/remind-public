@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { chatWithGemini } from '../services/geminiService';
+import { analyzeConversation } from '../services/conversationAnalysisService';
 import './VoiceChatScreen.css';
 
 function VoiceChatScreen({ onBack }) {
@@ -13,17 +15,29 @@ function VoiceChatScreen({ onBack }) {
   const [currentPhoto, setCurrentPhoto] = useState(null);
   const [photoKeywords, setPhotoKeywords] = useState(null);
   const [hasPhoto, setHasPhoto] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false); // 사진 보여주기 상태 (자연스러운 전환용)
   
   const chatHistoryRef = useRef([]); // 대화 히스토리
   const recognitionRef = useRef(null);
   const ttsQueueRef = useRef([]);
   const isSpeakingRef = useRef(false);
   const currentPhotoIdRef = useRef(null);
+  const callStartTimeRef = useRef(null); // 통화 시작 시간
 
   const GOOGLE_TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY || '';
 
+  // 괄호 지문 제거 (예: "(살짝 놀라며)", "(웃으며)" 등)
+  const cleanStageDirections = (text) => {
+    return text
+      .replace(/\([^)]*\)/g, '')  // (xxx) 제거
+      .replace(/\[[^\]]*\]/g, (match) => match === '[END_CALL]' ? match : '')  // [END_CALL] 외 [] 제거
+      .replace(/\s{2,}/g, ' ')    // 연속 공백 정리
+      .trim();
+  };
+
   // 초기화
   useEffect(() => {
+    callStartTimeRef.current = Date.now(); // 통화 시작 시간 기록
     loadPhotoAndStart();
     initSpeechRecognition();
     return () => {
@@ -44,43 +58,76 @@ function VoiceChatScreen({ onBack }) {
       const photosRef = collection(db, 'users', user.uid, 'photos');
       const snapshot = await getDocs(photosRef);
       
-      // 클라이언트에서 통화전 상태 필터링 (callStatus 또는 tag 확인)
-      const pendingPhotos = snapshot.docs.filter(doc => {
-        const data = doc.data();
-        return data.callStatus === '통화전' || 
-               (data.tag === '통화 전' && !data.callStatus);
+      console.log('📸 전체 사진 수:', snapshot.docs.length);
+      snapshot.docs.forEach(doc => {
+        const d = doc.data();
+        console.log('📸 사진:', doc.id, '| callStatus:', d.callStatus, '| tag:', d.tag, '| url:', d.photoURL || d.imageUrl || d.url || '없음');
       });
       
+      // 클라이언트에서 통화전 상태 필터링 (callStatus 또는 tag 확인)
+      let pendingPhotos = snapshot.docs.filter(doc => {
+        const data = doc.data();
+        return data.callStatus === '통화전' || 
+               data.tag === '통화 전' ||
+               data.tag === '통화전' ||
+               (!data.callStatus && !data.tag); // 상태 미지정 사진도 포함
+      });
+      
+      console.log('📸 통화전 사진 수:', pendingPhotos.length);
+      
+      // 통화전 사진이 없으면 통화후 사진이라도 사용 (가장 최근 것)
+      if (pendingPhotos.length === 0 && snapshot.docs.length > 0) {
+        console.log('📸 통화전 사진 없음 → 전체 사진 중 최근 것 사용');
+        pendingPhotos = snapshot.docs; // 모든 사진 대상
+      }
+      
       if (pendingPhotos.length > 0) {
-        // 클라이언트에서 정렬 후 첫 번째 사진 선택
+        // 클라이언트에서 정렬 후 사진 선택
         const photos = pendingPhotos.map(doc => ({ id: doc.id, ...doc.data() }));
         photos.sort((a, b) => {
           const dateA = a.createdAt?.toDate?.() || a.uploadDate?.toDate?.() || new Date(0);
           const dateB = b.createdAt?.toDate?.() || b.uploadDate?.toDate?.() || new Date(0);
-          return dateA - dateB;
+          return dateB - dateA; // 최신 사진 우선
         });
         
         const photoData = photos[0];
         console.log('📸 선택된 사진:', photoData);
         
+        const photoUrl = photoData.photoURL || photoData.imageUrl || photoData.url || '';
+        console.log('📸 사진 URL:', photoUrl);
+        
+        if (!photoUrl) {
+          console.warn('⚠️ 사진 URL이 없습니다!');
+        }
+        
         setCurrentPhoto({
           id: photoData.id,
-          url: photoData.photoURL || photoData.imageUrl,
+          url: photoUrl,
           ...photoData
         });
         currentPhotoIdRef.current = photoData.id;
         
-        // 키워드 정보 설정
-        if (photoData.keywords) {
+        // 키워드 정보 설정 (빈 배열이면 description으로 대체)
+        if (photoData.keywords && typeof photoData.keywords === 'object' && !Array.isArray(photoData.keywords) && Object.keys(photoData.keywords).length > 0) {
           setPhotoKeywords(photoData.keywords);
+        } else if (Array.isArray(photoData.keywords) && photoData.keywords.length > 0) {
+          setPhotoKeywords({ keywords: photoData.keywords });
+        } else {
+          // keywords가 없으면 description 등으로 기본 컨텍스트 생성
+          setPhotoKeywords({
+            description: photoData.description || '사진',
+            detailedDescription: photoData.description || '',
+          });
         }
+        console.log('📸 사진 키워드 설정:', photoData.keywords, '| description:', photoData.description);
         
         setHasPhoto(true);
+        setShowPhoto(true); // 사진 즉시 표시
         setStatus('사진에 대해 이야기해 볼까요?');
         setUiState('ready');
         
         // AI가 먼저 사진에 대해 질문하도록
-        setTimeout(() => startPhotoConversation(photoData), 1000);
+        setTimeout(() => startPhotoConversation(photoData), 1500);
       } else {
         // 사진이 없으면 일반 대화
         setHasPhoto(false);
@@ -95,7 +142,7 @@ function VoiceChatScreen({ onBack }) {
     }
   };
 
-  // 사진 기반 대화 시작 - AI가 먼저 질문
+  // 사진 기반 대화 시작 - AI가 사진에 대해 질문
   const startPhotoConversation = async (photoData) => {
     const keywords = photoData.keywords || {};
     const description = keywords.detailedDescription || keywords.description || photoData.description || '';
@@ -108,24 +155,21 @@ function VoiceChatScreen({ onBack }) {
     console.log('📝 사진 키워드:', keywords);
     console.log('📝 보호자 설명:', photoData.description);
     
-    // 키워드가 있으면 키워드 기반 질문 직접 생성 (API 호출 없이)
+    // 사진에 대해 바로 질문
     let firstQuestion = '';
     
-    if (conversationStarters.length > 0) {
-      // 추천 질문이 있으면 첫 번째 사용
+    if (conversationStarters && conversationStarters.length > 0) {
       firstQuestion = conversationStarters[0];
     } else if (description) {
-      // 설명이 있으면 그걸 기반으로
-      firstQuestion = `이 사진을 보니까 ${description} 같네요. 이때 기억나세요?`;
+      firstQuestion = `이 사진 보니까 ${description} 같네요. 이때 기억나세요?`;
     } else if (people.length > 0) {
-      firstQuestion = `사진에 ${people.join(', ')}님이 보이네요. 이분들과 함께한 추억이 있으신가요?`;
+      firstQuestion = `사진에 ${people.join(', ')}님이 보이네요. 이분들과 함께한 추억 이야기해 주세요!`;
     } else if (location) {
-      firstQuestion = `이곳이 ${location}인 것 같아요. 이곳에 자주 가셨나요?`;
+      firstQuestion = `이곳이 ${location}인 것 같아요. 여기 언제 가셨어요?`;
     } else if (emotion) {
       firstQuestion = `사진에서 ${emotion} 분위기가 느껴지네요. 어떤 날이었나요?`;
     } else if (photoData.description) {
-      // 보호자가 입력한 설명 사용
-      firstQuestion = `보호자분이 "${photoData.description}"라고 적어주셨네요. 이때 기억나시나요?`;
+      firstQuestion = `이 사진은 "${photoData.description}"라고 하네요. 이때 기억나시나요?`;
     } else {
       firstQuestion = '이 사진 참 좋네요. 어떤 추억이 담겨 있나요?';
     }
@@ -170,6 +214,70 @@ function VoiceChatScreen({ onBack }) {
       currentPhotoIdRef.current = null;
     } catch (error) {
       console.error('❌ 상태 업데이트 오류:', error);
+    }
+  };
+
+  // 통화 기록 저장 (대화 내용 + 분석 결과)
+  const saveCallLog = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.log('⚠️ 사용자 없음, 저장 스킵');
+        return;
+      }
+
+      // 통화 시간 계산
+      const callDuration = Math.round((Date.now() - callStartTimeRef.current) / 1000);
+      
+      // 대화 내용이 있는 경우에만 저장
+      if (chatHistoryRef.current.length === 0) {
+        console.log('⚠️ 대화 내용 없음, 저장 스킵');
+        return;
+      }
+
+      // 대화 분석
+      const analysis = analyzeConversation(chatHistoryRef.current, callDuration);
+      console.log('📊 대화 분석 결과:', analysis);
+
+      // 대화 텍스트 추출
+      const conversationText = chatHistoryRef.current.map(msg => {
+        const role = msg.role === 'user' ? '환자' : 'AI';
+        return `${role}: ${msg.parts[0]?.text || ''}`;
+      }).join('\n');
+
+      // call_logs 컨렉션에 저장
+      const callLogData = {
+        userId: user.uid,
+        callDate: serverTimestamp(),
+        callDuration: callDuration, // 초 단위
+        photoId: currentPhotoIdRef.current || null,
+        hasPhoto: hasPhoto,
+        
+        // 대화 내용
+        conversation: conversationText,
+        totalUtterances: analysis.totalUtterances,
+        totalWords: analysis.totalWords,
+        
+        // 분석 지표
+        analysis: {
+          metrics: analysis.metrics,
+          scores: analysis.scores,
+          status: analysis.status,
+          insights: analysis.insights
+        },
+        
+        // 상태 표시용
+        status: analysis.status.label,
+        cognitiveScore: analysis.scores.cognitive,
+        
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'call_logs'), callLogData);
+      console.log('✅ 통화 기록 저장 완료:', docRef.id);
+      
+    } catch (error) {
+      console.error('❌ 통화 기록 저장 오류:', error);
     }
   };
 
@@ -296,50 +404,33 @@ function VoiceChatScreen({ onBack }) {
     setIsRecording(false);
   };
 
-  // Gemini에 텍스트 전송 (프록시 사용)
+  // Gemini에 텍스트 전송 (프록시 또는 직접 호출)
   const sendTextToGemini = async (text, retryCount = 0) => {
     try {
       console.log('📨 Gemini에 텍스트 전송:', text);
       
-      const response = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: text, 
-          history: chatHistoryRef.current,
-          photoContext: hasPhoto ? photoKeywords : null
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        // 429 에러면 잠시 후 재시도
-        if (response.status === 502 && errText.includes('429') && retryCount < 2) {
-          console.log('⏳ API 한도 초과, 10초 후 재시도...');
-          setStatus('잠시 기다려 주세요...');
-          await new Promise(r => setTimeout(r, 10000));
-          return sendTextToGemini(text, retryCount + 1);
-        }
-        throw new Error(errText);
-      }
-
-      const data = await response.json();
-      const fullText = data.text || '';
+      const fullText = await chatWithGemini(
+        text, 
+        chatHistoryRef.current,
+        hasPhoto ? photoKeywords : null
+      );
       console.log('📝 응답:', fullText);
 
       // 히스토리 업데이트
       chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
       chatHistoryRef.current.push({ role: 'model', parts: [{ text: fullText }] });
 
-      // 화면에 표시
-      const displayText = fullText.replace('[END_CALL]', '').trim();
+      // 화면에 표시 (괄호 지문 제거)
+      const displayText = cleanStageDirections(fullText.replace('[END_CALL]', '')).trim();
       setCaption('AI: ' + displayText);
       
-      // TTS 재생
+      // TTS 재생 (괄호 지문 제거된 텍스트)
       if (displayText) addToTTSQueue(displayText);
 
       if (fullText.includes('[END_CALL]')) {
         console.log('🔚 종료 신호 감지');
+        // 통화 기록 저장
+        await saveCallLog();
         // 사진이 있었다면 통화후로 상태 변경
         if (hasPhoto) {
           await markPhotoAsCompleted();
@@ -364,6 +455,9 @@ function VoiceChatScreen({ onBack }) {
   const handleBack = async () => {
     console.log('🔙 종료 버튼 클릭, hasPhoto:', hasPhoto, 'photoId:', currentPhotoIdRef.current);
     
+    // 통화 기록 저장
+    await saveCallLog();
+    
     // 사진이 있으면 무조건 통화후로 변경 (대화 여부 상관없이)
     if (hasPhoto && currentPhotoIdRef.current) {
       await markPhotoAsCompleted();
@@ -380,13 +474,13 @@ function VoiceChatScreen({ onBack }) {
     <div className="voice-chat-screen">
       <div className="chat-header">
         <button className="back-btn" onClick={handleBack}>〈 종료</button>
-        <h2>추억 파트너</h2>
+        <h2>통화</h2>
       </div>
 
       <div className="call-interface">
-        {/* 사진 표시 영역 */}
-        {hasPhoto && currentPhoto ? (
-          <div className="photo-display">
+        {/* 사진 표시 영역 - 자연스럽게 페이드인 */}
+        {showPhoto && hasPhoto && currentPhoto ? (
+          <div className="photo-display visible">
             <img src={currentPhoto.url} alt="추억 사진" />
             {photoKeywords && (
               <div className="photo-keywords">

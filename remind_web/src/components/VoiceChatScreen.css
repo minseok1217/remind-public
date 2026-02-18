@@ -88,6 +88,33 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   border: 5px solid rgba(255, 255, 255, 0.3);
   position: relative;
+  transition: all 0.8s ease-out;
+  transform: scale(1);
+}
+
+/* 사진 숨김 상태 */
+.photo-display.hidden {
+  opacity: 0;
+  transform: scale(0.8) translateY(20px);
+  pointer-events: none;
+}
+
+/* 사진 표시 상태 - 자연스러운 페이드인 */
+.photo-display.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  animation: photoReveal 0.8s ease-out;
+}
+
+@keyframes photoReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .photo-display img {

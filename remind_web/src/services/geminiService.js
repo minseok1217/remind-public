@@ -142,3 +142,77 @@ export const generatePhotoDescription = async (imageFile) => {
     reader.readAsDataURL(imageFile);
   });
 };
+
+// 채팅 기능 (클라이언트에서 직접 Gemini 호출)
+export const chatWithGemini = async (message, history = [], photoContext = null) => {
+  // 사진 컨텍스트가 있으면 시스템 프롬프트에 추가
+  let photoInfo = '';
+  if (photoContext) {
+    photoInfo = `
+[현재 보고 있는 사진 정보]
+- 설명: ${photoContext.detailedDescription || photoContext.description || ''}
+- 인물: ${(photoContext.people || []).join(', ') || '정보 없음'}
+- 장소: ${photoContext.location || '정보 없음'}
+- 분위기: ${photoContext.emotion || '정보 없음'}
+- 상황: ${photoContext.situation || '정보 없음'}
+- 추천 대화 주제: ${(photoContext.conversationStarters || []).join(', ') || '정보 없음'}
+
+이 정보를 바탕으로 어르신과 사진에 대해 따뜻하게 대화하세요.`;
+  }
+
+  const systemPrompt = `당신은 치매 노인을 위한 다정하고 침착한 '회상 치료사'입니다.
+${photoInfo}
+[대화 규칙]
+1. 답변은 어르신이 듣기 편하도록 1~2문장 이내로 짧고 천천히 하세요.
+2. 사진에 대한 대화라면, 사진 속 추억을 함께 나누듯 질문하고 반응하세요.
+3. 사용자가 피곤해하거나 대화를 그만하고 싶어 하면 따뜻한 마무리 인사를 건네세요.
+4. 마무리 인사 맨 마지막에는 [END_CALL] 태그를 붙이세요.
+5. 절대로 (살짝 놀라며), (웃으며), (조용히) 같은 괄호 안 지문/행동 표현을 쓰지 마세요. 음성으로 직접 말하는 것만 작성하세요.
+6. 사진을 이미 보여주고 있으므로, "사진을 준비하지 못했다"같은 말을 하지 마세요. 사진에 대해 자연스럽게 대화하세요.`;
+
+  const contents = [
+    { role: 'user', parts: [{ text: systemPrompt }] },
+    { role: 'model', parts: [{ text: '네, 알겠습니다. 따뜻하게 대화하겠습니다.' }] },
+    ...history,
+    { role: 'user', parts: [{ text: message }] }
+  ];
+
+  // 프록시 먼저 시도
+  try {
+    const resp = await fetch('/api/gemini/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, history, photoContext }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      return json.text || '';
+    }
+  } catch (e) {
+    console.warn('Proxy failed, falling back to client-side:', e);
+  }
+
+  // 클라이언트에서 직접 호출
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Gemini API Error: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } catch (error) {
+    console.error('Chat error:', error);
+    throw error;
+  }
+};

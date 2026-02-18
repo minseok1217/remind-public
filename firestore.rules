@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // [1] 공통 함수: 로그인 여부 확인
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // [2] Users, Guardians, Patients (기본 정보)
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn();
+    }
+
+    match /guardians/{guardianId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == guardianId;
+      allow create: if isSignedIn();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == patientId;
+      allow create: if isSignedIn();
+    }
+
+    // [3] FamilyLinks (가족 연결 정보)
+    match /family_links/{linkId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // [4] Memories (추억 미디어)
+    match /Memories/{memoryId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // [5] Call (통화 기록)
+    match /Call/{callId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // [6] Conversation (대화 상세 로그)
+    match /Conversation/{logId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // [7] Report (분석 리포트)
+    match /Report/{reportId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // [8] 서브컬렉션 호환성 (Photos)
+    match /users/{userId}/photos/{photoId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /guardians/{guardianId}/photos/{photoId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // [9] 기존 호환 - call_logs (웹 통화 분석 저장용)
+    match /call_logs/{logId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // [10] 기존 호환 - photos, cognitive_scores
+    match /photos/{photoId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /cognitive_scores/{scoreId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

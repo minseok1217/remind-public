@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { calculateWeeklyTrend } from '../services/conversationAnalysisService';
 import './MainScreen.css';
 
 function MainScreen({ currentUser }) {
@@ -8,10 +9,16 @@ function MainScreen({ currentUser }) {
   const [patientInfo, setPatientInfo] = useState(null);
   const [familyLink, setFamilyLink] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // 통화 관련 상태
+  const [todayStatus, setTodayStatus] = useState(null);
+  const [cognitiveStatus, setCognitiveStatus] = useState(null);
+  const [callRecords, setCallRecords] = useState([]);
 
   useEffect(() => {
     if (currentUser) {
       loadUserInfo();
+      loadCallData();
     }
   }, [currentUser]);
 
@@ -86,44 +93,142 @@ function MainScreen({ currentUser }) {
     }
   };
 
-  const [todayStatus] = useState({
-    lastCallTime: '오후 2:30',
-    lastCallDuration: '15분'
-  });
+  // 통화 기록 및 인지 상태 로드
+  const loadCallData = async () => {
+    try {
+      // 보호자인 경우 환자 ID로 조회, 환자인 경우 본인 ID로 조회
+      // familyLink가 로드될 때까지 기다림
+      let targetUserId = currentUser.uid;
+      
+      // 보호자인지 확인 (users 문서에서 role 확인)
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        if (userData.role === '보호자') {
+          // family_links에서 연결된 환자 찾기
+          const familyLinksRef = collection(db, 'family_links');
+          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+          const familySnapshot = await getDocs(familyQuery);
+          
+          if (!familySnapshot.empty) {
+            const linkData = familySnapshot.docs[0].data();
+            targetUserId = linkData.patient_id;
+            console.log('보호자 모드: 환자 ID로 통화 기록 조회:', targetUserId);
+          }
+        }
+      }
 
-  const [cognitiveStatus] = useState({
-    score: 75,
-    recent: [
-      { label: '언어', score: 80 },
-      { label: '기억력', score: 75 },
-      { label: '정서', score: 85 }
-    ]
-  });
-
-  const [callRecords] = useState([
-    {
-      id: 1,
-      date: '2026년 1월 1일',
-      time: '03시',
-      duration: '15분 20초',
-      status: '통화 완료',
-      isRecent: true
-    },
-    {
-      id: 2,
-      date: '2026년 1월 2일',
-      time: '02시',
-      duration: '13분 20초',
-      status: '주의 필요'
-    },
-    {
-      id: 3,
-      date: '2026년 1월 1일',
-      time: '02시',
-      duration: '2분 20초',
-      status: '통화 완료'
+      // call_logs에서 통화 기록 조회
+      const callLogsRef = collection(db, 'call_logs');
+      const callQuery = query(
+        callLogsRef,
+        where('userId', '==', targetUserId)
+      );
+      
+      const callSnapshot = await getDocs(callQuery);
+      const logs = callSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).sort((a, b) => {
+        const dateA = a.callDate?.toDate?.() || new Date(0);
+        const dateB = b.callDate?.toDate?.() || new Date(0);
+        return dateB - dateA; // 최신순
+      }).slice(0, 10);
+      
+      console.log('통화 기록 로드:', logs.length, '건');
+      
+      if (logs.length > 0) {
+        // 오늘의 현황 (가장 최근 통화)
+        const latestCall = logs[0];
+        const callDate = latestCall.callDate?.toDate?.() || new Date();
+        const isToday = new Date().toDateString() === callDate.toDateString();
+        
+        const hours = callDate.getHours();
+        const minutes = callDate.getMinutes();
+        const timeString = `${hours >= 12 ? '오후' : '오전'} ${hours % 12 || 12}:${String(minutes).padStart(2, '0')}`;
+        const durationMinutes = Math.floor((latestCall.callDuration || 0) / 60);
+        const durationSeconds = (latestCall.callDuration || 0) % 60;
+        
+        setTodayStatus({
+          hasCall: isToday,
+          lastCallTime: timeString,
+          lastCallDuration: `${durationMinutes}분 ${durationSeconds}초`,
+          status: latestCall.status || '통화 완료',
+          statusColor: latestCall.analysis?.status?.color || '#41d17f',
+          message: latestCall.analysis?.insights?.[0] || '통화가 완료되었습니다.'
+        });
+        
+        // 인지 상태 요약 (최근 7일 트렌드)
+        const weeklyTrend = calculateWeeklyTrend(logs);
+        const latestAnalysis = latestCall.analysis;
+        
+        setCognitiveStatus({
+          score: latestAnalysis?.scores?.cognitive || 0,
+          statusLabel: latestAnalysis?.status?.label || '분석 중',
+          statusColor: latestAnalysis?.status?.color || '#999',
+          recent: [
+            { label: '언어', score: latestAnalysis?.scores?.language || 0 },
+            { label: '기억력', score: latestAnalysis?.scores?.memory || 0 },
+            { label: '정서', score: latestAnalysis?.scores?.emotion || 0 }
+          ],
+          trend: weeklyTrend.trend,
+          trendMessage: weeklyTrend.message
+        });
+        
+        // 통화 기록 목록
+        const formattedRecords = logs.slice(0, 5).map((log, index) => {
+          const logDate = log.callDate?.toDate?.() || new Date();
+          const year = logDate.getFullYear();
+          const month = logDate.getMonth() + 1;
+          const day = logDate.getDate();
+          const hour = logDate.getHours();
+          const durMin = Math.floor((log.callDuration || 0) / 60);
+          const durSec = (log.callDuration || 0) % 60;
+          
+          return {
+            id: log.id,
+            date: `${year}년 ${month}월 ${day}일`,
+            time: `${String(hour).padStart(2, '0')}시`,
+            duration: `${durMin}분 ${durSec}초`,
+            status: log.status || '통화 완료',
+            statusColor: log.analysis?.status?.color || '#41d17f',
+            isRecent: index === 0,
+            cognitiveScore: log.cognitiveScore || 0
+          };
+        });
+        
+        setCallRecords(formattedRecords);
+      } else {
+        // 통화 기록이 없는 경우
+        setTodayStatus({
+          hasCall: false,
+          lastCallTime: '-',
+          lastCallDuration: '-',
+          message: '아직 통화 기록이 없습니다.'
+        });
+        
+        setCognitiveStatus({
+          score: 0,
+          statusLabel: '데이터 없음',
+          recent: [
+            { label: '언어', score: 0 },
+            { label: '기억력', score: 0 },
+            { label: '정서', score: 0 }
+          ]
+        });
+        
+        setCallRecords([]);
+      }
+    } catch (error) {
+      console.error('통화 기록 로드 실패:', error);
+      // 에러 시 기본값 설정
+      setTodayStatus({ hasCall: false, message: '데이터를 불러올 수 없습니다.' });
+      setCognitiveStatus({ score: 0, statusLabel: '오류', recent: [] });
+      setCallRecords([]);
     }
-  ]);
+  };
 
   return (
     <div className="main-screen">
@@ -154,14 +259,16 @@ function MainScreen({ currentUser }) {
               <div className="call-info">
                 <div className="call-icon">☎️</div>
                 <div className="call-text">
-                  <p className="call-label">오늘 통화를 완료했어요!</p>
-                  <p className="call-subtitle">목소리가 평소보다 밝게 들렸어요!</p>
+                  <p className="call-label">
+                    {todayStatus?.hasCall ? '오늘 통화를 완료했어요!' : '아직 오늘 통화가 없어요'}
+                  </p>
+                  <p className="call-subtitle">{todayStatus?.message || ''}</p>
                 </div>
               </div>
               <div className="call-time">
                 <p className="time-label">통화 시간</p>
-                <p className="time-value">{todayStatus.lastCallTime}</p>
-                <p className="time-duration">{todayStatus.lastCallDuration}</p>
+                <p className="time-value">{todayStatus?.lastCallTime || '-'}</p>
+                <p className="time-duration">{todayStatus?.lastCallDuration || '-'}</p>
               </div>
             </div>
             <button className="check-button">기록 확인</button>
@@ -174,13 +281,17 @@ function MainScreen({ currentUser }) {
             </div>
             
             <div className="cognitive-score-section">
-              <p className="score-label">매우 양호</p>
-              <p className="score-description">최근 일주일간 통화를 분석했습니다.</p>
-              <div className="big-score">{cognitiveStatus.score}점</div>
+              <p className="score-label" style={{ color: cognitiveStatus?.statusColor || '#999' }}>
+                {cognitiveStatus?.statusLabel || '분석 중'}
+              </p>
+              <p className="score-description">
+                {cognitiveStatus?.trendMessage || '최근 통화를 분석했습니다.'}
+              </p>
+              <div className="big-score">{cognitiveStatus?.score || 0}점</div>
             </div>
 
             <div className="metrics-section">
-              {cognitiveStatus.recent.map((metric, index) => (
+              {(cognitiveStatus?.recent || []).map((metric, index) => (
                 <div key={index} className="metric-item">
                   <div className="metric-header">
                     <label className="metric-label">{metric.label}</label>
@@ -205,21 +316,30 @@ function MainScreen({ currentUser }) {
             <a href="#" className="view-all">전체 보기</a>
           </div>
           <div className="records-list">
-            {callRecords.map((record) => (
-              <div key={record.id} className={`record-card ${record.isRecent ? 'recent' : ''}`}>
-                <div className="record-header">
-                  <span className="record-date">📅 {record.date}</span>
-                  <span className="record-status-badge">{record.status}</span>
-                </div>
-                <div className="record-details">
-                  <span className="detail-item">시간: 오전 {record.time}</span>
-                  <span className="detail-item">통화 시간: {record.duration}</span>
-                </div>
-                {record.isRecent && (
-                  <button className="record-button">주의 필요</button>
-                )}
+            {callRecords.length === 0 ? (
+              <div className="no-records">
+                <p>아직 통화 기록이 없습니다.</p>
               </div>
-            ))}
+            ) : (
+              callRecords.map((record) => (
+                <div key={record.id} className={`record-card ${record.isRecent ? 'recent' : ''}`}>
+                  <div className="record-header">
+                    <span className="record-date">📅 {record.date}</span>
+                    <span 
+                      className="record-status-badge"
+                      style={{ backgroundColor: record.statusColor || '#41d17f' }}
+                    >
+                      {record.status}
+                    </span>
+                  </div>
+                  <div className="record-details">
+                    <span className="detail-item">시간: {record.time}</span>
+                    <span className="detail-item">통화 시간: {record.duration}</span>
+                    <span className="detail-item">인지 점수: {record.cognitiveScore}점</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

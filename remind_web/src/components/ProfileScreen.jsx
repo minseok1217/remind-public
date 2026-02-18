@@ -34,12 +34,16 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
 
   const loadUserData = async () => {
     try {
+      console.log('[ProfileScreen] 현재 사용자 UID:', currentUser.uid);
+      
       // Users 컬렉션에서 역할 확인
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
+      console.log('[ProfileScreen] users 문서 존재:', userDocSnap.exists());
 
       if (userDocSnap.exists()) {
         const userData = userDocSnap.data();
+        console.log('[ProfileScreen] 사용자 역할:', userData.role);
         
         if (userData.role === '보호자') {
           // 보호자 계정
@@ -58,21 +62,27 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
           // FamilyLinks에서 연결된 환자 찾기
           const familyLinksRef = collection(db, 'family_links');
           const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+          console.log('[ProfileScreen] family_links 쿼리 실행: guardian_id ==', currentUser.uid);
           const familySnapshot = await getDocs(familyQuery);
+          console.log('[ProfileScreen] family_links 결과 개수:', familySnapshot.size);
           
           if (!familySnapshot.empty) {
             const linkData = familySnapshot.docs[0].data();
+            console.log('[ProfileScreen] 가족 연결 데이터:', linkData);
             setFamilyLink(linkData);
             
             const patientUserId = linkData.patient_id;
+            console.log('[ProfileScreen] 연결된 환자 ID:', patientUserId);
             
             // 환자 Users 정보
             const patientUserRef = doc(db, 'users', patientUserId);
             const patientUserSnap = await getDoc(patientUserRef);
+            console.log('[ProfileScreen] 환자 users 문서 존재:', patientUserSnap.exists());
             
             // 환자 Patients 정보
             const patientDocRef = doc(db, 'patients', patientUserId);
             const patientDocSnap = await getDoc(patientDocRef);
+            console.log('[ProfileScreen] 환자 patients 문서 존재:', patientDocSnap.exists());
             
             if (patientUserSnap.exists()) {
               const pUserData = patientUserSnap.data();
@@ -334,21 +344,21 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                   <div className="gender-selector">
                     <button
                       type="button"
-                      className={`gender-btn ${editPatientData.gender === 'M' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', 'M')}
+                      className={`gender-btn ${editPatientData.gender === '남성' || editPatientData.gender === 'M' ? 'active' : ''}`}
+                      onClick={() => handlePatientInputChange('gender', '남성')}
                     >
                       남성
                     </button>
                     <button
                       type="button"
-                      className={`gender-btn ${editPatientData.gender === 'F' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', 'F')}
+                      className={`gender-btn ${editPatientData.gender === '여성' || editPatientData.gender === 'F' ? 'active' : ''}`}
+                      onClick={() => handlePatientInputChange('gender', '여성')}
                     >
                       여성
                     </button>
                   </div>
                 ) : (
-                  <div className="info-value">{patientData.gender === 'M' ? '남성' : patientData.gender === 'F' ? '여성' : '미입력'}</div>
+                  <div className="info-value">{patientData.gender === '남성' || patientData.gender === 'M' ? '남성' : patientData.gender === '여성' || patientData.gender === 'F' ? '여성' : '미입력'}</div>
                 )}
               </div>
             </div>
@@ -408,21 +418,21 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                   <div className="gender-selector">
                     <button
                       type="button"
-                      className={`gender-btn ${editPatientData.gender === 'M' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', 'M')}
+                      className={`gender-btn ${editPatientData.gender === '남성' || editPatientData.gender === 'M' ? 'active' : ''}`}
+                      onClick={() => handlePatientInputChange('gender', '남성')}
                     >
                       남성
                     </button>
                     <button
                       type="button"
-                      className={`gender-btn ${editPatientData.gender === 'F' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', 'F')}
+                      className={`gender-btn ${editPatientData.gender === '여성' || editPatientData.gender === 'F' ? 'active' : ''}`}
+                      onClick={() => handlePatientInputChange('gender', '여성')}
                     >
                       여성
                     </button>
                   </div>
                 ) : (
-                  <div className="info-value">{patientData.gender === 'M' ? '남성' : patientData.gender === 'F' ? '여성' : '미입력'}</div>
+                  <div className="info-value">{patientData.gender === '남성' || patientData.gender === 'M' ? '남성' : patientData.gender === '여성' || patientData.gender === 'F' ? '여성' : '미입력'}</div>
                 )}
               </div>
             </div>

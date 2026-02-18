@@ -235,8 +235,23 @@ function SignupScreen({ onSwitchToLogin }) {
     <div className="auth-screen">
       <div className="auth-container">
         <div className="auth-header">
+          {/* Infinity Logo SVG */}
+          <svg 
+            className="auth-infinity-logo" 
+            viewBox="0 0 100 50" 
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M25 25 C25 15, 35 10, 45 15 C55 20, 55 30, 45 35 C35 40, 25 35, 25 25 M75 25 C75 35, 65 40, 55 35 C45 30, 45 20, 55 15 C65 10, 75 15, 75 25"
+              fill="none"
+              stroke="#41d17f"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
           <h1>REMIND CALL</h1>
-          <p>건강한 뇌, 행복을 찾다</p>
+          <p>기억을 잇다, 마음을 잇다</p>
         </div>
 
         <form className="auth-form" onSubmit={handleSignup}>

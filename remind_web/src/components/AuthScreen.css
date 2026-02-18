@@ -1,7 +1,7 @@
 .auth-screen {
   width: 100%;
   min-height: 100vh;
-  background: linear-gradient(135deg, #41d17f 0%, #2eb872 100%);
+  background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,8 +22,16 @@
   margin-bottom: 30px;
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
+}
+
+.auth-infinity-logo {
+  width: 80px;
+  height: 40px;
+  margin-bottom: 8px;
 }
 
 .back-button {
@@ -50,16 +58,16 @@
 }
 
 .auth-header h1 {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
-  color: #333;
+  color: #41d17f;
   margin: 0;
-  letter-spacing: 0.5px;
+  letter-spacing: 2px;
 }
 
 .auth-header p {
   font-size: 14px;
-  color: #999;
+  color: #888;
   margin: 0;
 }
 
