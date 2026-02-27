@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import home_icon_on from './assets/home_icon_on.png'; 
+import home_icon_off from './assets/home_icon_off.png'; 
+import photo_icon_on from './assets/photo_icon_on.png'; 
+import photo_icon_off from './assets/photo_icon_off.png'; 
+import chart_icon_on from './assets/chart_icon_on.png'; 
+import chart_icon_off from './assets/chart_icon_off.png'; 
+import info_icon_on from './assets/info_icon_on.png'; 
+import info_icon_off from './assets/info_icon_off.png'; 
 import './App.css';
 
 // 컴포넌트들 (기존과 동일)
@@ -92,19 +100,16 @@ function AuthenticatedLayout({ currentUser, onLogout }) {
         <nav className="nav-menu">
           {/* Link 컴포넌트를 사용하여 URL 이동 */}
           <Link to="/" className={`nav-item ${path === '/' ? 'active' : ''}`}>
-            <span className="nav-icon">🏠</span><span className="nav-label">홈</span>
+            <span className="nav-icon"><img src={path === '/' ? home_icon_on : home_icon_off} alt="홈_아이콘" className='nav_icon' /></span><span className="nav-label">홈</span>
           </Link>
           <Link to="/photo" className={`nav-item ${path === '/photo' ? 'active' : ''}`}>
-            <span className="nav-icon">📸</span><span className="nav-label">사진등록</span>
-          </Link>
-          <Link to="/voice" className={`nav-item ${path === '/voice' ? 'active' : ''}`}>
-            <span className="nav-icon">🎙️</span><span className="nav-label">음성대화</span>
+            <span className="nav-icon"><img src={path === '/photo' ? photo_icon_on : photo_icon_off} alt="사진_아이콘" className='nav_icon' /></span><span className="nav-label">사진등록</span>
           </Link>
           <Link to="/stats" className={`nav-item ${path === '/stats' ? 'active' : ''}`}>
-            <span className="nav-icon">📊</span><span className="nav-label">통계</span>
+            <span className="nav-icon"><img src={path === '/stats' ? chart_icon_on : chart_icon_off} alt="통계_아이콘" className='nav_icon' /></span><span className="nav-label">통계</span>
           </Link>
           <Link to="/profile" className={`nav-item ${path === '/profile' ? 'active' : ''}`}>
-            <span className="nav-icon">👤</span><span className="nav-label">내 정보</span>
+            <span className="nav-icon"><img src={path === '/profile' ? info_icon_on : info_icon_off} alt="프로필_아이콘" className='nav_icon' /></span><span className="nav-label">내 정보</span>
           </Link>
         </nav>
       </aside>

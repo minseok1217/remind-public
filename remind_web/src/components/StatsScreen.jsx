@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import './StatsScreen.css';
+import call_icon from '../assets/call_icon.png';
+import search_icon from '../assets/search_icon.png';
 
 function StatsScreen({ currentUser, onBack }) {
   const [selectedCall, setSelectedCall] = useState(null);
@@ -41,10 +43,10 @@ function StatsScreen({ currentUser, onBack }) {
 
   return (
     <div className="stats-screen">
-      <div className="header-with-back">
-        <button className="back-button" onClick={onBack} title="뒤로가기">←</button>
-        <h1>통계 요약</h1>
+      <div className="header-content">
+        <h1 className="header-title">계정 관리 및 설정</h1>
       </div>
+      <div className="header-diver"></div>
 
       {/* Score Card */}
       <div className="score-card">
@@ -111,12 +113,15 @@ function StatsScreen({ currentUser, onBack }) {
         <div className="score-display">
           <div className="big-score">{stats.score}점</div>
         </div>
+      </div>
 
-        {/* Message Box */}
-        <div className="message-box">
-          <div className="message-label">✓ {stats.message}</div>
-          <p className="message-detail">{stats.detail}</p>
+      {/* Message Box */}
+      <div className="message-box">
+        <div className="message-main-label">
+          <img src={search_icon} className="icon-tiny" />
+          <div className="message-label">{stats.message}</div>
         </div>
+        <p className="message-detail">{stats.detail}</p>
       </div>
 
       {/* Call History Section */}
@@ -126,22 +131,18 @@ function StatsScreen({ currentUser, onBack }) {
           <a href="#" className="view-all">전체 보기</a>
         </div>
 
-        <div className="call-cards">
+        <div className="call-list">
           {callRecords.map((record) => (
-            <div
-              key={record.id}
-              className={`call-card ${selectedCall?.id === record.id ? 'active' : ''}`}
-              onClick={() => setSelectedCall(record)}
-            >
-              <div className="call-icon">☎️</div>
-              <div className="call-info">
-                <div className="call-date">📅 {record.date}</div>
-                <div className="call-time">시간: 오전 {record.time}</div>
-                <div className="call-duration">{record.duration}</div>
+            <div key={record.id} className="call-item">
+              <div className="call-list-icon">
+                <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />
               </div>
-              <div className={`call-status-badge ${record.status === '주의 필요' ? 'warning' : ''}`}>
-                {record.status}
+              <div className="call-info-content">
+                <div className="call-detail">날짜: {record.date}</div>
+                <div className="call-detail">시간: {record.time}</div>
+                <div className="call-detail">{record.duration}</div>
               </div>
+              <span className={`call-status-value ${record.status=="분석 불가" ? 'status-disabled' : (record.status=="주의 필요" ? 'status-warning' : 'status-good')}`}>{record.status}</span>
               <div className="call-arrow">›</div>
             </div>
           ))}

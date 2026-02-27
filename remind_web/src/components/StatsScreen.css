@@ -1,8 +1,6 @@
 .stats-screen {
   display: flex;
   flex-direction: column;
-  gap: 30px;
-  padding-bottom: 50px;
 }
 
 .header-with-back {
@@ -13,33 +11,16 @@
   position: relative;
 }
 
-.back-button {
-  background-color: #f0fdf4;
-  border: none;
-  color: #41d17f;
-  font-size: 24px;
-  font-weight: 400;
-  cursor: pointer;
-  padding: 10px 14px;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
 .back-button:hover {
   background-color: #e8f5e9;
-  color: #2eb872;
+  color: #00C16E;
   transform: translateX(-4px);
 }
 
 .header-with-back h1 {
   font-size: 28px;
   font-weight: 700;
-  color: #333;
+  color: #111;
   margin: 0;
   flex: 1;
 }
@@ -47,6 +28,7 @@
 /* Score Card */
 .score-card {
   background-color: white;
+  margin-top: 20px;
   border-radius: 16px;
   padding: 25px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -101,28 +83,34 @@
 .big-score {
   font-size: 48px;
   font-weight: 700;
-  color: #41d17f;
+  color: #00C16E;
 }
 
 /* Message Box */
 .message-box {
-  background: linear-gradient(135deg, #e8f5e9 0%, #f0fdf4 100%);
-  border: 2px solid #c8e6c9;
+  background: #DCFAED;
+  border: 1px solid #00C16E;
   border-radius: 12px;
   padding: 20px;
-  margin-bottom: 20px;
+  margin: 20px 0;
+}
+
+.message-main-label {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+  align-items: center;
 }
 
 .message-label {
   font-size: 14px;
-  font-weight: 600;
-  color: #2eb872;
-  margin-bottom: 10px;
+  font-weight: 500;
+  color: #00C16E;
 }
 
 .message-detail {
   font-size: 13px;
-  color: #666;
+  color: #767676;
   line-height: 1.6;
   margin: 0;
 }
@@ -131,7 +119,6 @@
 .call-history {
   display: flex;
   flex-direction: column;
-  gap: 20px;
 }
 
 .section-header {
@@ -145,10 +132,11 @@
   font-weight: 700;
   color: #333;
   margin: 0;
+  padding-left: 5px;
 }
 
 .view-all {
-  color: #41d17f;
+  color: #00C16E;
   text-decoration: none;
   font-size: 13px;
   font-weight: 600;
@@ -159,87 +147,12 @@
   color: #2eb872;
 }
 
-/* Call Cards */
-.call-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.call-card {
-  background-color: white;
-  border: 2px solid #f0f0f0;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.call-card:hover {
-  border-color: #41d17f;
-  background-color: #f0fdf4;
-}
-
-.call-card.active {
-  border-color: #41d17f;
-  background-color: #f0fdf4;
-}
-
-.call-icon {
-  font-size: 32px;
-  min-width: 40px;
-  text-align: center;
-}
-
-.call-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.call-date {
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-}
-
-.call-time {
-  font-size: 12px;
-  color: #999;
-}
-
-.call-duration {
-  font-size: 12px;
-  color: #999;
-}
-
-.call-status-badge {
-  background-color: #41d17f;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.call-status-badge.warning {
-  background-color: #f97316;
-}
-
 .call-arrow {
-  font-size: 20px;
-  color: #ccc;
+  font-size: 40px;
+  color: #DCFAED;
+  font-weight: 300;
   transition: color 0.3s ease;
-}
-
-.call-card:hover .call-arrow,
-.call-card.active .call-arrow {
-  color: #41d17f;
+  margin: 0 -5px;
 }
 
 /* Responsive */

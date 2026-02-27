@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import './AuthScreen.css';
+import './LoginScreen.css'; // AuthScreen.css 대신 LoginScreen.css 임포트
+import logo from '../assets/logo.png'; 
 
 function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPassword }) {
   const [accountType, setAccountType] = useState('guardian'); // 'guardian' or 'patient'
@@ -24,17 +25,17 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
       // Users 컬렉션에서 사용자 역할 확인
       const userDocRef = doc(db, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
-      
+
       if (!userDocSnap.exists()) {
         setError('사용자 정보가 존재하지 않습니다.');
         await auth.signOut();
         setLoading(false);
         return;
       }
-      
+
       const userData = userDocSnap.data();
       const expectedRole = accountType === 'guardian' ? '보호자' : '환자';
-      
+
       if (userData.role !== expectedRole) {
         setError(`${expectedRole} 계정이 아닙니다.`);
         await auth.signOut();
@@ -60,15 +61,15 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
   };
 
   return (
-    <div className="auth-screen">
-      <div className="auth-container">
-        <div className="auth-header">
-          <h1>REMIND CALL</h1>
-          <p>기억을 잇다, 마음을 잇다</p>
+    <div className="login-auth-screen">
+      <div className="login-auth-container">
+        <div className="login-auth-header">
+          <img className="login-logo-img" src={logo} alt="REMIND CALL 로고" />
+          <p className="login-text-wrapper">기억을 잇다, 마음을 잇다</p>
         </div>
 
         {/* 계정 타입 선택 */}
-        <div className="account-type-selector">
+        <div className="login-account-type-selector">
           <button
             type="button"
             className={`account-type-btn ${accountType === 'guardian' ? 'active' : ''}`}
@@ -87,72 +88,83 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
           </button>
         </div>
 
-        <form className="auth-form" onSubmit={handleLogin}>
-          <div className="form-group">
-            <label>아이디</label>
-            <input
-              type="email"
-              placeholder="이메일을 입력해주세요"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
-              required
-            />
-          </div>
+        <section className="login-frame">
+          <form className="login-auth-form" onSubmit={handleLogin} noValidate>
+            <div className="login-frame-input">
+              <div className="login-form-group">
+                <label className="login-text-wrapper-2">아이디</label>
+                <div className="common-input-box">
+                  <input
+                    type="email"
+                    className="common-input-text"
+                    placeholder="이메일을 입력해주세요"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
+                    required
+                  />
+                </div>
+              </div>
 
-          <div className="form-group">
-            <label>비밀번호</label>
-            <input
-              type="password"
-              placeholder="비밀번호를 입력해주세요"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              required
-            />
-          </div>
+              <div className="login-form-group">
+                <label className="login-text-wrapper-2">비밀번호</label>
+                <div className="common-input-box">
+                  <input
+                    type="password"
+                    className="common-input-text"
+                    placeholder="비밀번호를 입력해주세요"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+            {error && <div className="error-message">{error}</div>}
 
-          {error && <div className="error-message">{error}</div>}
-
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
-            {loading ? '로그인 중...' : '로그인'}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <div className="footer-links">
             <button
-              type="button"
-              className="switch-button"
-              onClick={onSwitchToFindId}
+              type="submit"
+              className="common-button"
               disabled={loading}
             >
-              아이디 찾기
+              <span className="common-button-text">
+                {loading ? '로그인 중...' : '로그인'}
+              </span>
             </button>
-            <span className="link-divider">|</span>
-            <button
-              type="button"
-              className="switch-button"
-              onClick={onSwitchToFindPassword}
-              disabled={loading}
-            >
-              비밀번호 찾기
-            </button>
-            <span className="link-divider">|</span>
-            <button
-              type="button"
-              className="switch-button"
-              onClick={onSwitchToSignup}
-              disabled={loading}
-            >
-              회원가입
-            </button>
+          </form>
+
+          <div className="login-auth-footer">
+            <div className="login-footer-links">
+              <button
+                type="button"
+                className="login-switch-button"
+                onClick={onSwitchToFindId}
+                disabled={loading}
+              >
+                <p>아이디 찾기</p>
+              </button>
+              <span className="login-link-divider">ㅣ</span>
+              <button
+                type="button"
+                className="login-switch-button"
+                onClick={onSwitchToFindPassword}
+                disabled={loading}
+              >
+                <p>비밀번호 찾기</p>
+              </button>
+              <span className="login-link-divider">ㅣ</span>
+              <button
+                type="button"
+                className="login-switch-button"
+                onClick={onSwitchToSignup}
+                disabled={loading}
+              >
+                <p>회원가입</p>
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
