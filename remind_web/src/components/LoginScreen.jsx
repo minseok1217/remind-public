@@ -6,7 +6,7 @@ import './AuthScreen.css';
 
 function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPassword }) {
   const [accountType, setAccountType] = useState('guardian'); // 'guardian' or 'patient'
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,8 +17,30 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
     setLoading(true);
 
     try {
+      const normalizedLoginId = loginId.trim();
+      if (!normalizedLoginId) {
+        setError('아이디를 입력해주세요.');
+        setLoading(false);
+        return;
+      }
+
+      let signInEmail = normalizedLoginId;
+
+      if (accountType === 'guardian') {
+        if (!normalizedLoginId.includes('@')) {
+          setError('보호자는 이메일 형식으로 입력해주세요.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // 환자는 아이디만 입력해도 로그인 가능하도록 변환
+        if (!normalizedLoginId.includes('@')) {
+          signInEmail = `${normalizedLoginId}@patient.app`;
+        }
+      }
+
       // Firebase Auth로 로그인
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, signInEmail, password);
       const user = userCredential.user;
 
       // Users 컬렉션에서 사용자 역할 확인
@@ -45,7 +67,7 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
       console.log(`${userData.role} 로그인 성공`);
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
-        setError('유효하지 않은 이메일입니다.');
+        setError(accountType === 'guardian' ? '유효하지 않은 이메일입니다.' : '환자용 아이디 또는 이메일 형식이 올바르지 않습니다.');
       } else if (err.code === 'auth/user-not-found') {
         setError('등록되지 않은 계정입니다.');
       } else if (err.code === 'auth/wrong-password') {
@@ -104,12 +126,12 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
 
         <form className="auth-form" onSubmit={handleLogin}>
           <div className="form-group">
-            <label>아이디</label>
+            <label>{accountType === 'guardian' ? '아이디(이메일)' : '환자용 아이디'}</label>
             <input
-              type="email"
-              placeholder="이메일을 입력해주세요"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type={accountType === 'guardian' ? 'email' : 'text'}
+              placeholder={accountType === 'guardian' ? '이메일을 입력해주세요' : '환자용 아이디를 입력해주세요'}
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
               disabled={loading}
               required
             />

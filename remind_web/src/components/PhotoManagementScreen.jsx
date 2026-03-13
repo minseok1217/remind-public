@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
-import { storage, db } from '../firebase';
-import { ref, listAll, getBytes, deleteObject } from 'firebase/storage';
-import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import './PhotoManagementScreen.css';
+
+const STATUS_PRE = '통화전';
+const STATUS_POST = '통화후';
+
+const normalizeCallStatus = (value) => (value || '').replace(/\s+/g, '');
+
+const getPhotoStatus = (photo) => normalizeCallStatus(photo.callStatus || photo.tag);
 
 function PhotoManagementScreen({ currentUser }) {
   const [photos, setPhotos] = useState([]);
@@ -57,24 +63,11 @@ function PhotoManagementScreen({ currentUser }) {
     }
   };
 
-  const filteredPhotos = selectedTag === 'all' 
-    ? photos 
-    : photos.filter(p => {
-        const status = p.callStatus || p.tag;
-        return status === selectedTag;
-      });
-
-  const tags = ['통화전', '통화후'];
-  
-  // 통화전 사진 (callStatus가 '통화전'이거나 tag가 '통화 전'인 경우)
-  const preCallPhotos = photos.filter(p => 
-    p.callStatus === '통화전' || (p.tag === '통화 전' && !p.callStatus)
-  );
-  
-  // 통화후 사진
-  const postCallPhotos = photos.filter(p => 
-    p.callStatus === '통화후' || p.tag === '통화 후'
-  );
+  const preCallPhotos = photos.filter((p) => getPhotoStatus(p) === STATUS_PRE);
+  const postCallPhotos = photos.filter((p) => getPhotoStatus(p) === STATUS_POST);
+  const visiblePhotos = selectedTag === 'all'
+    ? photos
+    : (selectedTag === STATUS_PRE ? preCallPhotos : postCallPhotos);
 
   return (
     <div className="photo-management-screen">
@@ -112,14 +105,14 @@ function PhotoManagementScreen({ currentUser }) {
           전체 ({photos.length})
         </button>
         <button 
-          className={`tag-btn ${selectedTag === '통화전' ? 'active' : ''}`}
-          onClick={() => setSelectedTag('통화전')}
+          className={`tag-btn ${selectedTag === STATUS_PRE ? 'active' : ''}`}
+          onClick={() => setSelectedTag(STATUS_PRE)}
         >
           통화 전 ({preCallPhotos.length})
         </button>
         <button 
-          className={`tag-btn ${selectedTag === '통화후' ? 'active' : ''}`}
-          onClick={() => setSelectedTag('통화후')}
+          className={`tag-btn ${selectedTag === STATUS_POST ? 'active' : ''}`}
+          onClick={() => setSelectedTag(STATUS_POST)}
         >
           통화 후 ({postCallPhotos.length})
         </button>
@@ -128,8 +121,10 @@ function PhotoManagementScreen({ currentUser }) {
       {/* Photos Grid - 전체 사진 */}
       {photos.length > 0 && (
         <div className="photos-grid">
-          {(selectedTag === 'all' ? photos : selectedTag === '통화전' ? preCallPhotos : postCallPhotos).map(photo => (
-            <div key={photo.id} className={`photo-card ${photo.callStatus === '통화후' || photo.tag === '통화 후' ? 'completed' : 'pre-call'}`}>
+          {visiblePhotos.map(photo => {
+            const isCompleted = getPhotoStatus(photo) === STATUS_POST;
+            return (
+            <div key={photo.id} className={`photo-card ${isCompleted ? 'completed' : 'pre-call'}`}>
               <div className="photo-image-container">
                 <img 
                   src={photo.photoURL || photo.imageUrl} 
@@ -137,7 +132,7 @@ function PhotoManagementScreen({ currentUser }) {
                   className="photo-image"
                 />
                 <div className="call-status-badge">
-                  {photo.callStatus === '통화후' || photo.tag === '통화 후' ? '✅ 통화 완료' : '📞 통화 대기'}
+                  {isCompleted ? '✅ 통화 완료' : '📞 통화 대기'}
                 </div>
               </div>
               <div className="photo-info">
@@ -146,8 +141,8 @@ function PhotoManagementScreen({ currentUser }) {
                   <p className="photo-emotion">분위기: {photo.keywords.emotion}</p>
                 )}
                 <div className="photo-meta">
-                  <span className={`photo-tag ${photo.callStatus === '통화후' || photo.tag === '통화 후' ? 'completed-tag' : 'pre-call-tag'}`}>
-                    {photo.callStatus === '통화후' || photo.tag === '통화 후' ? '통화 후' : '통화 전'}
+                  <span className={`photo-tag ${isCompleted ? 'completed-tag' : 'pre-call-tag'}`}>
+                    {isCompleted ? '통화 후' : '통화 전'}
                   </span>
                   <button
                     className={`delete-btn ${deletingId === photo.id ? 'deleting' : ''}`}
@@ -160,7 +155,7 @@ function PhotoManagementScreen({ currentUser }) {
                 </div>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
