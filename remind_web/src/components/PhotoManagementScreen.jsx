@@ -71,29 +71,14 @@ function PhotoManagementScreen({ currentUser }) {
 
   return (
     <div className="photo-management-screen">
-      <div className="management-header">
-        <h1>사진 관리</h1>
-        <div className="photo-count">
-          <span>등록된 사진 ({photos.length})</span>
-        </div>
+      <div className="header-content">
+        <h1 className="header-title">사진 관리</h1>
       </div>
+      <div className="header-diver"></div>
 
-      {/* Info Alert */}
-      <div className="info-alert">
-        <span className="alert-icon">ℹ️</span>
-        <p>등록된 사진은 AI가 자동으로 분석하여 태그, 설명, 날짜가 채워집니다.</p>
-      </div>
-
-      {/* Analysis Status */}
-      <div className="analysis-status">
-        <div className="status-badge">
-          <span className="status-icon">📞</span>
-          <span className="status-text">통화 전: {preCallPhotos.length}개</span>
-        </div>
-        <div className="status-badge completed">
-          <span className="status-icon">✅</span>
-          <span className="status-text">통화 후: {postCallPhotos.length}개</span>
-        </div>
+      <div className="manage-top-content">
+        <div className="manage-top-title">등록된 사진 <span className="manage-top-title-cnt">({photos.length})</span></div>
+        <span className="manage-top-subtitle">AI 통화 시 어르신과 이야기를 나눌 추억 사진들입니다.</span>
       </div>
 
       {/* Tags Filter */}
@@ -131,9 +116,6 @@ function PhotoManagementScreen({ currentUser }) {
                   alt={photo.description || '사진'}
                   className="photo-image"
                 />
-                <div className="call-status-badge">
-                  {isCompleted ? '✅ 통화 완료' : '📞 통화 대기'}
-                </div>
               </div>
               <div className="photo-info">
                 <h3 className="photo-name">{photo.description || photo.name || '사진'}</h3>
@@ -142,16 +124,19 @@ function PhotoManagementScreen({ currentUser }) {
                 )}
                 <div className="photo-meta">
                   <span className={`photo-tag ${isCompleted ? 'completed-tag' : 'pre-call-tag'}`}>
-                    {isCompleted ? '통화 후' : '통화 전'}
+                    {isCompleted ? '통화 완료' : '통화 전'}
                   </span>
-                  <button
-                    className={`delete-btn ${deletingId === photo.id ? 'deleting' : ''}`}
-                    onClick={() => handleDeletePhoto(photo.id)}
-                    disabled={deletingId === photo.id}
-                    title="삭제"
-                  >
-                    🗑️
-                  </button>
+
+                  {(photo.callStatus === '통화전' && photo.tag === '통화 전') && 
+                    <button
+                      className={`delete-btn ${deletingId === photo.id ? 'deleting' : ''}`}
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      disabled={deletingId === photo.id}
+                      title="삭제"
+                    >
+                      <img src={trash_icon} className="trash_icon" />
+                    </button>
+                  }
                 </div>
               </div>
             </div>
@@ -165,9 +150,19 @@ function PhotoManagementScreen({ currentUser }) {
       ) : photos.length === 0 ? (
         <div className="empty-message">
           <p>등록된 사진이 없습니다.</p>
-          <p className="empty-submessage">새로운 사진을 등록해주세요.</p>
+          <div className="empty-submessage">새로운 사진을 등록해주세요.</div>
         </div>
       ) : null}
+
+      {/* Info Alert */}
+      <div className="info-contain-box">
+        <div className="info-icon">
+          <img className="icon-tiny" src={infoicon} alt="정보 아이콘" />
+        </div>
+        <p className="info-text">
+          ‘통화 완료’된 사진은 삭제할 수 없습니다.
+        </p>
+      </div>
     </div>
   );
 }

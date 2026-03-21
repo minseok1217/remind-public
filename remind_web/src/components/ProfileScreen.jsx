@@ -3,6 +3,10 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import './ProfileScreen.css';
+import user_icon from '../assets/user_icon.png';
+import call_icon from '../assets/call_icon.png';
+import time_icon from '../assets/time_icon.png';
+import date_icon from '../assets/date_icon.png';
 
 function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [guardianData, setGuardianData] = useState({
@@ -229,251 +233,181 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
 
   return (
     <div className="profile-screen">
-      <div className="header-with-back">
-        <button className="back-button" onClick={onBack} title="뒤로가기">←</button>
-        <h1>계정 관리 및 설정</h1>
+      <div className="header-content">
+        <h1 className="header-title">계정 관리 및 설정</h1>
       </div>
+      <div className="header-diver"></div>
 
       {loading ? (
         <div className="loading-message">로딩 중...</div>
-      ) : userType === 'guardian' ? (
+      ) : 
         <>
           {/* 보호자 정보 섹션 */}
-          <div className="section">
-            <h2 className="section-title">📋 보호자 정보 (본인)</h2>
-            
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">👤</span>
-                  <span>이름</span>
+          <section className="profile-section">
+            <h2 className="profile-section-title">본인 정보</h2>
+            <div className="profile-cards-container">
+              <div className="profile-info-card">
+                <div className="icon-circle">
+                  <img src={user_icon} className="icon-circle-small-img" />
                 </div>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editGuardianData.name}
-                    onChange={(e) => handleGuardianInputChange('name', e.target.value)}
-                    className="info-input"
-                  />
-                ) : (
-                  <div className="info-value">{guardianData.name || '미입력'}</div>
-                )}
+                <div className="profile-info-content">
+                  <div className="profile-info-label">이름</div>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editGuardianData.name}
+                      onChange={(e) => handleGuardianInputChange('name', e.target.value)}
+                      className="profile-info-input"
+                    />
+                  ) : (
+                    <div className="profile-info-value">{guardianData.name || '미입력'}</div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">✉️</span>
-                  <span>이메일</span>
+              <div className="profile-info-card">
+                <div className="icon-circle">
+                  <img src={user_icon} className="icon-circle-small-img" />
                 </div>
-                <div className="info-value">{guardianData.email}</div>
+                <div className="profile-info-content">
+                  <div className="profile-info-label">이메일</div>
+                  <div className="profile-info-value">{guardianData.email}</div>
+                </div>
               </div>
-            </div>
 
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">☎️</span>
-                  <span>전화번호</span>
+              <div className="profile-info-card">
+                <div className="icon-circle">
+                  <img src={call_icon} className="icon-circle-img" />
                 </div>
-                {isEditing ? (
-                  <input
-                    type="tel"
-                    value={editGuardianData.phoneNumber}
-                    onChange={(e) => handleGuardianInputChange('phoneNumber', e.target.value)}
-                    className="info-input"
-                    placeholder="010-0000-0000"
-                  />
-                ) : (
-                  <div className="info-value">{guardianData.phoneNumber || '미입력'}</div>
-                )}
+                <div className="profile-info-content">
+                  <div className="profile-info-label">전화번호</div>
+                  {isEditing ? (
+                    <input
+                      type="tel"
+                      value={editGuardianData.phoneNumber}
+                      onChange={(e) => handleGuardianInputChange('phoneNumber', e.target.value)}
+                      className="profile-info-input"
+                      placeholder="010-0000-0000"
+                    />
+                  ) : (
+                    <div className="profile-info-value">{guardianData.phoneNumber || '미입력'}</div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          </section>
+
+          {/* AI 통화 설정 */}
+          <section class="profile-section">
+            <h2 class="profile-section-title">AI 통화 설정</h2>
+            <div class="profile-ai-card">
+              <div class="icon-circle">
+                <img src={time_icon} className="icon-circle-img" />
+              </div>
+              <div class="profile-ai-content">
+                <div class="profile-ai-text">
+                  <h3 class="profile-ai-title">통화 시간</h3>
+                  <p class="profile-ai-description">매일 AI가 설정한 시간에 전화를 드립니다.</p>
+                </div>
+                <div class="profile-time-selector">
+                  <button class="profile-time-button" id="timeButton">
+                    <span id="selectedTime">02:00 PM</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
 
           {/* 환자 정보 섹션 */}
-          <div className="section">
-            <h2 className="section-title">👤 환자 정보</h2>
-
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">👤</span>
-                  <span>환자 이름</span>
+          <section class="profile-section">
+            <h2 class="profile-section-title">환자 정보</h2>
+            <div class="profile-cards-container">
+              <div class="profile-info-card">
+                <div class="icon-circle">
+                  <img src={user_icon} className="icon-circle-small-img" />
                 </div>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editPatientData.name}
-                    onChange={(e) => handlePatientInputChange('name', e.target.value)}
-                    className="info-input"
-                  />
-                ) : (
-                  <div className="info-value">{patientData.name || '미입력'}</div>
-                )}
+                <div class="profile-info-content">
+                  <div class="profile-info-label">성명</div>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editPatientData.name}
+                      onChange={(e) => handlePatientInputChange('name', e.target.value)}
+                      className="profile-info-input"
+                    />
+                  ) : (
+                    <div className="profile-info-value">{patientData.name || '미입력'}</div>
+                  )}
+                </div>
+              </div>
+
+              <div class="profile-info-card">
+                <div class="icon-circle">
+                  <img src={date_icon} className="icon-circle-img" />
+                </div>
+                <div class="profile-info-content">
+                  <div class="profile-info-label">생년월일</div>
+                  {isEditing ? (
+                    <input
+                      type="date"
+                      value={editPatientData.birthdate}
+                      onChange={(e) => handlePatientInputChange('birthdate', e.target.value)}
+                      className="profile-info-input"
+                    />
+                  ) : (
+                    <div className="profile-info-value">{patientData.birthdate || '미입력'}</div>
+                  )}
+                </div>
+              </div>
+
+              <div class="profile-info-card">
+                <div class="icon-circle">
+                  <img src={call_icon} className="icon-circle-img" />
+                </div>
+                <div class="profile-info-content">
+                  <div class="profile-info-label">전화번호</div>
+                  <div class="profile-info-value">010-2222-2222</div>
+                </div>
               </div>
             </div>
-
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">📅</span>
-                  <span>생년월일</span>
-                </div>
-                {isEditing ? (
-                  <input
-                    type="date"
-                    value={editPatientData.birthdate}
-                    onChange={(e) => handlePatientInputChange('birthdate', e.target.value)}
-                    className="info-input"
-                  />
-                ) : (
-                  <div className="info-value">{patientData.birthdate || '미입력'}</div>
-                )}
-              </div>
-            </div>
-
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">👥</span>
-                  <span>성별</span>
-                </div>
-                {isEditing ? (
-                  <div className="gender-selector">
-                    <button
-                      type="button"
-                      className={`gender-btn ${editPatientData.gender === '남성' || editPatientData.gender === 'M' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', '남성')}
-                    >
-                      남성
-                    </button>
-                    <button
-                      type="button"
-                      className={`gender-btn ${editPatientData.gender === '여성' || editPatientData.gender === 'F' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', '여성')}
-                    >
-                      여성
-                    </button>
-                  </div>
-                ) : (
-                  <div className="info-value">{patientData.gender === '남성' || patientData.gender === 'M' ? '남성' : patientData.gender === '여성' || patientData.gender === 'F' ? '여성' : '미입력'}</div>
-                )}
-              </div>
-            </div>
-          </div>
+          </section>
         </>
-      ) : (
-        <>
-          {/* 환자 정보 섹션 (환자가 접속했을 때) */}
-          <div className="section">
-            <h2 className="section-title">👤 내 정보</h2>
-
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">👤</span>
-                  <span>이름</span>
-                </div>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editPatientData.name}
-                    onChange={(e) => handlePatientInputChange('name', e.target.value)}
-                    className="info-input"
-                  />
-                ) : (
-                  <div className="info-value">{patientData.name || '미입력'}</div>
-                )}
-              </div>
-            </div>
-
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">📅</span>
-                  <span>생년월일</span>
-                </div>
-                {isEditing ? (
-                  <input
-                    type="date"
-                    value={editPatientData.birthdate}
-                    onChange={(e) => handlePatientInputChange('birthdate', e.target.value)}
-                    className="info-input"
-                  />
-                ) : (
-                  <div className="info-value">{patientData.birthdate || '미입력'}</div>
-                )}
-              </div>
-            </div>
-
-            <div className="info-card">
-              <div className="info-row">
-                <div className="info-label">
-                  <span className="icon">👥</span>
-                  <span>성별</span>
-                </div>
-                {isEditing ? (
-                  <div className="gender-selector">
-                    <button
-                      type="button"
-                      className={`gender-btn ${editPatientData.gender === '남성' || editPatientData.gender === 'M' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', '남성')}
-                    >
-                      남성
-                    </button>
-                    <button
-                      type="button"
-                      className={`gender-btn ${editPatientData.gender === '여성' || editPatientData.gender === 'F' ? 'active' : ''}`}
-                      onClick={() => handlePatientInputChange('gender', '여성')}
-                    >
-                      여성
-                    </button>
-                  </div>
-                ) : (
-                  <div className="info-value">{patientData.gender === '남성' || patientData.gender === 'M' ? '남성' : patientData.gender === '여성' || patientData.gender === 'F' ? '여성' : '미입력'}</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+        }
 
       {/* Action Button */}
-      <div className="action-section">
+      <div className="profile-action-section">
         {!isEditing ? (
           <>
             <button 
-              className="action-button"
+              className="profile-action-button"
               onClick={handleEditClick}
             >
               수정 하기
             </button>
             <button 
-              className="action-button logout-btn"
+              className="profile-action-button logout-btn"
               onClick={handleLogout}
             >
               로그아웃
             </button>
           </>
         ) : (
-          <div className="action-buttons">
+          <>
             <button 
-              className="action-button save-btn"
+              className="profile-action-button save-btn"
               onClick={handleSave}
               disabled={isSaving}
             >
               {isSaving ? '저장 중...' : '저장 하기'}
             </button>
             <button 
-              className="action-button cancel-btn"
+              className="profile-action-button cancel-btn"
               onClick={handleCancel}
               disabled={isSaving}
             >
               취소
             </button>
-          </div>
+          </>
         )}
       </div>
     </div>

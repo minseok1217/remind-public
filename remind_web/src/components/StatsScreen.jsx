@@ -3,6 +3,8 @@ import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { calculateWeeklyTrend } from '../services/conversationAnalysisService';
 import './StatsScreen.css';
+import call_icon from '../assets/call_icon.png';
+import search_icon from '../assets/search_icon.png';
 
 function StatsScreen({ currentUser, onBack, onNavigate }) {
   const [loading, setLoading] = useState(true);
@@ -222,10 +224,10 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
 
   return (
     <div className="stats-screen">
-      <div className="stats-header">
-        <button className="stats-back-btn" onClick={onBack}>←</button>
-        <h1>통계</h1>
+      <div className="header-content">
+        <h1 className="header-title">계정 관리 및 설정</h1>
       </div>
+      <div className="header-diver"></div>
 
       {/* Period Tabs */}
       <div className="period-tabs">
@@ -242,19 +244,12 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
           최근 30일
         </button>
       </div>
-
-      {/* Cognitive Score Card */}
-      <div className="cognitive-card">
-        <div className="cognitive-card-title">인지 상태 점수</div>
-
-        {/* Score Circle */}
-        <div className="score-circle-container">
-          <div className="score-circle" style={{ borderColor: stats?.statusColor || '#41d17f' }}>
-            <span className="score-number" style={{ color: stats?.statusColor || '#41d17f' }}>
-              {stats?.score || 0}
-            </span>
-            <span className="score-unit">점</span>
-          </div>
+      
+      {/* Score Card */}
+      <div className="score-card">
+        <div className="score-header">
+          <div className="score-label">인지 상태 변화</div>
+          <div className="date-range">{stats.dateRange}</div>
         </div>
 
         {/* Chart */}
@@ -345,21 +340,26 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
           )}
         </div>
 
-        {/* Status Message */}
-        <div className="status-message-box" style={{ backgroundColor: `${stats?.statusColor || '#41d17f'}15`, borderColor: `${stats?.statusColor || '#41d17f'}40` }}>
-          <span className="status-icon" style={{ color: stats?.statusColor || '#41d17f' }}>✓</span>
-          <div className="status-text">
-            <span className="status-label-text" style={{ color: stats?.statusColor || '#41d17f' }}>{stats?.message || '분석 중'}</span>
-            <p className="status-detail">{stats?.detail || ''}</p>
-          </div>
+        {/* Score Display */}
+        <div className="score-display">
+          <div className="big-score">{stats.score}점</div>
         </div>
       </div>
 
+      {/* Message Box */}
+      <div className="message-box">
+        <div className="message-main-label">
+          <img src={search_icon} className="icon-tiny" />
+          <div className="message-label">{stats?.message || '분석 중'}</div>
+        </div>
+        <p className="message-detail">{stats?.detail || ''}</p>
+      </div>
+
       {/* Call History Section */}
-      <div className="call-history-section">
-        <div className="section-title-row">
-          <h3>통화 기록</h3>
-          <button className="view-all-btn" onClick={handleViewAllHistory}>전체 보기 &rsaquo;</button>
+      <div className="call-history">
+        <div className="section-header">
+          <h3>통화 이력</h3>
+          <button className="view-all" onClick={handleViewAllHistory}>전체 보기 &rsaquo;</button>
         </div>
 
         <div className="call-list">
@@ -367,19 +367,19 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
             <div className="no-records">통화 기록이 없습니다.</div>
           ) : (
             callRecords.map((record) => (
-              <div key={record.id} className="call-list-item" onClick={() => handleCallClick(record)}>
-                <div className="call-list-icon">📞</div>
-                <div className="call-list-info">
-                  <div className="call-list-date">{record.date}</div>
-                  <div className="call-list-meta">{record.time} · 통화시간 {record.duration}</div>
-                </div>
-                <div className={`call-badge ${record.badgeType}`}>
-                  {record.statusLabel}
-                </div>
-                <div className="call-list-arrow">&rsaquo;</div>
+            <div key={record.id} className="call-item" onClick={() => handleCallClick(record)}>
+              <div className="call-list-icon">
+                <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />
               </div>
-            ))
-          )}
+              <div className="call-info-content">
+                <div className="call-detail">날짜: {record.date}</div>
+                <div className="call-detail">시간: {record.time}</div>
+                <div className="call-detail">{record.duration}</div>
+              </div>
+              <span className={`call-badge ${record.badgeType}`}>{record.statusLabel}</span>
+              <div className="call-arrow">›</div>
+            </div>
+          )))}
         </div>
       </div>
     </div>

@@ -4,6 +4,12 @@ import { auth, db } from '../firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { generateVerificationCode, saveVerificationCode, verifyCode, formatPhoneNumber, validatePhoneNumber } from '../services/verificationService';
 import './AuthScreen.css';
+import './SignupScreen.css';
+import backicon from '../assets/back_icon.png';
+import usericon from '../assets/user_icon.png';
+import plusicon from '../assets/plus_icon.png';
+import infoicon from '../assets/info_icon.png';
+
 
 function SignupScreen({ onSwitchToLogin }) {
   // 보호자 정보
@@ -232,83 +238,81 @@ function SignupScreen({ onSwitchToLogin }) {
   };
 
   return (
-    <div className="auth-screen">
-      <div className="auth-container">
-        <div className="auth-header">
-          {/* Infinity Logo SVG */}
-          <svg 
-            className="auth-infinity-logo" 
-            viewBox="0 0 100 50" 
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M25 25 C25 15, 35 10, 45 15 C55 20, 55 30, 45 35 C35 40, 25 35, 25 25 M75 25 C75 35, 65 40, 55 35 C45 30, 45 20, 55 15 C65 10, 75 15, 75 25"
-              fill="none"
-              stroke="#41d17f"
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <h1>REMIND CALL</h1>
-          <p>기억을 잇다, 마음을 잇다</p>
+    <div className="signup-container">
+      <div className="signup-header">
+        <div className="header-content">
+          <button type="button" className="back-ic-button">
+            <img className="icon" src={backicon} alt="뒤로가기 아이콘" />
+          </button>
+          <h1 className="header-title">회원가입</h1>
         </div>
+      </div>
 
-        <form className="auth-form" onSubmit={handleSignup}>
-          {/* 보호자 정보 섹션 */}
-          <div className="form-section">
-            <h3 className="section-subtitle">📋 보호자 정보</h3>
+      <form className="signup-content" onSubmit={handleSignup}>
+        {/* 보호자 정보 섹션 */}
+        <section>
+          <div className="sign-section-header">
+            <div className="section-icon">
+              <img className="icon-small" src={usericon} alt="유저 아이콘" />
+            </div>
+            <h3 className="sign-section-title">보호자 정보</h3>
+          </div>
             
-            <div className="form-group">
-              <label>보호자 이름</label>
+          <div className="form-fields">
+            <div className="form-field">
+              <label className="field-label" htmlFor="guardianName">이름</label>
               <input
                 type="text"
                 placeholder="보호자 이름을 입력해주세요"
                 value={guardianName}
                 onChange={(e) => setGuardianName(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>아이디 (이메일)</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="guardianId">이메일</label>
               <input
                 type="email"
                 placeholder="이메일을 입력해주세요"
                 value={guardianEmail}
                 onChange={(e) => setGuardianEmail(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>비밀번호</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="guardianPassword">비밀번호</label>
               <input
                 type="password"
                 placeholder="비밀번호를 입력해주세요"
                 value={guardianPassword}
                 onChange={(e) => setGuardianPassword(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>비밀번호 확인</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="guardianPassword">비밀번호 확인</label>
               <input
                 type="password"
                 placeholder="비밀번호를 다시 입력해주세요"
                 value={guardianPasswordConfirm}
                 onChange={(e) => setGuardianPasswordConfirm(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>전화번호</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="guardianPhone">전화번호</label>
               <div className="phone-verification-group">
                 <input
                   type="tel"
@@ -316,6 +320,7 @@ function SignupScreen({ onSwitchToLogin }) {
                   value={guardianPhoneNumber}
                   onChange={(e) => setGuardianPhoneNumber(formatPhoneNumber(e.target.value))}
                   disabled={loading || verificationStep !== 'none'}
+                  className="input-field"
                   required
                 />
                 {verificationStep === 'none' && (
@@ -369,56 +374,71 @@ function SignupScreen({ onSwitchToLogin }) {
               </div>
             )}
           </div>
+        </section>
 
-          {/* 환자 정보 섹션 */}
-          <div className="form-section patient-section">
-            <h3 className="section-subtitle">➕ 환자 정보</h3>
-            <div className="info-box">
-              <span className="info-icon">ℹ️</span>
-              <p>가입 완료 시, 입력하신 환자 정보로 <strong>환자 전용 계정</strong>이 자동 생성됩니다.</p>
+        {/* 환자 정보 섹션 */}
+        <section>
+          <div className="sign-section-header">
+            <div className="section-icon">
+              <img className="icon-small" src={plusicon} alt="환자 아이콘" />
             </div>
+            <h2 className="sign-section-title">환자 정보</h2>
+          </div>
+
+          <div className="info-box">
+            <div className="info-icon">
+              <img className="icon-tiny" src={infoicon} alt="정보 아이콘" />
+            </div>
+            <p className="info-text">
+              가입 완료 시, 입력하신 환자 정보로 <span className="info-bold">환자 정용 계정이</span> 자동 생성됩니다.
+            </p>
+          </div>
             
-            <div className="form-group">
-              <label>환자 이름</label>
+          <div className="form-fields">
+            <div className="form-field">
+              <label className="field-label" htmlFor="patientName">환자 이름</label>
               <input
                 type="text"
                 placeholder="환자 성함을 입력하세요"
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>환자 전화번호</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="patientPhone">환자 전화번호</label>
               <input
                 type="tel"
                 placeholder="환자 전화번호를 입력하세요"
                 value={patientPhone}
                 onChange={(e) => setPatientPhone(formatPhoneNumber(e.target.value))}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>생년월일</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="birthDate">생년월일</label>
               <input
                 type="date"
                 value={patientBirthdate}
                 onChange={(e) => setPatientBirthdate(e.target.value)}
                 disabled={loading}
+                className="input-field date-input"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>성별</label>
-              <div className="gender-selector">
+            <div className="form-field">
+              <label className="field-label">성별</label>
+              <div className="sign-gender-buttons">
                 <button
                   type="button"
-                  className={`gender-btn ${patientGender === '남성' ? 'active' : ''}`}
+                  className={`sign-gender-btn ${patientGender === '남성' ? 'active' : ''}`}
                   onClick={() => setPatientGender('남성')}
                   disabled={loading}
                 >
@@ -426,7 +446,7 @@ function SignupScreen({ onSwitchToLogin }) {
                 </button>
                 <button
                   type="button"
-                  className={`gender-btn ${patientGender === '여성' ? 'active' : ''}`}
+                  className={`sign-gender-btn ${patientGender === '여성' ? 'active' : ''}`}
                   onClick={() => setPatientGender('여성')}
                   disabled={loading}
                 >
@@ -435,31 +455,33 @@ function SignupScreen({ onSwitchToLogin }) {
               </div>
             </div>
 
-            <div className="form-group">
-              <label>환자용 아이디</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="patientId">환자용 아이디</label>
               <input
                 type="text"
                 placeholder="아이디를 입력하세요"
                 value={patientId}
                 onChange={(e) => setPatientId(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="form-group">
-              <label>환자용 비밀번호</label>
+            <div className="form-field">
+              <label className="field-label" htmlFor="patientPassword">환자용 비밀번호</label>
               <input
                 type="password"
                 placeholder="비밀번호를 입력하세요"
                 value={patientPassword}
                 onChange={(e) => setPatientPassword(e.target.value)}
                 disabled={loading}
+                className="input-field"
                 required
               />
             </div>
 
-            <div className="terms-checkbox">
+            <div className="sign-terms-checkbox">
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -468,37 +490,37 @@ function SignupScreen({ onSwitchToLogin }) {
                   disabled={loading}
                 />
                 <span className="checkbox-text">
-                  개인정보 수집 및 이용, 환자 정보 제공 서비스 이용 약관에 동의합니다. <strong>(필수)</strong>
+                  개인정보 수집 및 이용, 환자 정보 제공 서비스 이용 약관에 동의합니다. (필수)
                 </span>
               </label>
             </div>
           </div>
+        </section>
 
-          {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message">{error}</div>}
 
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
+        <button
+          type="submit"
+          className="common-button"
+          disabled={loading}
+        >
+          <span className='common-button-text'>
             {loading ? '회원가입 중...' : '회원가입'}
-          </button>
-        </form>
+          </span>
+        </button>
+      </form>
 
-        <div className="auth-footer">
-          <p>
-            이미 계정이 있으신가요?{' '}
-            <button
-              type="button"
-              className="switch-button"
-              onClick={onSwitchToLogin}
-              disabled={loading}
-            >
-              로그인
-            </button>
-          </p>
-        </div>
-      </div>
+      <p class="login-link">
+        이미 계정이 있으신가요?{' '}
+        <button
+          type="button"
+          className="switch-button"
+          onClick={onSwitchToLogin}
+          disabled={loading}
+        >
+          로그인
+        </button>
+      </p>
     </div>
   );
 }

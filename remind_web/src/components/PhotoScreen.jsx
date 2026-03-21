@@ -4,6 +4,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { extractKeywordsFromPhoto } from '../services/geminiService';
 import './PhotoScreen.css';
+import upload_icon from '../assets/photo_icon_on.png';
 
 function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -122,13 +123,14 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
   return (
     <div className="photo-screen">
-      <div className="header-with-back">
-        <button className="back-button" onClick={onBack} title="뒤로가기">←</button>
-        <h1>사진 등록</h1>
+      <div className="header-content">
+        <h1 className="header-title">사진 등록</h1>
+        <button className="photo-header-button">사진 관리</button>
       </div>
+      <div className="header-diver"></div>
 
       <div className="description-text">
-        <p>사기 등록 중 고교로 사진을 업로드하고 사진 설명을 입력해서 사진을 인증해주세요.</p>
+        <p>AI가 통화 중 참고할 사진을 업로드하고 사진 속 인물이나 상황을 설명해주세요.</p>
       </div>
 
       {/* Upload Area */}
@@ -143,9 +145,11 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
             disabled={isUploading}
           />
           <div className="upload-content">
-            <div className="upload-icon">📸</div>
+            <div className="upload-icon-circle">
+              <img src={upload_icon} className='upload-icon-img' />
+            </div>
             <h3 className="upload-title">사진 업로드</h3>
-            <p className="upload-subtitle">신청해서 사진 찾기</p>
+            <p className="upload-subtitle">사진을 선택하거나 촬영하세요</p>
           </div>
         </label>
 

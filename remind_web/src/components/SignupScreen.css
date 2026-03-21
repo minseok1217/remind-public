@@ -1,0 +1,249 @@
+.signup-container {
+  min-height: 100vh;
+  background-color: #f6f8f7;
+}
+
+/* Header */
+.signup-header {
+  width: 100%;
+  border-bottom: 1px solid #E4E4E4;
+}
+
+.header-content {
+  max-width: 448px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.back-ic-button {
+  padding: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: absolute;
+  left: 10px;
+}
+
+.back-ic-button .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.header-spacer {
+  width: 40px;
+}
+
+/* Content */
+.signup-content {
+  max-width: 448px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Section */
+.sign-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.section-icon {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-small {
+  width: 27px;
+  height: 27px;
+  color: #ffffff;
+}
+
+.sign-section-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+
+/* Form Fields */
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  padding-left: 10px;
+  margin-bottom: 8px;
+}
+
+.input-field {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid #00C16E;
+  border-radius: 12px;
+  font-family: "Pretendard-Bold", Helvetica;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 24px;
+  color: #000000;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input-field::placeholder {
+  color: #d7d7d7;
+  font-weight: 400;
+  font-size: 16px;
+}
+
+.input-field:focus {
+  border-color: #00C16E;
+}
+
+/* Date Input */
+.date-input-wrapper {
+  position: relative;
+}
+
+.date-input {
+  color: #9ca3af;
+}
+
+.calendar-icon {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: #00C16E;
+  pointer-events: none;
+}
+
+/* Gender Buttons */
+.sign-gender-btn {
+  flex: 1;
+  padding: 10px;
+  background-color: #f5f5f5;
+  color: #767676;
+  border: 1px solid #DADADA;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sign-gender-btn:hover:not(:disabled) {
+  background-color: #eee;
+}
+
+.sign-gender-btn.active {
+  background-color: #DCFAED;
+  color: #00C16E;
+  border-color: #00C16E;
+}
+
+.sign-gender-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sign-gender-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/*info box*/
+.info-box {
+  background-color: #DCFAED;
+  border: 1px solid #00C16E;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.info-box .info-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.info-box p {
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.info-box strong {
+  color: #1b5e20;
+}
+
+/* Terms */
+.terms-text {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+  padding: 0 4px;
+}
+
+/* Submit Button */
+.submit-button {
+  width: 100%;
+  height: 56px;
+  background-color: #00C16E;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submit-button:hover {
+  background-color: #059669;
+}
+
+/* Login Link */
+.login-link {
+  text-align: center;
+  font-size: 14px;
+  color: #4b5563;
+  height: 50px;
+}
+
+.login-anchor {
+  color: #10b981;
+  font-weight: 600;
+  text-decoration: underline;
+}

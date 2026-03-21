@@ -1,0 +1,210 @@
+@media (min-width: 480px) {
+  .login-auth-screen {
+    max-width: 480px;      /* 전체 박스 너비를 480px로 고정 */
+    margin: 0 auto;        /* 화면 중앙으로 배치 */
+    position: relative;    /* 하위 요소의 fixed/absolute 기준점 조정 */
+    height: 100vh;         /* 전체 화면 높이 유지 */
+    display: flex;         /* 자식 요소를 중앙으로 보내기 위한 설정 */
+    align-items: center;  /* 수직 중앙 정렬 */
+  }
+
+  .login-auth-screen .login-auth-container {
+    left: 50% !important;  /* 부모(.auth-screen) 기준 중앙 */
+    transform: translateX(-50%); /* 정확한 중앙 정렬 */
+    width: 420px !important;;          /* 480px의 86.67%에 해당하는 고정 너비 */
+    position: absolute;    /* fixed 대신 absolute로 변경하여 부모 박스 안에 가둠 */
+  }
+}
+
+.login-auth-screen {
+  background-color: #f6f8f7;
+  width: 100%;
+  min-width: 360px;
+}
+
+.login-auth-screen .login-auth-container {
+  display: flex;
+  flex-direction: column;
+  width: 86.67%;
+  height: 64.59%;
+  align-items: center;
+  gap: 38px;
+  position: fixed;
+  top: 11.62%;
+  left: 6.67%;
+}
+
+.login-auth-screen .login-auth-header {
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  align-items: center;
+  gap: 13px;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.login-auth-screen .login-group {
+  position: relative;
+  width: 157px;
+  height: 108px;
+}
+
+.login-auth-screen .login-text-wrapper {
+  position: relative;
+  align-self: stretch;
+  color: #a6adb7;
+  font-size: 16px;
+  text-align: center;
+  line-height: normal;
+  font-family: "Pretendard-Bold", Helvetica;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.login-auth-screen .login-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.login-auth-screen .login-auth-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 30px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.login-auth-screen .login-frame-input {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.login-auth-screen .login-form-group {
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  height: 84px;
+  margin-right: -2.00px;
+}
+
+.login-auth-screen .login-text-wrapper-2 {
+  position: absolute;
+  width: 14.97%;
+  height: 30.95%;
+  top: 0;
+  left: 2.45%;
+  color: #767676;
+  font-size: 18px;
+  line-height: 26px;
+  white-space: nowrap;
+  font-family: "Pretendard-Bold", Helvetica;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.login-auth-screen .login-auth-footer {
+  position: relative;
+  width: 238.4px;
+  height: 17px;
+}
+
+.login-auth-screen .login-image {
+  width: 26.85%;
+  top: 10.93%;
+  left: 0;
+  position: absolute;
+  height: 100%;
+}
+
+.login-auth-screen .img {
+  width: 32.30%;
+  top: 10.93%;
+  left: 36.52%;
+  position: absolute;
+  height: 100%;
+}
+
+.login-auth-screen .vector {
+  left: 31.74%;
+  position: absolute;
+  width: 0;
+  height: 64.71%;
+  top: 17.65%;
+}
+
+.login-auth-screen .image-2 {
+  width: 20.55%;
+  top: 11.25%;
+  left: 77.27%;
+  position: absolute;
+  height: 100%;
+}
+
+.login-auth-screen .vector-2 {
+  left: 72.41%;
+  position: absolute;
+  width: 0;
+  height: 64.71%;
+  top: 17.65%;
+}
+/* Original CSS code should be injected here */
+
+.login-auth-screen .login-text-wrapper-2 {
+  display: block;
+} 
+
+.login-auth-screen .login-auth-footer .login-footer-links {
+  display: flex;            /* 한 줄 배치를 위한 flex 설정 */
+  align-items: center;      /* 세로 중앙 정렬 */
+  justify-content: center;  /* 가로 중앙 정렬 */
+  gap: 10px;               /* 요소 사이 간격 */
+  position: relative;
+  width: 100%;             /* 부모 너비에 맞춤 */
+  margin-top: 10px;        /* 상단 여백 (필요시 조절) */
+}
+
+.login-auth-screen .login-auth-footer .login-switch-button{
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.login-auth-screen .login-auth-footer p {
+  color: #767676;
+  font-size: 14px;
+  font-family: "Pretendard-Regular", Helvetica;
+  cursor: pointer;
+  margin: 0;               /* 기본 마진 제거 */
+  white-space: nowrap;     /* 줄바꿈 방지 */
+}
+
+.login-auth-screen .login-auth-footer .login-link-divider {
+  color: #d7d7d7;          /* 구분선 색상 연하게 */
+  font-size: 12px;
+  user-select: none;       /* 선택 방지 */
+}
+
+.login-auth-screen .login-auth-footer img:hover {
+  opacity: 0.8;
+}
+
+.login-auth-screen .login-auth-footer img:active {
+  opacity: 0.6;
+}
