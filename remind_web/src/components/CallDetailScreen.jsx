@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import './CallDetailScreen.css';
+import backicon from '../assets/back_icon.png';
+import charticon from '../assets/chart_icon_on.png';
+import aiicon from '../assets/ai_icon.png';
+import usericon from '../assets/user_icon.png';
+import infoicon from '../assets/info_icon.png';
+
 
 function CallDetailScreen({ callLog, currentUser, onBack }) {
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -24,6 +30,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       if (callLog?.photoId && callLog?.userId) {
         const photoDocRef = doc(db, 'users', callLog.userId, 'photos', callLog.photoId);
         const photoSnap = await getDoc(photoDocRef);
+        console.log(photoSnap.exists());
         if (photoSnap.exists()) {
           setPhotoUrl(photoSnap.data().imageUrl || photoSnap.data().url || null);
         }
@@ -105,45 +112,52 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
 
   return (
     <div className="call-detail-screen">
-      <div className="cd-header">
-        <button className="cd-back-btn" onClick={onBack}>←</button>
-        <h1>통화 분석</h1>
+      <div className="header-content">
+        <button className="back-ic-button" onClick={onBack}>
+          <img className="icon" src={backicon} alt="뒤로가기 아이콘" />
+        </button>
+        <h1 className="header-title">{getCallDateString()}</h1>
       </div>
-
-      {/* Call Info */}
-      <div className="cd-call-info-bar">
-        <span className="cd-call-date">{getCallDateString()} {getCallTimeString()}</span>
-        <span className="cd-call-dur">통화시간 {getDurationString()}</span>
-      </div>
-
+      <div className="header-diver"></div>
+      
       {/* Photo Section */}
-      {photoUrl && (
+      {photoUrl && ( 
         <div className="cd-photo-section">
-          <div className="cd-photo-label">사용된 사진</div>
           <div className="cd-photo-wrapper">
-            <img src={photoUrl} alt="통화에 사용된 사진" className="cd-photo" />
+              <img src={photoUrl} alt="통화에 사용된 사진" className="cd-photo" />
+            <h2 className="cd-photo-label">제주도 가족 여행 갈을 때</h2>
           </div>
         </div>
       )}
 
       {/* Score Circle & Status */}
       <div className="cd-score-section">
-        <div className="cd-score-circle" style={{ borderColor: status.color || '#41d17f' }}>
-          <span className="cd-score-num" style={{ color: status.color || '#41d17f' }}>{cognitiveScore}</span>
-          <span className="cd-score-unit">점</span>
+        <div className="cd-status-card">
+          <p className="cd-score-title">인지 상태 점수</p>
+          <div className="cd-score-circle" style={{ borderColor: status.color || '#00C16E' }}>
+            <span className="cd-score-num" style={{ color: status.color || '#00C16E' }}>{cognitiveScore}점</span>
+          </div>
         </div>
-        <div className={`cd-status-badge ${getStatusBadgeType()}`}>
-          {status.label || '분석 완료'}
+        <div className="cd-status-card highlight">
+          <p className="cd-score-title">상태</p>
+          <div className="status-text-container">
+            <div className={`cd-status-badge ${getStatusBadgeType()}`}>
+              {status.label || '분석 완료'}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Detailed Analysis Bars */}
       <div className="cd-analysis-card">
-        <div className="cd-analysis-title">상세 분석</div>
+        <div className="analysis-label">
+          <img src={charticon} className='icon-small' />
+          <div className="cd-analysis-title">상세 분석</div>
+        </div>
         <div className="cd-score-bars">
-          <ScoreBar label="유창성" value={metrics.fluencyScore || scores.language || 0} color="#4CAF50" />
-          <ScoreBar label="기억력" value={scores.memory || 0} color="#2196F3" />
-          <ScoreBar label="정서" value={scores.emotion || 0} color="#FF9800" />
+          <ScoreBar label="유창성" value={metrics.fluencyScore || scores.language || 0} color="#00C16E" />
+          <ScoreBar label="기억력" value={scores.memory || 0} color="#00C16E" />
+          <ScoreBar label="정서" value={scores.emotion || 0} color="#00C16E" />
         </div>
 
         {/* Metric Details */}
@@ -167,32 +181,50 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
         </div>
       </div>
 
-      {/* Insights */}
-      {insights.length > 0 && (
-        <div className="cd-insight-card">
-          <div className="cd-insight-icon">💡</div>
-          <div className="cd-insight-text">
-            {insights.map((insight, i) => (
-              <p key={i}>{insight}</p>
-            ))}
+      {/* Conversation Section */}
+      {messages.length > 0 && (
+        <div className="cd-conversation-section">
+          <div className="cd-conversation-title">주요 대화 내용</div>
+          <div className="cd-conversation-card">
+            <div className="cd-messages">
+              {messages.map(msg => (
+                <div key={msg.id} className={`cd-message ${msg.role}`}>
+                  <div className="cd-message-role">
+                    {msg.role === 'ai' ? 
+                      <div className='chat-ai-label'>
+                        <div className="chat-icon-circle">
+                          <img src={aiicon} className='chat-icon' />
+                        </div>
+                        <span>AI 케어</span>
+                      </div>
+                      :
+                      <div className='chat-user-label'>
+                        <span>환자</span>
+                        <div className="chat-icon-circle">
+                          <img src={usericon} className='chat-icon' />
+                        </div>
+                      </div>
+                    }
+                  </div>
+                  <div className={`cd-message-text ${msg.role === 'ai' ? 'ai-message' : 'user-message'}`}>{msg.text}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Conversation Section */}
-      {messages.length > 0 && (
-        <div className="cd-conversation-card">
-          <div className="cd-conversation-title">대화 내용</div>
-          <div className="cd-messages">
-            {messages.map(msg => (
-              <div key={msg.id} className={`cd-message ${msg.role}`}>
-                <div className="cd-message-role">
-                  {msg.role === 'ai' ? '🤖 AI' : '👤 환자'}
-                </div>
-                <div className="cd-message-text">{msg.text}</div>
-              </div>
-            ))}
+      {/* Info Alert */}
+      {insights.length > 0 && (
+        <div className="info-contain-box">
+          <div className="info-icon">
+            <img className="icon-tiny" src={infoicon} alt="정보 아이콘" />
           </div>
+          <p className="info-text">
+            {insights.map((insight, i) => (
+              <p key={i}>{insight}</p>
+            ))}
+          </p>
         </div>
       )}
     </div>

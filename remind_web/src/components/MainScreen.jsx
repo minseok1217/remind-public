@@ -320,7 +320,7 @@ function MainScreen({ currentUser }) {
                 <p>아직 통화 기록이 없습니다.</p>
               </div>
             ) : (
-              callRecords.map((record) => (
+              callRecords.slice(0,3).map((record) => (
               <div key={record.id} className="call-item">
                 <div className="call-list-icon">
                   <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />

@@ -43,7 +43,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
 
           if (!familySnapshot.empty) {
             targetUserId = familySnapshot.docs[0].data().patient_id;
-          }
+          } 
         }
       }
 
@@ -74,7 +74,8 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
         setCallRecords([]);
       }
     } catch (error) {
-      console.error('[StatsScreen] 데이터 로드 실패:', error);
+      console.error('[StatsScreen] 데이터 로드 실패:', error.message, error.code, error);
+      alert(`데이터 로드 실패: ${error.message}. 콘솔을 확인해주세요.`);
       setStats({
         score: 0,
         trend: [],
@@ -249,7 +250,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
       <div className="score-card">
         <div className="score-header">
           <div className="score-label">인지 상태 변화</div>
-          <div className="date-range">{stats.dateRange}</div>
+          <div className="date-range">01월 01일 ~ 01월 07일</div>
         </div>
 
         {/* Chart */}
@@ -341,9 +342,11 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
         </div>
 
         {/* Score Display */}
+        {/*
         <div className="score-display">
           <div className="big-score">{stats.score}점</div>
         </div>
+        */}
       </div>
 
       {/* Message Box */}
@@ -366,7 +369,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
           {callRecords.length === 0 ? (
             <div className="no-records">통화 기록이 없습니다.</div>
           ) : (
-            callRecords.map((record) => (
+            callRecords.slice(0,3).map((record) => (
             <div key={record.id} className="call-item" onClick={() => handleCallClick(record)}>
               <div className="call-list-icon">
                 <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />
@@ -374,9 +377,9 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
               <div className="call-info-content">
                 <div className="call-detail">날짜: {record.date}</div>
                 <div className="call-detail">시간: {record.time}</div>
-                <div className="call-detail">{record.duration}</div>
+                <div className="call-detail">통화 시간: {record.duration}</div>
               </div>
-              <span className={`call-badge ${record.badgeType}`}>{record.statusLabel}</span>
+              <span className={`call-status-value ${record.status=="분석 불가" ? 'status-disabled' : (record.status=="주의 필요" ? 'status-warning' : 'status-good')}`}>{record.statusLabel}</span>
               <div className="call-arrow">›</div>
             </div>
           )))}

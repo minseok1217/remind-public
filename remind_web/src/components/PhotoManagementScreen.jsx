@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import './PhotoManagementScreen.css';
+import trash_icon from '../assets/trash_icon.png';
+import infoicon from '../assets/info_icon.png';
+import backicon from '../assets/back_icon.png';
 
 const STATUS_PRE = '통화전';
 const STATUS_POST = '통화후';
@@ -72,8 +75,12 @@ function PhotoManagementScreen({ currentUser }) {
   return (
     <div className="photo-management-screen">
       <div className="header-content">
+        <button type="button" className="back-ic-button">
+          <img className="icon" src={backicon} alt="뒤로가기 아이콘" />
+        </button>
         <h1 className="header-title">사진 관리</h1>
       </div>
+
       <div className="header-diver"></div>
 
       <div className="manage-top-content">

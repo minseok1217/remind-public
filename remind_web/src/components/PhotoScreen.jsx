@@ -125,7 +125,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     <div className="photo-screen">
       <div className="header-content">
         <h1 className="header-title">사진 등록</h1>
-        <button className="photo-header-button">사진 관리</button>
+        <button className="photo-header-button" onClick={onGoToManagement}>사진 관리</button>
       </div>
       <div className="header-diver"></div>
 

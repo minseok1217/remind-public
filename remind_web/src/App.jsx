@@ -16,6 +16,14 @@ import SignupScreen from './components/SignupScreen';
 import FindIdScreen from './components/FindIdScreen';
 import FindPasswordScreen from './components/FindPasswordScreen';
 import VoiceChatScreen from './components/VoiceChatScreen';
+import home_icon_on from './assets/home_icon_on.png'; 
+import home_icon_off from './assets/home_icon_off.png'; 
+import photo_icon_on from './assets/photo_icon_on.png'; 
+import photo_icon_off from './assets/photo_icon_off.png'; 
+import chart_icon_on from './assets/chart_icon_on.png'; 
+import chart_icon_off from './assets/chart_icon_off.png'; 
+import info_icon_on from './assets/info_icon_on.png'; 
+import info_icon_off from './assets/info_icon_off.png'; 
 
 function App() {
   const [activeNav, setActiveNav] = useState('home');
@@ -135,7 +143,7 @@ function App() {
             onClick={() => setActiveNav('home')}
             title="홈"
           >
-            <span className="nav-icon">🏠</span>
+            <span className="nav-icon"><img src={activeNav === 'home' ? home_icon_on : home_icon_off} alt="홈_아이콘" className='nav_icon' /></span>
             <span className="nav-label">홈</span>
           </button>
 
@@ -146,7 +154,7 @@ function App() {
               onClick={() => setActiveNav('photo')}
               title="사진등록"
             >
-              <span className="nav-icon">📸</span>
+              <span className="nav-icon"><img src={activeNav === 'photo' ? photo_icon_on : photo_icon_off} alt="사진_아이콘" className='nav_icon' /></span>
               <span className="nav-label">사진등록</span>
             </button>
           )}
@@ -168,7 +176,7 @@ function App() {
             onClick={() => { setActiveNav('stats'); setSubScreen(null); }}
             title="통계"
           >
-            <span className="nav-icon">📊</span>
+            <span className="nav-icon"><img src={activeNav === 'stats' ? chart_icon_on : chart_icon_off} alt="통계_아이콘" className='nav_icon' /></span>
             <span className="nav-label">통계</span>
           </button>
           <button 
@@ -176,7 +184,7 @@ function App() {
             onClick={() => setActiveNav('profile')}
             title="내 정보"
           >
-            <span className="nav-icon">👤</span>
+            <span className="nav-icon"><img src={activeNav === 'profile' ? info_icon_on : info_icon_off} alt="프로필_아이콘" className='nav_icon' /></span>
             <span className="nav-label">내 정보</span>
           </button>
         </nav>

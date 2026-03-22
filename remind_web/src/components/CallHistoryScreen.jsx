@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import './CallHistoryScreen.css';
+import backicon from '../assets/back_icon.png';
+import clockicon from '../assets/clock_icon.png';
+import timeicon from '../assets/time_icon.png';
+import dateicon from '../assets/date_icon.png';
 
 function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
   const [loading, setLoading] = useState(true);
@@ -108,10 +112,13 @@ function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
 
   return (
     <div className="call-history-screen">
-      <div className="ch-header">
-        <button className="ch-back-btn" onClick={onBack}>←</button>
-        <h1>통화 기록</h1>
+      <div className="header-content">
+        <button type="button" className="back-ic-button" onClick={onBack}>
+          <img className="icon" src={backicon} alt="뒤로가기 아이콘" />
+        </button>
+        <h1 className="header-title">통화 기록</h1>
       </div>
+      <div className="header-diver"></div>
 
       {callRecords.length === 0 ? (
         <div className="ch-empty">
@@ -122,21 +129,37 @@ function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
         <div className="ch-date-groups">
           {callRecords.map((group) => (
             <div key={group.dateKey} className="ch-date-group">
-              <div className="ch-date-label">{group.displayDate}</div>
               <div className="ch-cards">
                 {group.records.map((record) => (
                   <div key={record.id} className="ch-card">
-                    <div className="ch-card-top">
-                      <div className="ch-card-icon">📞</div>
-                      <div className="ch-card-info">
-                        <div className="ch-card-time">{record.time}</div>
-                        <div className="ch-card-duration">통화시간 {record.duration}</div>
-                      </div>
-                      <div className={`ch-badge ${record.badgeType}`}>
+                    <div className="ch-card-header">
+                      <h2 className="ch-card-date">{group.displayDate}</h2>
+                      <span className={`ch-badge ${record.badgeType}`}>
                         {record.statusLabel}
+                      </span>
+                    </div>
+                    <div className="ch-card-info">
+                      <div className="ch-info-row">
+                        <div className="ch-info-icon">
+                          <img src={timeicon} className='icon-small' />
+                        </div>
+                        <div className="ch-info-content">
+                          <p className="ch-info-label">시간</p>
+                          <p className="ch-info-value">{record.time}</p>
+                        </div>
+                      </div>
+
+                      <div className="ch-info-row">
+                        <div className="ch-info-icon">
+                          <img src={clockicon} className='icon-small' />
+                        </div>
+                        <div className="ch-info-content">
+                          <p className="ch-info-label">통화 시간</p>
+                          <p className="ch-info-value">{record.duration}</p>
+                        </div>
                       </div>
                     </div>
-                    <button
+                    <button 
                       className="ch-detail-btn"
                       onClick={() => handleViewDetail(record)}
                     >
