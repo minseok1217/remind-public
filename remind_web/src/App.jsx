@@ -38,6 +38,11 @@ function App() {
     setSubScreen({ type, data });
   };
 
+  const handleMainScreenCallHistoryNavigate = () => {
+    setActiveNav("stats");
+    setSubScreen({ type: "callHistory", data: {} });
+  };
+
   const handleSubBack = () => {
     if (subScreen?.type === 'callDetail') {
       // If came from call history, go back to call history
@@ -191,9 +196,9 @@ function App() {
       </aside>
 
       <main className="main-content">
-        {activeNav === 'home' && <MainScreen currentUser={currentUser} />}
+        {activeNav === 'home' && <MainScreen currentUser={currentUser} onNavigate={handleStatsNavigate} onViewAllCallHistory={handleMainScreenCallHistoryNavigate} />}
         {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
-        {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} />}
+        {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
         {activeNav === 'call' && <VoiceChatScreen onBack={() => setActiveNav('home')} />}
         {activeNav === 'stats' && !subScreen && (
           <StatsScreen

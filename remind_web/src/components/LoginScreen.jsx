@@ -98,7 +98,7 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
             onClick={() => setAccountType('guardian')}
             disabled={loading}
           >
-            🔐 보호자 로그인
+            보호자 로그인
           </button>
           <button
             type="button"
@@ -106,7 +106,7 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
             onClick={() => setAccountType('patient')}
             disabled={loading}
           >
-            👤 환자 로그인
+            환자 로그인
           </button>
         </div>
 

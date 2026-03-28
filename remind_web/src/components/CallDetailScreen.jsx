@@ -11,6 +11,7 @@ import infoicon from '../assets/info_icon.png';
 
 function CallDetailScreen({ callLog, currentUser, onBack }) {
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [photoDescription, setPhotoDescription] = useState('');
   const [loading, setLoading] = useState(true);
 
   const analysis = callLog?.analysis || {};
@@ -32,7 +33,9 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
         const photoSnap = await getDoc(photoDocRef);
         console.log(photoSnap.exists());
         if (photoSnap.exists()) {
-          setPhotoUrl(photoSnap.data().imageUrl || photoSnap.data().url || null);
+          const photoData = photoSnap.data();
+          setPhotoUrl(photoData.imageUrl || photoData.url || null); 
+          setPhotoDescription(photoData.description || ""); 
         }
       }
     } catch (error) {
@@ -45,18 +48,6 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const getCallDateString = () => {
     const d = callLog?.callDate?.toDate?.() || new Date();
     return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
-  };
-
-  const getCallTimeString = () => {
-    const d = callLog?.callDate?.toDate?.() || new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  };
-
-  const getDurationString = () => {
-    const dur = callLog?.callDuration || 0;
-    const min = Math.floor(dur / 60);
-    const sec = dur % 60;
-    return `${min}분 ${sec}초`;
   };
 
   const getStatusBadgeType = () => {
@@ -125,7 +116,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
         <div className="cd-photo-section">
           <div className="cd-photo-wrapper">
               <img src={photoUrl} alt="통화에 사용된 사진" className="cd-photo" />
-            <h2 className="cd-photo-label">제주도 가족 여행 갈을 때</h2>
+            <h2 className="cd-photo-label">{photoDescription}</h2>
           </div>
         </div>
       )}

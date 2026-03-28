@@ -13,7 +13,7 @@ const normalizeCallStatus = (value) => (value || '').replace(/\s+/g, '');
 
 const getPhotoStatus = (photo) => normalizeCallStatus(photo.callStatus || photo.tag);
 
-function PhotoManagementScreen({ currentUser }) {
+function PhotoManagementScreen({ currentUser, onBack }) {
   const [photos, setPhotos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTag, setSelectedTag] = useState('all');
@@ -75,7 +75,7 @@ function PhotoManagementScreen({ currentUser }) {
   return (
     <div className="photo-management-screen">
       <div className="header-content">
-        <button type="button" className="back-ic-button">
+        <button type="button" className="back-ic-button" onClick={onBack}>
           <img className="icon" src={backicon} alt="뒤로가기 아이콘" />
         </button>
         <h1 className="header-title">사진 관리</h1>

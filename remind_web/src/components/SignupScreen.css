@@ -146,41 +146,6 @@
   pointer-events: none;
 }
 
-/* Gender Buttons */
-.sign-gender-btn {
-  flex: 1;
-  padding: 10px;
-  background-color: #f5f5f5;
-  color: #767676;
-  border: 1px solid #DADADA;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.sign-gender-btn:hover:not(:disabled) {
-  background-color: #eee;
-}
-
-.sign-gender-btn.active {
-  background-color: #DCFAED;
-  color: #00C16E;
-  border-color: #00C16E;
-}
-
-.sign-gender-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.sign-gender-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
 /*info box*/
 .info-box {
   background-color: #DCFAED;

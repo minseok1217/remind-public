@@ -1,15 +1,28 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, signOut, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth, db, firebaseConfig } from '../firebase';
+import { doc, getDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { calculateWeeklyTrend } from '../services/conversationAnalysisService';
 import './MainScreen.css';
-import call_icon from '../assets/call_icon.png'
+import call_icon from '../assets/call_icon.png';
 
-function MainScreen({ currentUser }) {
+function MainScreen({ currentUser, onViewAllCallHistory }) {
   const [guardianInfo, setGuardianInfo] = useState(null);
   const [patientInfo, setPatientInfo] = useState(null);
   const [familyLink, setFamilyLink] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // 환자 생성 팝업
+  const [showPatientRegistrationPopup, setShowPatientRegistrationPopup] = useState(false);
+  const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientPhoneNumber, setNewPatientPhoneNumber] = useState('');
+  const [newPatientBirthdate, setNewPatientBirthdate] = useState('');
+  const [newPatientGender, setNewPatientGender] = useState('남성');
+  const [newPatientCallTime, setNewPatientCallTime] = useState('12:00'); // 통화 시간 (HH:mm 형식)
+  const [newPatientId, setNewPatientId] = useState('');
+  const [newPatientPassword, setNewPatientPassword] = useState('');
+  const [error, setError] = useState('');
   
   // 통화 관련 상태
   const [todayStatus, setTodayStatus] = useState(null);
@@ -46,7 +59,7 @@ function MainScreen({ currentUser }) {
 
             // FamilyLinks에서 연결된 환자 찾기
             const familyLinksRef = collection(db, 'family_links');
-            const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+            const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid), where('status', '==', '연결됨'));
             const familySnapshot = await getDocs(familyQuery);
             
             if (!familySnapshot.empty) {
@@ -68,9 +81,16 @@ function MainScreen({ currentUser }) {
                 setPatientInfo({ ...pUserData, ...pData });
                 console.log('환자 정보 로드 완료:', pUserData.name);
               }
+            } else {
+              // 연결된 환자가 없는 경우 팝업 표시
+              setShowPatientRegistrationPopup(true);
             }
+          } else {
+            // 연결된 환자가 없는 경우 팝업 표시
+            setShowPatientRegistrationPopup(true);
           }
         } else if (userData.role === '환자') {
+          /* 
           // 환자인 경우 - patients 추가 정보 로드
           const patientDocRef = doc(db, 'patients', currentUser.uid);
           const patientDocSnap = await getDoc(patientDocRef);
@@ -78,6 +98,7 @@ function MainScreen({ currentUser }) {
           if (patientDocSnap.exists()) {
             setPatientInfo({ ...userData, ...patientDocSnap.data() });
           }
+          */
         }
       }
     } catch (error) {
@@ -89,6 +110,124 @@ function MainScreen({ currentUser }) {
         '원인: Firestore 보안 규칙 또는 인증(로그인) 문제일 수 있습니다.\n' +
         '해결: Firebase 콘솔의 Firestore 규칙에서 `users/{uid}`, `guardians/{uid}`, `patients/{uid}`, `family_links` 읽기 권한을 확인하세요.'
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const linkPatient = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    // 유효성 검사
+    if (!newPatientName.trim()) {
+      setError('이름을 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    if (!newPatientPhoneNumber.trim()) {
+      setError('전화번호를 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    if (!newPatientBirthdate || !newPatientGender) {
+      setError('환자 정보를 모두 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    if (!newPatientId.trim() || !newPatientPassword.trim()) {
+      setError('환자용 아이디와 비밀번호를 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
+    // firebase는 계정 생성 시 해당 계정으로 로그인 되도록 되어 있어서 임시 앱을 생성해서 기존 로그인 유지되도록 우회
+    let tempApp;
+    try {
+      // 임시 앱 생성 (이름을 'temp'로 지정하여 메인 앱과 분리)
+      const tempAppName = `temp-${Date.now()}`;
+      tempApp = initializeApp(firebaseConfig, tempAppName);
+      const tempAuth = getAuth(tempApp);
+
+      // 1. 환자 계정 생성 (Firebase Auth) - 유효한 이메일 형식 사용
+      const patientEmail = `${newPatientId}@patient.app`;
+      const patientCredential = await createUserWithEmailAndPassword(tempAuth, patientEmail, newPatientPassword);
+      const patientUser = patientCredential.user;
+
+      // 2. 환자 프로필 업데이트
+      await updateProfile(patientUser, {
+        displayName: newPatientName
+      });
+
+      // ========== 새로운 DB 구조 ==========
+
+      // 3. Users 컬렉션에 환자 정보 저장
+      const patientUserDocRef = doc(db, 'users', patientUser.uid);
+      await setDoc(patientUserDocRef, {
+        user_id: patientUser.uid,
+        login_id: newPatientId,
+        name: newPatientName,
+        phone_number: newPatientPhoneNumber,
+        role: '환자',
+        created_at: new Date(),
+        notification_enabled: true,
+        personal_information: true
+      });
+
+      // 4. Guardians 컬렉션에 보호자 추가 정보 저장
+      const guardianDocRef = doc(db, 'guardians', currentUser.uid);
+      await setDoc(guardianDocRef, {
+        user_id: currentUser.uid,
+        relationship: '보호자',
+        patient_id: patientUser.uid
+      });
+
+      // 5. Patients 컬렉션에 환자 추가 정보 저장
+      const patientDocRef = doc(db, 'patients', patientUser.uid);
+      await setDoc(patientDocRef, {
+        user_id: patientUser.uid,
+        birth_date: newPatientBirthdate,
+        gender: newPatientGender,
+        call_time: newPatientCallTime.replace(':', ''), // HHmm 형식으로 저장
+        call_time: "1200",
+        guardian_id: currentUser.uid
+      });
+
+      // 6. FamilyLinks 컬렉션에 가족 연결 정보 저장
+      const linkId = `${currentUser.uid}_${patientUser.uid}`;
+      const familyLinkDocRef = doc(db, 'family_links', linkId);
+      await setDoc(familyLinkDocRef, {
+        link_id: linkId,
+        patient_id: patientUser.uid,
+        guardian_id: currentUser.uid,
+        status: '연결됨',
+        created_at: new Date()
+      });
+
+      // 임시 앱 로그아웃 및 삭제
+      await signOut(tempAuth);
+      await deleteApp(tempApp);
+
+      // 등록 성공 후 팝업 닫고 정보 새로고침
+      setShowPatientRegistrationPopup(false);
+      await loadUserInfo();
+      
+    } catch (err) {
+      if (err.code === 'auth/invalid-email') {
+        setError('유효하지 않은 이메일입니다.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('이미 사용 중인 이메일입니다.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('비밀번호가 너무 약합니다.');
+      } else {
+        setError('회원가입에 실패했습니다. 다시 시도해주세요.');
+      }
+      if (tempApp) await deleteApp(tempApp); // 에러 시에도 삭제
+      console.error('회원가입 오류:', err);
     } finally {
       setLoading(false);
     }
@@ -110,7 +249,7 @@ function MainScreen({ currentUser }) {
         if (userData.role === '보호자') {
           // family_links에서 연결된 환자 찾기
           const familyLinksRef = collection(db, 'family_links');
-          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid), where('status', '==', '연결됨'));
           const familySnapshot = await getDocs(familyQuery);
           
           if (!familySnapshot.empty) {
@@ -312,7 +451,7 @@ function MainScreen({ currentUser }) {
         <div className="card-section call-history-section">
           <div className="card-section-header">
             <h2 className="card-section-title">최근 통화 기록</h2>
-            <a href="#" className="view-all">전체 보기</a>
+            <button className="view-all" onClick={onViewAllCallHistory}>전체 보기</button>
           </div>
           <div className="call-list">
             {callRecords.length === 0 ? (
@@ -336,6 +475,116 @@ function MainScreen({ currentUser }) {
           </div>
         </div>
       </div>
+
+      {showPatientRegistrationPopup && !patientInfo && (
+        <div className="popup-overlay">
+          <div className="popup-content">
+            <h2>환자 정보 등록</h2>
+            <p>보호자님, 연결된 환자 정보가 없습니다. 지금 환자를 등록해주세요.</p>
+            <form onSubmit={linkPatient}>
+              <div className="popup-form-field">
+                <label htmlFor="patientName">이름</label>
+                <input
+                  type="text"
+                  id="patientName"
+                  value={newPatientName}
+                  onChange={(e) => setNewPatientName(e.target.value)}
+                  placeholder="환자 성함을 입력하세요"
+                  disabled={loading}
+                  required
+                />
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientPhoneNumber">전화번호</label>
+                <input
+                  type="tel"
+                  id="patientPhoneNumber"
+                  value={newPatientPhoneNumber}
+                  onChange={(e) => setNewPatientPhoneNumber(e.target.value)}
+                  placeholder="010-1234-5678"
+                  disabled={loading}
+                  required
+                />
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientBirthdate">생년월일</label>
+                <input
+                  type="date"
+                  id="patientBirthdate"
+                  value={newPatientBirthdate}
+                  onChange={(e) => setNewPatientBirthdate(e.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientGender">성별</label>
+                <div className="popup-gender-buttons">
+                  <button
+                    type="button"
+                    className={`popup-gender-btn ${newPatientGender === '남성' ? 'active' : ''}`}
+                    onClick={() => setNewPatientGender('남성')}
+                    disabled={loading}
+                  >
+                    남성
+                  </button>
+                  <button
+                    type="button"
+                    className={`popup-gender-btn ${newPatientGender === '여성' ? 'active' : ''}`}
+                    onClick={() => setNewPatientGender('여성')}
+                    disabled={loading}
+                  >
+                    여성
+                  </button>
+                </div>
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="addPatientCallTime">통화 시간</label>
+                <input
+                  type="time"
+                  id="addPatientCallTime"
+                  value={newPatientCallTime}
+                  onChange={(e) => setNewPatientCallTime(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientId">아이디</label>
+                <input
+                  type="text"
+                  id="patientId"
+                  value={newPatientId}
+                  onChange={(e) => setNewPatientId(e.target.value)}
+                  placeholder="아이디를 입력하세요"
+                  disabled={loading}
+                  required
+                />
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientPassword">비밀번호</label>
+                <input
+                  type="password"
+                  id="patientPassword"
+                  value={newPatientPassword}
+                  onChange={(e) => setNewPatientPassword(e.target.value)}
+                  placeholder="비밀번호를 입력하세요"
+                  disabled={loading}
+                  required
+                />
+              </div>
+              {error && <div className="error-message">{error}</div>}
+              <div className="popup-actions">
+                <button type="button" className="cancel-button" onClick={() => setShowPatientRegistrationPopup(false)}>
+                  취소
+                </button>
+                <button type="submit" className="confirm-button" disabled={loading}>
+                  환자 등록
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

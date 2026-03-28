@@ -34,6 +34,38 @@
   left: 6.67%;
 }
 
+.login-account-type-selector {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  background-color: #EFEFEF;
+  padding: 5px;
+  border-radius: 10px;
+}
+
+.account-type-btn {
+  flex: 1;
+  padding: 10px;
+  color: #A6ADB7;
+  border-radius: 8px;
+  border: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 50%;
+}
+
+.account-type-btn.active {
+  background-color: white;
+  color: #00C16E;
+}
+
+.account-type-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .login-auth-screen .login-auth-header {
   display: flex;
   flex-direction: column;

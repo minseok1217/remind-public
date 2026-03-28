@@ -13,6 +13,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
   const [stats, setStats] = useState(null);
   const [callRecords, setCallRecords] = useState([]);
   const [selectedPoint, setSelectedPoint] = useState(null); // 선택된 날짜 포인트
+  const [dateRangeString, setDateRangeString] = useState(''); // 현재 표시되는 날짜 범위 문자열
 
   useEffect(() => {
     if (currentUser) {
@@ -25,7 +26,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
       computeStats(allLogs, periodTab);
       setSelectedPoint(null); // 기간 변경 시 선택 초기화
     }
-  }, [periodTab, allLogs]);
+  }, [periodTab, allLogs, setDateRangeString]);
 
   const loadAllLogs = async () => {
     try {
@@ -38,7 +39,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
         const userData = userDocSnap.data();
         if (userData.role === '보호자') {
           const familyLinksRef = collection(db, 'family_links');
-          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid), where('status', '==', '연결됨'));
           const familySnapshot = await getDocs(familyQuery);
 
           if (!familySnapshot.empty) {
@@ -91,8 +92,20 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
 
   const computeStats = (logs, period) => {
     const days = period === '7days' ? 7 : 30;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - (days - 1)); // (days - 1)을 사용하여 정확한 범위 계산
+
+    const formatMonthDay = (date) => {
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}월 ${day}일`;
+    };
+
+    const newDateRangeString = `${formatMonthDay(startDate)} ~ ${formatMonthDay(endDate)}`;
+    setDateRangeString(newDateRangeString); // 새로운 state에 날짜 범위 저장
+    
+    const cutoff = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()); // 시작 날짜를 기준으로 cutoff 설정
 
     const filtered = logs.filter(log => {
       const d = log.callDate?.toDate?.() || new Date(0);
@@ -250,7 +263,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
       <div className="score-card">
         <div className="score-header">
           <div className="score-label">인지 상태 변화</div>
-          <div className="date-range">01월 01일 ~ 01월 07일</div>
+          <div className="date-range">{dateRangeString}</div>
         </div>
 
         {/* Chart */}

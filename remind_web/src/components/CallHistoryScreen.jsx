@@ -28,7 +28,7 @@ function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
         const userData = userDocSnap.data();
         if (userData.role === '보호자') {
           const familyLinksRef = collection(db, 'family_links');
-          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid));
+          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid), where('status', '==', '연결됨'));
           const familySnapshot = await getDocs(familyQuery);
 
           if (!familySnapshot.empty) {

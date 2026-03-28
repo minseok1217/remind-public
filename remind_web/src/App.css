@@ -407,3 +407,140 @@ a {
   color: #8F8F8F;
   background-color: #F2F2F2;
 }
+
+
+/* Patient Registration Popup */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.popup-content {
+  background: #fff;
+  padding: 30px;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.popup-content h2 {
+  font-size: 24px;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.popup-content p {
+  font-size: 15px;
+  color: #666;
+  margin-bottom: 25px;
+  line-height: 1.5;
+}
+
+.popup-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.popup-content .popup-form-field {
+  text-align: left;
+}
+
+.popup-content label {
+  display: block;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.popup-content input[type="text"],
+.popup-content input[type="tel"],
+.popup-content input[type="date"],
+.popup-content input[type="email"],
+.popup-content input[type="password"],
+.popup-content select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+/* Gender Buttons */
+.popup-gender-btn {
+  flex: 1;
+  padding: 10px;
+  background-color: #f5f5f5;
+  color: #767676;
+  border: 1px solid #DADADA;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.popup-gender-btn.active {
+  background-color: #DCFAED;
+  color: #00C16E;
+  border-color: #00C16E;
+}
+
+.popup-gender-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.popup-gender-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.popup-actions {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 25px;
+  gap: 10px;
+}
+
+.popup-actions button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  flex: 1;
+}
+
+.popup-actions .cancel-button {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.popup-actions .cancel-button:hover {
+  background-color: #ccc;
+}
+
+.popup-actions .confirm-button {
+  background-color: #00C16E;
+  color: white;
+}
+
+.popup-actions .confirm-button:hover {
+  background-color: #00a85e;
+}

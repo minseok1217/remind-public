@@ -21,14 +21,7 @@ function SignupScreen({ onSwitchToLogin }) {
   const [verificationStep, setVerificationStep] = useState('none'); // 'none', 'sending', 'verifying', 'verified'
   const [verificationCode, setVerificationCode] = useState('');
   const [inputVerificationCode, setInputVerificationCode] = useState('');
-  
-  // 환자 정보
-  const [patientName, setPatientName] = useState('');
-  const [patientPhone, setPatientPhone] = useState('');
-  const [patientBirthdate, setPatientBirthdate] = useState('');
-  const [patientGender, setPatientGender] = useState('남성');
-  const [patientId, setPatientId] = useState('');
-  const [patientPassword, setPatientPassword] = useState('');
+
   const [agreeTerms, setAgreeTerms] = useState(false);
 
   const [error, setError] = useState('');
@@ -103,7 +96,7 @@ function SignupScreen({ onSwitchToLogin }) {
       return;
     }
 
-    if (!guardianName.trim() || !patientName.trim()) {
+    if (!guardianName.trim()) {
       setError('이름을 모두 입력해주세요.');
       setLoading(false);
       return;
@@ -111,18 +104,6 @@ function SignupScreen({ onSwitchToLogin }) {
 
     if (verificationStep !== 'verified') {
       setError('전화번호 인증을 완료해주세요.');
-      setLoading(false);
-      return;
-    }
-
-    if (!patientBirthdate || !patientGender) {
-      setError('환자 정보를 모두 입력해주세요.');
-      setLoading(false);
-      return;
-    }
-
-    if (!patientId.trim() || !patientPassword.trim()) {
-      setError('환자용 아이디와 비밀번호를 입력해주세요.');
       setLoading(false);
       return;
     }
@@ -143,20 +124,9 @@ function SignupScreen({ onSwitchToLogin }) {
         displayName: guardianName
       });
 
-      // 3. 환자 계정 생성 (Firebase Auth) - 유효한 이메일 형식 사용
-      const patientEmail = `${patientId}@patient.app`;
-      
-      const patientCredential = await createUserWithEmailAndPassword(auth, patientEmail, patientPassword);
-      const patientUser = patientCredential.user;
-
-      // 4. 환자 프로필 업데이트
-      await updateProfile(patientUser, {
-        displayName: patientName
-      });
-
       // ========== 새로운 DB 구조 ==========
       
-      // 5. Users 컬렉션에 보호자 정보 저장
+      // 3. Users 컬렉션에 보호자 정보 저장
       const guardianUserDocRef = doc(db, 'users', guardianUser.uid);
       await setDoc(guardianUserDocRef, {
         user_id: guardianUser.uid,
@@ -169,55 +139,18 @@ function SignupScreen({ onSwitchToLogin }) {
         personal_information: agreeTerms
       });
 
-      // 6. Users 컬렉션에 환자 정보 저장
-      const patientUserDocRef = doc(db, 'users', patientUser.uid);
-      await setDoc(patientUserDocRef, {
-        user_id: patientUser.uid,
-        login_id: patientId,
-        name: patientName,
-        phone_number: patientPhone,
-        role: '환자',
-        created_at: new Date(),
-        notification_enabled: true,
-        personal_information: agreeTerms
-      });
-
-      // 7. Guardians 컬렉션에 보호자 추가 정보 저장
+      // 4. Guardians 컬렉션에 보호자 추가 정보 저장
       const guardianDocRef = doc(db, 'guardians', guardianUser.uid);
       await setDoc(guardianDocRef, {
         user_id: guardianUser.uid,
         relationship: '보호자',
         patient_id: patientUser.uid
       });
-
-      // 8. Patients 컬렉션에 환자 추가 정보 저장
-      const patientDocRef = doc(db, 'patients', patientUser.uid);
-      await setDoc(patientDocRef, {
-        user_id: patientUser.uid,
-        birth_date: patientBirthdate,
-        gender: patientGender,
-        guardian_id: guardianUser.uid
-      });
-
-      // 9. FamilyLinks 컬렉션에 가족 연결 정보 저장
-      const linkId = `${guardianUser.uid}_${patientUser.uid}`;
-      const familyLinkDocRef = doc(db, 'family_links', linkId);
-      await setDoc(familyLinkDocRef, {
-        link_id: linkId,
-        patient_id: patientUser.uid,
-        guardian_id: guardianUser.uid,
-        status: '연결됨',
-        created_at: new Date()
-      });
-
-      // 회원가입 성공 - 로그아웃 후 로그인 화면으로
-      console.log('보호자 회원가입 성공:', guardianUser.uid);
-      console.log('환자 계정 자동 생성:', patientUser.uid);
       
       // 현재 로그인된 계정 로그아웃
       await auth.signOut();
       
-      alert('✅ 회원가입이 완료되었습니다!\n환자 계정도 자동으로 생성되었습니다.\n로그인 화면에서 로그인해주세요.');
+      alert('✅ 회원가입이 완료되었습니다!\n로그인 화면에서 로그인해주세요.');
       
       // 로그인 화면으로 이동
       onSwitchToLogin();
@@ -241,7 +174,7 @@ function SignupScreen({ onSwitchToLogin }) {
     <div className="signup-container">
       <div className="signup-header">
         <div className="header-content">
-          <button type="button" className="back-ic-button">
+          <button type="button" className="back-ic-button" onClick={onSwitchToLogin}>
             <img className="icon" src={backicon} alt="뒤로가기 아이콘" />
           </button>
           <h1 className="header-title">회원가입</h1>
@@ -376,126 +309,19 @@ function SignupScreen({ onSwitchToLogin }) {
           </div>
         </section>
 
-        {/* 환자 정보 섹션 */}
-        <section>
-          <div className="sign-section-header">
-            <div className="section-icon">
-              <img className="icon-small" src={plusicon} alt="환자 아이콘" />
-            </div>
-            <h2 className="sign-section-title">환자 정보</h2>
-          </div>
-
-          <div className="info-box">
-            <div className="info-icon">
-              <img className="icon-tiny" src={infoicon} alt="정보 아이콘" />
-            </div>
-            <p className="info-text">
-              가입 완료 시, 입력하신 환자 정보로 <span className="info-bold">환자 정용 계정이</span> 자동 생성됩니다.
-            </p>
-          </div>
-            
-          <div className="form-fields">
-            <div className="form-field">
-              <label className="field-label" htmlFor="patientName">환자 이름</label>
-              <input
-                type="text"
-                placeholder="환자 성함을 입력하세요"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                disabled={loading}
-                className="input-field"
-                required
-              />
-            </div>
-
-            <div className="form-field">
-              <label className="field-label" htmlFor="patientPhone">환자 전화번호</label>
-              <input
-                type="tel"
-                placeholder="환자 전화번호를 입력하세요"
-                value={patientPhone}
-                onChange={(e) => setPatientPhone(formatPhoneNumber(e.target.value))}
-                disabled={loading}
-                className="input-field"
-                required
-              />
-            </div>
-
-            <div className="form-field">
-              <label className="field-label" htmlFor="birthDate">생년월일</label>
-              <input
-                type="date"
-                value={patientBirthdate}
-                onChange={(e) => setPatientBirthdate(e.target.value)}
-                disabled={loading}
-                className="input-field date-input"
-                required
-              />
-            </div>
-
-            <div className="form-field">
-              <label className="field-label">성별</label>
-              <div className="sign-gender-buttons">
-                <button
-                  type="button"
-                  className={`sign-gender-btn ${patientGender === '남성' ? 'active' : ''}`}
-                  onClick={() => setPatientGender('남성')}
-                  disabled={loading}
-                >
-                  남성
-                </button>
-                <button
-                  type="button"
-                  className={`sign-gender-btn ${patientGender === '여성' ? 'active' : ''}`}
-                  onClick={() => setPatientGender('여성')}
-                  disabled={loading}
-                >
-                  여성
-                </button>
-              </div>
-            </div>
-
-            <div className="form-field">
-              <label className="field-label" htmlFor="patientId">환자용 아이디</label>
-              <input
-                type="text"
-                placeholder="아이디를 입력하세요"
-                value={patientId}
-                onChange={(e) => setPatientId(e.target.value)}
-                disabled={loading}
-                className="input-field"
-                required
-              />
-            </div>
-
-            <div className="form-field">
-              <label className="field-label" htmlFor="patientPassword">환자용 비밀번호</label>
-              <input
-                type="password"
-                placeholder="비밀번호를 입력하세요"
-                value={patientPassword}
-                onChange={(e) => setPatientPassword(e.target.value)}
-                disabled={loading}
-                className="input-field"
-                required
-              />
-            </div>
-
-            <div className="sign-terms-checkbox">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={agreeTerms}
-                  onChange={(e) => setAgreeTerms(e.target.checked)}
-                  disabled={loading}
-                />
-                <span className="checkbox-text">
-                  개인정보 수집 및 이용, 환자 정보 제공 서비스 이용 약관에 동의합니다. (필수)
-                </span>
-              </label>
-            </div>
-          </div>
-        </section>
+        <div className="sign-terms-checkbox">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={agreeTerms}
+              onChange={(e) => setAgreeTerms(e.target.checked)}
+              disabled={loading}
+            />
+            <span className="checkbox-text">
+              개인정보 수집 및 이용, 환자 정보 제공 서비스 이용 약관에 동의합니다. (필수)
+            </span>
+          </label>
+        </div>
 
         {error && <div className="error-message">{error}</div>}
 

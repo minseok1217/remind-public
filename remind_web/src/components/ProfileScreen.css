@@ -96,6 +96,22 @@
   color: var(--gray-900);
 }
 
+.profile-card-connect {
+  padding: 2px 5px;
+  font-weight: 400;
+  color: white;
+  font-size: 13px;
+  border-radius: 5px;
+}
+
+.profile-card-connect.connected {
+  background-color: #00C16E;
+}
+
+.profile-card-connect.disconnected {
+  background-color: rgba(223, 57, 57);
+}
+
 /* AI Card */
 .profile-ai-card {
   background-color: white;
@@ -202,7 +218,7 @@
   font-size: 14px;
   line-height: 20px;
   padding: 2px 5px;
-  font-family: 'pretendard';
+  font-family: "pretendard";
 }
 
 /* Responsive Design */
@@ -219,4 +235,303 @@
   .profile-time-selector {
     align-self: flex-end;
   }
+
+  /* Patient card specific adjustments for small screens */
+  .profile-info-card.patient-card {
+    flex-direction: row; /* 카드를 가로로 유지 */
+    flex-wrap: wrap; /* 필요에 따라 줄 바꿈 */
+    align-items: flex-start;
+    padding-right: 16px; /* 기본 패딩으로 복원 */
+  }
+
+  .profile-info-card.patient-card .icon-circle {
+    margin-right: 12px; /* 아이콘과 내용 사이 간격 */
+  }
+
+  .profile-info-content {
+    flex: 1; /* 남은 공간 차지 */
+    min-width: calc(100% - 70px); /* 아이콘 제외한 최소 너비 (아이콘 너비 40px + 마진 12px) */
+    display: flex;
+    flex-direction: column; /* 정보 항목들을 세로로 쌓음 */
+    gap: 8px; /* 정보 항목들 사이 간격 */
+  }
+
+  .profile-info-row {
+    flex-direction: row; /* 라벨과 값을 가로로 배치 */
+    justify-content: flex-start; /* 라벨과 값을 왼쪽으로 정렬 */
+    align-items: center;
+    gap: 10px; /* 라벨과 값 사이 간격 */
+    width: 100%; /* 전체 너비 사용 */
+  }
+
+  .profile-info-label {
+    width: auto; /* 고정 너비 해제 */
+    flex-shrink: 0; /* 줄어들지 않도록 */
+  }
+
+  .profile-info-value,
+  .profile-info-input,
+  .popup-gender-buttons {
+    flex: 1; /* 남은 공간을 채우도록 */
+    text-align: left; /* 값을 왼쪽으로 정렬 */
+  }
+
+  .profile-card-connect {
+    margin-left: 0; /* 연결 상태 버튼 마진 제거 */
+  }
+
+  .patient-card-actions {
+    flex-direction: column; /* 버튼 세로 배열 */
+    gap: 8px; /* 버튼 사이 간격 */
+    margin-left: auto; /* 왼쪽 공간 자동으로 확보하여 오른쪽으로 정렬 */
+    margin-top: 10px; /* 정보와 버튼 사이 간격 */
+    align-self: flex-end; /* 오른쪽으로 정렬 */
+  }
+
+  .patient-action-button {
+    flex: none;
+    width: unset; 
+  }
+  .profile-action-button {
+    min-width: unset;
+    width: 100%;
+  }
+}
+
+/* Multi-patient UI specific styles */
+.profile-info-card.patient-card {
+  cursor: pointer;
+  flex-direction: row; /* 환자 카드는 가로 배열 */
+  justify-content: space-between; /* 내용과 버튼을 양 끝으로 */
+  align-items: flex-start; /* 아이콘과 텍스트 상단 정렬 */
+  padding-right: 12px; /* 버튼 공간 확보 */
+}
+
+.profile-info-card.patient-card.selected {
+  border-color: #00C16E; /* 선택된 카드 하이라이트 */
+  box-shadow: 0 2px 10px rgba(0, 193, 110, 0.5);
+}
+
+.connect-patient-btn {
+  color: #E2AD4C;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+}
+
+.profile-info-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-info-row {
+  display: flex;
+  align-items: center; /* 라벨과 값 세로 정렬 */
+  gap: 10px; /* 라벨과 값 사이 간격 */
+}
+
+.profile-info-label {
+  width: 60px; /* 라벨 너비 고정 */
+  flex-shrink: 0;
+}
+
+.patient-list-header {
+  margin-bottom: 12px;
+}
+
+.patient-list-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.patient-list-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+
+.patient-list-cnt {
+  font-size: 13px;
+  color: #00C16E;
+  border-radius: 10px;
+  background-color: #DCFAED;
+  padding: 3px 10px;
+}
+
+.patient-card-actions {
+  display: flex;
+  flex-direction: column; /* 버튼 세로 배열 */
+  gap: 8px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.patient-action-button {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-patient-btn {
+  background-color: #00C16E;
+  color: white;
+  border: none;
+}
+
+.edit-patient-btn:hover {
+  background-color: #00A35C;
+}
+
+.delete-patient-btn {
+  background-color: #F8F8F8;
+  border: 1px solid var(--gray-300);
+  color: var(--gray-700);
+  padding: 4px 8px; /* 아이콘 버튼이므로 패딩 조절 */
+}
+
+.delete-patient-btn:hover {
+  background-color: #E0E0E0;
+}
+
+.trash-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.add-patient-button-container {
+  width: 100%;
+  margin-top: 15px; /* 환자 목록과의 간격 */
+}
+
+.add-patient-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: white; 
+  color: #00C16E; 
+  border: 1px solid #00C16E;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-patient-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.no-patients-message {
+  text-align: center;
+  color: var(--gray-500);
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+.no-patients-message p {
+  margin: 5px 0;
+}
+
+.profile-action-section {
+  margin-bottom: 40px; /* Add margin-bottom here as it was in my denied write_to_file */
+}
+
+.save-btn {
+  background-color: #00C16E;
+}
+
+/* Gender buttons for popup, reused here */
+.popup-gender-buttons {
+  display: flex;
+  gap: 8px;
+  flex-grow: 1;
+}
+
+.popup-gender-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.popup-gender-btn.active {
+  border-color: #00C16E;
+  color: #00C16E;
+}
+
+.popup-gender-btn:hover:not(.active) {
+  border-color: #767676;
+  color: #767676;
+}
+
+/* Styling for time input specifically */
+.profile-info-input[type="time"] {
+  appearance: none; /* Standard */
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+  width: auto; /* Adjust width as needed */
+  text-align: center;
+  font-family: "pretendard";
+}
+
+.profile-info-input[type="time"]:focus {
+  border-color: #00C16E;
+  box-shadow: 0 0 0 2px rgba(0, 193, 110, 0.2);
+}
+
+/* Hide default arrow buttons for Webkit browsers */
+.profile-info-input[type="time"]::-webkit-calendar-picker-indicator {
+  background: none;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+/* Styling for time input in the popup specifically */
+.popup-form-field input[type="time"] {
+  appearance: none;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--gray-900);
+  background-color: white;
+  cursor: pointer;
+  outline: none;
+  width: 100%; /* Occupy full width within its container */
+  text-align: center;
+  font-family: "pretendard";
+}
+
+.popup-form-field input[type="time"]:focus {
+  border-color: #00C16E;
+  box-shadow: 0 0 0 2px rgba(0, 193, 110, 0.2);
+}
+
+/* Hide default arrow buttons for Webkit browsers in popup */
+.popup-form-field input[type="time"]::-webkit-calendar-picker-indicator {
+  background: none;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
 }
