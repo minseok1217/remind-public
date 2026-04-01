@@ -3,7 +3,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, signOut, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db, firebaseConfig } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
-import { updatePatientConnectionStatus } from '../services/familyLinkService';
+import { updatePatientConnectionStatus, verifyAndLinkGuardian } from '../services/familyLinkService';
 import './ProfileScreen.css';
 import user_icon from '../assets/user_icon.png';
 import call_icon from '../assets/call_icon.png';
@@ -32,6 +32,10 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [newPatientPassword, setNewPatientPassword] = useState(''); // 환자 로그인 비밀번호
   const [newPatientCallTime, setNewPatientCallTime] = useState('12:00'); // 통화 시간 (HH:mm 형식)
   const [addPatientError, setAddPatientError] = useState(''); // 환자 추가 시 에러 메시지
+
+  const [showExistingPatientPopup, setShowExistingPatientPopup] = useState(false); // 기존 환자 등록 팝업 표시 여부
+  const [existingPatientCode, setExistingPatientCode] = useState(''); // 기존 환자 등록 코드
+  const [existingPatientError, setExistingPatientError] = useState(''); // 기존 환자 등록 시 에러 메시지
 
   const [isEditingMyInfo, setIsEditingMyInfo] = useState(false); // 본인 정보 수정 모드
   const [isEditingPatientInfo, setIsEditingPatientInfo] = useState(false); // 환자 정보 수정 모드
@@ -273,6 +277,47 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     setShowAddPatientPopup(false);
   };
 
+  const handleShowExistingPatientPopup = () => {
+    setShowExistingPatientPopup(true);
+    setExistingPatientCode('');
+    setExistingPatientError('');
+  };
+
+  const handleCloseExistingPatientPopup = () => {
+    setShowExistingPatientPopup(false);
+  };
+
+  const handleVerifyAndLinkPatient = async (e) => {
+    e.preventDefault();
+    setExistingPatientError('');
+    if (!existingPatientCode) {
+      setExistingPatientError('6자리 코드를 입력해주세요.');
+      return;
+    }
+
+    if (existingPatientCode.length !== 6 || !/^[0-9]+$/.test(existingPatientCode)) {
+      setExistingPatientError('코드는 6자리 숫자여야 합니다.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const success = await verifyAndLinkGuardian(currentUser.uid, existingPatientCode);
+      if (success) {
+        alert('✅ 환자와 성공적으로 연결되었습니다.');
+        handleCloseExistingPatientPopup();
+        await loadUserData(); // 환자 목록 새로고침
+      } else {
+        setExistingPatientError('유효하지 않거나 만료된 코드입니다. 다시 확인해주세요.');
+      }
+    } catch (error) {
+      console.error('기존 환자 연결 실패:', error);
+      setExistingPatientError('환자 연결 실패');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveNewPatient = async (e) => {
     e.preventDefault();
     setAddPatientError('');
@@ -351,6 +396,7 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
         birth_date: newPatientBirthdate,
         gender: newPatientGender,
         call_time: newPatientCallTime.replace(':', ''), // HHmm 형식으로 저장
+        is_notified: true, // 알림 설정 필드 추가
         guardian_id: currentUser.uid
       });
 
@@ -676,6 +722,10 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                   <img src={plus_icon} alt="Add Patient" className="add-patient-icon" />
                   새 환자 등록
                 </button>
+                <button className="add-patient-button" onClick={handleShowExistingPatientPopup}>
+                  <img src={plus_icon} alt="Add Patient" className="add-patient-icon" />
+                  기존 환자 등록
+                </button>
               </div>
             )}
           </section>
@@ -874,6 +924,38 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                 </button>
                 <button type="submit" className="confirm-button">
                   환자 등록
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showExistingPatientPopup && (
+        <div className="popup-overlay">
+          <div className="popup-content">
+            <h2>기존 환자 등록</h2>
+            <p>환자에게 발급된 6자리 임시 코드를 입력해주세요.</p>
+            <form onSubmit={handleVerifyAndLinkPatient}>
+              <div className="popup-form-field">
+                <label htmlFor="existingPatientCode">임시 코드</label>
+                <input
+                  type="text"
+                  id="existingPatientCode"
+                  value={existingPatientCode}
+                  onChange={(e) => setExistingPatientCode(e.target.value)}
+                  placeholder="6자리 코드 입력"
+                  maxLength="6"
+                  required
+                />
+              </div>
+              {existingPatientError && <div className="error-message">{existingPatientError}</div>}
+              <div className="popup-actions">
+                <button type="button" className="cancel-button" onClick={handleCloseExistingPatientPopup}>
+                  취소
+                </button>
+                <button type="submit" className="confirm-button">
+                  연결하기
                 </button>
               </div>
             </form>

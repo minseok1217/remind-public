@@ -5,7 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import './LoginScreen.css'; // AuthScreen.css 대신 LoginScreen.css 임포트
 import logo from '../assets/logo.png'; 
 
-function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPassword }) {
+function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPassword, onLoginSuccess }) {
   const [accountType, setAccountType] = useState('guardian'); // 'guardian' or 'patient'
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
@@ -66,6 +66,7 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
       }
 
       console.log(`${userData.role} 로그인 성공`);
+      onLoginSuccess(accountType);
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
         setError(accountType === 'guardian' ? '유효하지 않은 이메일입니다.' : '환자용 아이디 또는 이메일 형식이 올바르지 않습니다.');

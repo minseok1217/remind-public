@@ -1,0 +1,456 @@
+.main-screen-p {
+  display: flex;
+  flex-direction: column;
+  width: 100%; /* Changed from max-width to width */
+  box-sizing: border-box; /* Include padding in element\"s total width and height */
+}
+
+/* Header */
+.main-header-p {
+  margin-bottom: 10px;
+  padding: 0px; /* Remove horizontal padding here as it\"s handled by main-screen-p */
+}
+
+.main-header-content-p {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-type-p {
+  font-size: 12px;
+  color: #00C16E;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.header-diver {
+  width: 100vw;
+  height: 1px;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+  background-color: #E4E4E4;
+}
+
+.greeting-section-p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap; /* Allow greeting text to wrap */
+}
+
+.greeting-p {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111111;
+}
+
+.username-p {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111111;
+}
+
+.content-section-p {
+  width: 100%; /* Ensure it takes full width */
+  max-width: 800px; /* A reasonable max-width for content on larger screens */
+  margin: 20px auto 0 auto; /* Center content and add top margin */
+  box-sizing: border-box;
+}
+
+.card-p {
+  background-color: #FFF;
+  border-radius: 15px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.card-item-p {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  flex-wrap: wrap; /* Allow items in card to wrap */
+}
+
+.item-left-p {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 1; /* Allow it to take available space */
+  min-width: 0; /* Important for flex items with text overflow */
+}
+
+.item-right-p {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.icon-container-p {
+  width: 40px;
+  height: 40px;
+  border-radius: 5px;
+  background-color: rgba(0, 193, 110, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.item-icon-p {
+  width: 25px;
+  height: 25px;
+}
+
+.item-icon-bell-p {
+  width: 18px;
+  height: 18px;
+}
+
+.item-text-p {
+  font-size: 16px;
+  color: #111;
+  font-weight: 600;
+}
+
+.text-group-p {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1; /* Allow text group to take space */
+  min-width: 0;
+}
+
+.item-description-p {
+  font-size: 12px;
+  color: #777;
+  margin-top: 3px;
+}
+
+.switch-p {
+  position: relative;
+  display: inline-block;
+  width: 45px;
+  height: 25px;
+  flex-shrink: 0;
+}
+
+.switch-p input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider-p {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.slider-p:before {
+  position: absolute;
+  content: "";
+  height: 21px;
+  width: 21px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider-p {
+  background-color: #00C16E;
+}
+
+input:focus + .slider-p {
+  box-shadow: 0 0 1px #00C16E;
+}
+
+input:checked + .slider-p:before {
+  transform: translateX(20px);
+}
+
+.time-selector-p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border: 1px solid #00C16E;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #00C16E;
+  background-color: #DCFAED;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 5px;
+}
+
+.arrow-down-p {
+  margin-left: 10px;
+  font-size: 10px;
+}
+
+.divider-p {
+  height: 1px;
+  background-color: #eee;
+  margin: 10px 0;
+}
+
+.card-item-title-p {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap; /* Allow title items to wrap */
+}
+
+.icon-container-small-p {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.item-icon-small-p {
+  width: 18px;
+  height: 18px;
+}
+
+.item-title-text-p {
+  font-size: 18px;
+  font-weight: bold;
+  color: #111;
+}
+
+.card-subtitle-p {
+  font-size: 14px;
+  color: #777;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.info-box-p {
+  display: flex;
+  align-items: flex-start;
+  background-color: #F0F0F0;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* Allow info box content to wrap */
+}
+
+.info-icon-p {
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.info-text-p {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.5;
+  flex: 1; /* Allow text to take remaining space */
+  min-width: 0; /* Prevent text overflow issues */
+}
+
+.connect-button-p {
+  width: 100%;
+  padding: 15px;
+  background-color: #00C16E;
+  color: #FFF;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.connect-button-p:hover {
+  background-color: #00a85d;
+}
+
+.logout-button-p {
+  background-color: rgba(223, 57, 57);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  min-width: 150px;
+}
+
+.code-display-section-p {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111;
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px dashed #00C16E;
+}
+
+.code-display-section-p p {
+  margin: 5px 0;
+}
+
+.temp-code-p {
+  font-size: 24px;
+  color: #00C16E;
+  letter-spacing: 2px;
+}
+
+.countdown-p {
+  font-size: 16px;
+  color: #df3939;
+  font-weight: bold;
+}
+
+
+/* Media Queries for responsiveness */
+@media (min-width: 768px) {
+  .main-screen-p {
+    padding: 0 40px; /* More padding on larger screens */
+  }
+
+  .main-header-content-p {
+    justify-content: flex-start; /* Align header content to start on larger screens */
+    gap: 20px;
+  }
+
+  .greeting-section-p {
+    gap: 15px;
+  }
+
+  .greeting-p,
+  .username-p {
+    font-size: 24px; /* Larger font for greetings */
+  }
+
+  .user-type-p {
+    font-size: 14px;
+  }
+
+  .content-section-p {
+    max-width: 960px; /* Even wider content area on large screens */
+    padding: 0; /* Padding handled by main-screen-p */
+  }
+
+  .card-item-p {
+    padding: 15px 0; /* More padding within cards */
+  }
+
+  .item-text-p {
+    font-size: 18px; /* Larger text in card items */
+  }
+
+  .item-description-p {
+    font-size: 14px;
+  }
+
+  .time-selector-p {
+    padding: 10px 15px;
+    font-size: 16px;
+  }
+
+  .card-item-title-p {
+    margin-bottom: 15px;
+  }
+
+  .item-title-text-p {
+    font-size: 22px;
+  }
+
+  .card-subtitle-p {
+    font-size: 16px;
+  }
+
+  .info-box-p {
+    padding: 20px;
+  }
+
+  .info-text-p {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .main-screen-p {
+    padding: 0 60px;
+  }
+
+  .content-section-p {
+    max-width: 1200px; /* Even wider content area on very large screens */
+  }
+}
+
+.content-section-p .time-picker-controls-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+}
+
+.content-section-p .item-right-p input[type="time"] {
+  padding: 5px 0;
+  border: 1px solid #00C16E;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #00C16E;
+  background-color: #DCFAED;
+  outline: none;
+  font-family: 'pretendard';
+  font-weight: 600;
+  text-align: center;
+}
+
+.content-section-p .time-picker-controls-section button {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.content-section-p .time-picker-controls-section button:first-of-type { /* Save button */
+  background-color: #00C16E;
+  color: white;
+}
+
+.content-section-p .time-picker-controls-section button:first-of-type:hover {
+  background-color: #00a85d;
+}
+
+.content-section-p .time-picker-controls-section button:last-of-type { /* Cancel button */
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.content-section-p .time-picker-controls-section button:last-of-type:hover {
+  background-color: #cccccc;
+}

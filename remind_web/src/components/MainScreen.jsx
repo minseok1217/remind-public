@@ -193,7 +193,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         birth_date: newPatientBirthdate,
         gender: newPatientGender,
         call_time: newPatientCallTime.replace(':', ''), // HHmm 형식으로 저장
-        call_time: "1200",
+        is_notified: true, // 알림 설정 필드 추가
         guardian_id: currentUser.uid
       });
 

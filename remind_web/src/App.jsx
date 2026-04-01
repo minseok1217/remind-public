@@ -5,6 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import './App.css';
 import SplashScreen from './components/SplashScreen';
 import MainScreen from './components/MainScreen';
+import MainScreen_p from './components/MainScreen_p';
 import ProfileScreen from './components/ProfileScreen';
 import PhotoScreen from './components/PhotoScreen';
 import PhotoManagementScreen from './components/PhotoManagementScreen';
@@ -29,6 +30,7 @@ function App() {
   const [activeNav, setActiveNav] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
   const [userRole, setUserRole] = useState(null); // '보호자' | '환자'
+  const [loggedInAccountType, setLoggedInAccountType] = useState(null); // 'guardian' | 'patient'
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [authScreen, setAuthScreen] = useState('login'); // 'login', 'signup', 'findId', 'findPassword'
@@ -52,6 +54,13 @@ function App() {
     }
   };
 
+  const handleLoginSuccess = (accountType) => {
+    setLoggedInAccountType(accountType);
+    setAuthScreen('login'); // 로그인 성공 후 로그인 화면으로 돌아가게 (실제로 MainScreen으로 이동하므로 이 부분은 재조정 필요)
+    setActiveNav('home'); // 성공하면 홈 화면으로 이동
+    localStorage.setItem('loggedInAccountType', accountType); // Add this line
+  };
+
   useEffect(() => {
     // 스플래시 화면 표시 후 숨기기
     const splashTimer = setTimeout(() => {
@@ -70,25 +79,38 @@ function App() {
           const userDocRef = doc(db, 'users', user.uid);
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
-            setUserRole(userDocSnap.data().role || null);
+            const role = userDocSnap.data().role || null;
+            setUserRole(role);
+            // On refresh, if user is logged in, set loggedInAccountType from role
+            setLoggedInAccountType(role === '환자' ? 'patient' : 'guardian');
           }
         } catch (e) {
           console.error('역할 조회 실패:', e);
         }
       } else {
         setUserRole(null);
+        setLoggedInAccountType(null); // Clear loggedInAccountType on logout
+        localStorage.removeItem('loggedInAccountType'); // Also clear from local storage
       }
       setLoading(false);
     });
 
+    // Load loggedInAccountType from localStorage on initial mount
+    const storedAccountType = localStorage.getItem('loggedInAccountType');
+    if (storedAccountType) {
+      setLoggedInAccountType(storedAccountType);
+    }
+
     return unsubscribe;
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount and unmount
 
   const handleLogout = async () => {
     if (window.confirm('로그아웃 하시겠습니까?')) {
       try {
         await signOut(auth);
         setActiveNav('home');
+        localStorage.removeItem('loggedInAccountType'); // Also clear on logout
+        setLoggedInAccountType(null); // Clear state
       } catch (error) {
         console.error('로그아웃 실패:', error);
       }
@@ -118,6 +140,7 @@ function App() {
             onSwitchToSignup={() => setAuthScreen('signup')}
             onSwitchToFindId={() => setAuthScreen('findId')}
             onSwitchToFindPassword={() => setAuthScreen('findPassword')}
+            onLoginSuccess={handleLoginSuccess}
           />
         )}
         {authScreen === 'signup' && (
@@ -136,67 +159,72 @@ function App() {
   // 로그인된 경우
   return (
     <div className="app-container">
-      <aside className="sidebar">
-        <div className="app-logo">
-          <div className="logo-icon">R</div>
-          <span className="logo-text">REMIND CALL</span>
-        </div>
-        
-        <nav className="nav-menu">
-          <button 
-            className={`nav-item ${activeNav === 'home' ? 'active' : ''}`}
-            onClick={() => setActiveNav('home')}
-            title="홈"
-          >
-            <span className="nav-icon"><img src={activeNav === 'home' ? home_icon_on : home_icon_off} alt="홈_아이콘" className='nav_icon' /></span>
-            <span className="nav-label">홈</span>
-          </button>
-
-          {/* 보호자 전용: 사진등록 */}
-          {userRole === '보호자' && (
+      {!(loggedInAccountType === 'patient' && activeNav === 'home') && (
+        <aside className="sidebar">
+          <div className="app-logo">
+            <div className="logo-icon">R</div>
+            <span className="logo-text">REMIND CALL</span>
+          </div>
+          
+          <nav className="nav-menu">
             <button 
-              className={`nav-item ${activeNav === 'photo' ? 'active' : ''}`}
-              onClick={() => setActiveNav('photo')}
-              title="사진등록"
+              className={`nav-item ${activeNav === 'home' ? 'active' : ''}`}
+              onClick={() => setActiveNav('home')}
+              title="홈"
             >
-              <span className="nav-icon"><img src={activeNav === 'photo' ? photo_icon_on : photo_icon_off} alt="사진_아이콘" className='nav_icon' /></span>
-              <span className="nav-label">사진등록</span>
+              <span className="nav-icon"><img src={activeNav === 'home' ? home_icon_on : home_icon_off} alt="홈_아이콘" className='nav_icon' /></span>
+              <span className="nav-label">홈</span>
             </button>
-          )}
 
-          {/* 환자 전용: 통화 */}
-          {userRole === '환자' && (
+            {/* 보호자 전용: 사진등록 */}
+            {userRole === '보호자' && (
+              <button 
+                className={`nav-item ${activeNav === 'photo' ? 'active' : ''}`}
+                onClick={() => setActiveNav('photo')}
+                title="사진등록"
+              >
+                <span className="nav-icon"><img src={activeNav === 'photo' ? photo_icon_on : photo_icon_off} alt="사진_아이콘" className='nav_icon' /></span>
+                <span className="nav-label">사진등록</span>
+              </button>
+            )}
+
+            {/* 환자 전용: 통화 */}
+            {userRole === '환자' && (
+              <button 
+                className={`nav-item ${activeNav === 'call' ? 'active' : ''}`}
+                onClick={() => setActiveNav('call')}
+                title="통화"
+              >
+                <span className="nav-icon">📞</span>
+                <span className="nav-label">통화</span>
+              </button>
+            )}
+
             <button 
-              className={`nav-item ${activeNav === 'call' ? 'active' : ''}`}
-              onClick={() => setActiveNav('call')}
-              title="통화"
+              className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
+              onClick={() => { setActiveNav('stats'); setSubScreen(null); }}
+              title="통계"
             >
-              <span className="nav-icon">📞</span>
-              <span className="nav-label">통화</span>
+              <span className="nav-icon"><img src={activeNav === 'stats' ? chart_icon_on : chart_icon_off} alt="통계_아이콘" className='nav_icon' /></span>
+              <span className="nav-label">통계</span>
             </button>
-          )}
-
-          <button 
-            className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('stats'); setSubScreen(null); }}
-            title="통계"
-          >
-            <span className="nav-icon"><img src={activeNav === 'stats' ? chart_icon_on : chart_icon_off} alt="통계_아이콘" className='nav_icon' /></span>
-            <span className="nav-label">통계</span>
-          </button>
-          <button 
-            className={`nav-item ${activeNav === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveNav('profile')}
-            title="내 정보"
-          >
-            <span className="nav-icon"><img src={activeNav === 'profile' ? info_icon_on : info_icon_off} alt="프로필_아이콘" className='nav_icon' /></span>
-            <span className="nav-label">내 정보</span>
-          </button>
-        </nav>
-      </aside>
+            <button 
+              className={`nav-item ${activeNav === 'profile' ? 'active' : ''}`}
+              onClick={() => setActiveNav('profile')}
+              title="내 정보"
+            >
+              <span className="nav-icon"><img src={activeNav === 'profile' ? info_icon_on : info_icon_off} alt="프로필_아이콘" className='nav_icon' /></span>
+              <span className="nav-label">계정 관리</span>
+            </button>
+          </nav>
+        </aside>
+      )}
 
       <main className="main-content">
-        {activeNav === 'home' && <MainScreen currentUser={currentUser} onNavigate={handleStatsNavigate} onViewAllCallHistory={handleMainScreenCallHistoryNavigate} />}
+        {activeNav === 'home' && (loggedInAccountType === 'patient' ? 
+          <MainScreen_p currentUser={currentUser} onNavigate={handleStatsNavigate} /> : 
+          <MainScreen currentUser={currentUser} onNavigate={handleStatsNavigate} onViewAllCallHistory={handleMainScreenCallHistoryNavigate} />
+        )}
         {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
         {activeNav === 'call' && <VoiceChatScreen onBack={() => setActiveNav('home')} />}

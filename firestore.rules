@@ -3,76 +3,77 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // [1] 공통 함수: 로그인 여부 확인
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // [2] Users, Guardians, Patients (기본 정보)
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
-      allow create: if isSignedIn();
+    // 보호자가 특정 환자와 연결되어 있는지 확인하는 함수
+    function isGuardianOfPatient(guardianId, patientId) {
+      return exists(/databases/$(database)/documents/family_links/$(guardianId + "_" + patientId));
     }
 
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
+      allow update, delete: if isSignedIn() && (request.auth.uid == userId || isGuardianOfPatient(request.auth.uid, userId));
+    }
     match /guardians/{guardianId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == guardianId;
       allow create: if isSignedIn();
     }
-
     match /patients/{patientId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == patientId;
       allow create: if isSignedIn();
+      // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
+      allow update, delete: if isSignedIn() && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
     }
-
-    // [3] FamilyLinks (가족 연결 정보)
     match /family_links/{linkId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
     }
-    
-    // [4] Memories (추억 미디어)
     match /Memories/{memoryId} {
       allow read, write: if isSignedIn();
     }
-
-    // [5] Call (통화 기록)
     match /Call/{callId} {
       allow read, write: if isSignedIn();
     }
-
-    // [6] Conversation (대화 상세 로그)
     match /Conversation/{logId} {
       allow read, write: if isSignedIn();
     }
-
-    // [7] Report (분석 리포트)
     match /Report/{reportId} {
       allow read, write: if isSignedIn();
     }
-
-    // [8] 서브컬렉션 호환성 (Photos)
     match /users/{userId}/photos/{photoId} {
       allow read, write: if isSignedIn();
     }
-    
     match /guardians/{guardianId}/photos/{photoId} {
       allow read, write: if isSignedIn();
     }
-
-    // [9] 기존 호환 - call_logs (웹 통화 분석 저장용)
     match /call_logs/{logId} {
       allow read, write: if isSignedIn();
     }
-
-    // [10] 기존 호환 - photos, cognitive_scores
     match /photos/{photoId} {
       allow read, write: if isSignedIn();
     }
-
     match /cognitive_scores/{scoreId} {
       allow read, write: if isSignedIn();
+    }
+
+    match /temp_codes/{codeId} {
+      // 환자만 임시 코드를 생성할 수 있습니다.
+      allow create: if isSignedIn() 
+                      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "환자" 
+                      && request.resource.data.patient_id == request.auth.uid 
+                      && request.resource.data.code == codeId 
+                      && request.resource.data.expires_at is timestamp; 
+
+      // 보호자는 유효한 코드를 읽고, 환자는 자신이 생성한 코드를 읽을 수 있습니다. (임시적으로 완화된 규칙 - 로그인만 확인)
+       allow read: if isSignedIn();
+
+      // 코드는 사용되거나 만료되면 삭제될 수 있습니다. (클라이언트에서 직접 삭제 허용)
+      allow delete: if isSignedIn();
     }
   }
 }

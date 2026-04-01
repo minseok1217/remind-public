@@ -407,6 +407,13 @@
 .add-patient-button-container {
   width: 100%;
   margin-top: 15px; /* 환자 목록과의 간격 */
+  display: flex;
+  gap: 10px; /* 버튼들 사이의 간격 */
+}
+
+.add-patient-button {
+  flex: 1; /* 두 버튼이 공간을 균등하게 차지 */
+
 }
 
 .add-patient-button {
@@ -534,4 +541,115 @@
   width: 24px;
   height: 24px;
   cursor: pointer;
+}
+
+/* Popup styles */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.popup-content {
+  background: white;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.popup-content h2 {
+  font-size: 24px;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.popup-content p {
+  font-size: 15px;
+  color: #666;
+  margin-bottom: 25px;
+  line-height: 1.5;
+}
+
+.popup-form-field {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.popup-form-field label {
+  display: block;
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.popup-form-field input[type="text"],
+.popup-form-field input[type="tel"],
+.popup-form-field input[type="date"],
+.popup-form-field input[type="password"] {
+  width: calc(100% - 24px); /* Adjust for padding */
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: "pretendard";
+}
+
+.popup-form-field input:focus {
+  border-color: #00C16E;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 193, 110, 0.2);
+}
+
+.popup-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.popup-actions button {
+  flex: 1;
+  padding: 12px 15px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.cancel-button {
+  background-color: #e0e0e0;
+  color: #555;
+  border: none;
+}
+
+.cancel-button:hover {
+  background-color: #cccccc;
+}
+
+.confirm-button {
+  background-color: #00C16E;
+  color: white;
+  border: none;
+}
+
+.confirm-button:hover {
+  background-color: #00a85d;
+}
+
+.error-message {
+  color: #df3939;
+  font-size: 13px;
+  margin-top: 10px;
+  text-align: center;
 }
