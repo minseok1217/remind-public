@@ -1,0 +1,443 @@
+/* KMMSEScreen.css */
+.kmmse-screen {
+  width: 100%;
+  min-height: 100vh;
+  background: #f6f8f7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 40px;
+  box-sizing: border-box;
+}
+
+/* 진행바 */
+.kmmse-top-bar {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 20px;
+}
+
+.kmmse-progress-text {
+  display: block;
+  text-align: right;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.kmmse-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.kmmse-progress-fill {
+  height: 100%;
+  background: #41d17f;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* 카드 */
+.kmmse-card {
+  width: 100%;
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.kmmse-question-card {
+  align-items: flex-start;
+}
+
+/* 로고 */
+.kmmse-logo {
+  font-size: 48px;
+  color: #41d17f;
+  line-height: 1;
+  font-weight: 700;
+}
+
+/* 섹션 전환 헤더 배지 */
+.kmmse-section-header-badge {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #41d17f;
+  padding: 6px 16px;
+  border-radius: 20px;
+  margin-bottom: 4px;
+}
+
+/* 나레이션 텍스트 */
+.kmmse-narration-text {
+  font-size: 16px;
+  color: #374151;
+  line-height: 1.8;
+  white-space: pre-line;
+  text-align: left;
+  margin: 0;
+  width: 100%;
+}
+
+/* 타이틀 */
+.kmmse-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  text-align: center;
+}
+
+.kmmse-subtitle {
+  font-size: 16px;
+  color: #4b5563;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 정보 박스 */
+.kmmse-info-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kmmse-info-box p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #166534;
+  line-height: 1.5;
+}
+
+.kmmse-info-box p:last-child {
+  margin-bottom: 0;
+}
+
+/* 노트 */
+.kmmse-note {
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 섹션 라벨 */
+.kmmse-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #41d17f;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #f0fdf4;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 4px;
+}
+
+/* 질문 텍스트 */
+.kmmse-question {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-line;
+}
+
+/* 텍스트 입력 영역 */
+.kmmse-input-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.kmmse-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 16px;
+  color: #111827;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.kmmse-input:focus {
+  border-color: #41d17f;
+}
+
+.kmmse-input::placeholder {
+  color: #9ca3af;
+}
+
+/* 선택지 버튼들 */
+.kmmse-choices {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.kmmse-choice-btn {
+  width: 100%;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 16px;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.kmmse-choice-btn:hover {
+  background: #f0fdf4;
+  border-color: #41d17f;
+  color: #166534;
+}
+
+.kmmse-choice-btn:active {
+  transform: scale(0.98);
+}
+
+/* 기억 등록 */
+.kmmse-memory-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.kmmse-memory-words {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.kmmse-memory-word {
+  background: #41d17f;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  padding: 14px 24px;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(65, 209, 127, 0.3);
+}
+
+.kmmse-timer-text {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+  text-align: center;
+}
+
+/* 물건 이름 맞추기 */
+.kmmse-object-display {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  background: #f9fafb;
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 4px;
+}
+
+.kmmse-object-emoji {
+  font-size: 80px;
+  line-height: 1;
+}
+
+/* 확인 버튼 영역 */
+.kmmse-confirm-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* 기본 버튼 */
+.kmmse-btn-primary {
+  width: 100%;
+  padding: 15px;
+  background: #41d17f;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.kmmse-btn-primary:hover:not(:disabled) {
+  background: #2eb872;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(65, 209, 127, 0.4);
+}
+
+.kmmse-btn-primary:disabled {
+  background: #d1fae5;
+  color: #a7f3d0;
+  cursor: not-allowed;
+}
+
+.kmmse-btn-secondary {
+  width: 100%;
+  padding: 15px;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.kmmse-btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+/* 음성 버튼 */
+.kmmse-mic-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 20px;
+  background: #f0fdf4;
+  border: 2px solid #41d17f;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 4px 0;
+}
+
+.kmmse-mic-btn:hover {
+  background: #dcfce7;
+}
+
+.kmmse-mic-btn.listening {
+  background: #fee2e2;
+  border-color: #ef4444;
+  animation: kmmse-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes kmmse-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
+
+.kmmse-mic-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.kmmse-mic-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #166534;
+}
+
+.kmmse-mic-btn.listening .kmmse-mic-label {
+  color: #dc2626;
+}
+
+/* 인식 결과 표시 */
+.kmmse-voice-result {
+  width: 100%;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kmmse-voice-result-label {
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.kmmse-voice-result-text {
+  font-size: 16px;
+  color: #1c1917;
+  font-weight: 500;
+}
+
+/* 선택지 힌트 텍스트 */
+.kmmse-choice-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
+  margin: 4px 0 0;
+}
+
+/* 결과 화면 */
+.kmmse-score-circle {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 8px solid #41d17f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.kmmse-score-num {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.kmmse-score-max {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.kmmse-diff-badge {
+  padding: 8px 24px;
+  border-radius: 20px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.kmmse-diff-label {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+  text-align: center;
+}

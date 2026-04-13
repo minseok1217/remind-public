@@ -21,6 +21,8 @@ function VoiceChatScreen({ onBack }) {
   const [hasPhoto, setHasPhoto] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
 
+  const [difficulty, setDifficulty] = useState('중'); // '상' | '중' | '하'
+
   const chatHistoryRef = useRef([]);
   const recognitionRef = useRef(null);
   const ttsQueueRef = useRef([]);
@@ -28,6 +30,7 @@ function VoiceChatScreen({ onBack }) {
   const currentPhotoIdRef = useRef(null);
   const currentPhotoOwnerIdRef = useRef(null);
   const callStartTimeRef = useRef(null);
+  const difficultyRef = useRef('중');
   const isEndingCallRef = useRef(false);
   const endSignalCountRef = useRef(0);
   const processingRef = useRef(false);
@@ -515,7 +518,16 @@ function VoiceChatScreen({ onBack }) {
   const sendTextToGemini = async (text) => {
     processingRef.current = true;
     try {
-      const fullText = await chatWithGemini(text, chatHistoryRef.current, hasPhoto ? photoKeywords : null);
+      const elapsedMinutes = callStartTimeRef.current
+        ? Math.floor((Date.now() - callStartTimeRef.current) / 60000)
+        : 0;
+      const fullText = await chatWithGemini(
+        text,
+        chatHistoryRef.current,
+        hasPhoto ? photoKeywords : null,
+        difficultyRef.current,
+        elapsedMinutes
+      );
 
       chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
       chatHistoryRef.current.push({ role: 'model', parts: [{ text: fullText }] });
@@ -557,6 +569,25 @@ function VoiceChatScreen({ onBack }) {
       processingRef.current = false;
     }
   };
+
+  // 환자 난이도 로드
+  useEffect(() => {
+    const loadDifficulty = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+        const snap = await getDoc(doc(db, 'patients', user.uid));
+        if (snap.exists()) {
+          const d = snap.data().difficulty || '중';
+          setDifficulty(d);
+          difficultyRef.current = d;
+        }
+      } catch (e) {
+        console.warn('난이도 로드 실패, 기본값(중) 사용:', e);
+      }
+    };
+    loadDifficulty();
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;

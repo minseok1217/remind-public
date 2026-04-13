@@ -1,0 +1,259 @@
+/* OrientationTrainingScreen.css */
+.orientation-screen {
+  width: 100%;
+  min-height: 100vh;
+  background: #f6f8f7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px 40px;
+  box-sizing: border-box;
+}
+
+/* 헤더 */
+.orientation-header {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+}
+
+.orientation-back-btn {
+  background: none;
+  border: none;
+  font-size: 15px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.orientation-back-btn:hover {
+  color: #111827;
+}
+
+.orientation-header-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.orientation-header-step {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* 진행바 */
+.orientation-progress-track {
+  width: 100%;
+  max-width: 480px;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.orientation-progress-fill {
+  height: 100%;
+  background: #41d17f;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* 카드 */
+.orientation-card {
+  width: 100%;
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 28px 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+/* 이모지 박스 */
+.orientation-emoji-box {
+  background: #f0fdf4;
+  border-radius: 16px;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orientation-emoji {
+  font-size: 80px;
+  line-height: 1;
+}
+
+/* 질문 */
+.orientation-question {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* 선택지 */
+.orientation-choices {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.orientation-choice-btn {
+  width: 100%;
+  padding: 15px 16px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 15px;
+  color: #374151;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.orientation-choice-btn:hover {
+  background: #f0fdf4;
+  border-color: #41d17f;
+  color: #166534;
+}
+
+.orientation-choice-btn:active {
+  transform: scale(0.98);
+}
+
+/* 피드백 */
+.orientation-feedback {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.orientation-feedback-banner {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.orientation-feedback-banner.correct {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 2px solid #86efac;
+}
+
+.orientation-feedback-banner.incorrect {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 2px solid #fca5a5;
+}
+
+.orientation-correct-answer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 10px 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.orientation-correct-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.orientation-correct-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #78350f;
+}
+
+.orientation-hint {
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 완료 화면 */
+.orientation-complete-icon {
+  font-size: 72px;
+  line-height: 1;
+  text-align: center;
+}
+
+.orientation-complete-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  text-align: center;
+}
+
+.orientation-complete-score {
+  font-size: 18px;
+  color: #374151;
+  text-align: center;
+  margin: 0;
+}
+
+.orientation-complete-score strong {
+  color: #41d17f;
+  font-weight: 700;
+}
+
+.orientation-complete-msg {
+  font-size: 15px;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* 기본 버튼 */
+.orientation-btn-primary {
+  width: 100%;
+  padding: 15px;
+  background: #41d17f;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.orientation-btn-primary:hover {
+  background: #2eb872;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(65, 209, 127, 0.4);
+}
+
+.orientation-btn-primary:active {
+  transform: scale(0.98);
+}

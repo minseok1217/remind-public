@@ -19,9 +19,14 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
   const [newPatientPhoneNumber, setNewPatientPhoneNumber] = useState('');
   const [newPatientBirthdate, setNewPatientBirthdate] = useState('');
   const [newPatientGender, setNewPatientGender] = useState('남성');
-  const [newPatientCallTime, setNewPatientCallTime] = useState('12:00'); // 통화 시간 (HH:mm 형식)
+  const [newPatientCallTime, setNewPatientCallTime] = useState('12:00');
   const [newPatientId, setNewPatientId] = useState('');
   const [newPatientPassword, setNewPatientPassword] = useState('');
+  // 위치 정보 (K-MMSE 채점용)
+  const [newPatientCity, setNewPatientCity] = useState('');
+  const [newPatientPlaceType, setNewPatientPlaceType] = useState('집');
+  const [newPatientPlaceName, setNewPatientPlaceName] = useState('');
+  const [newPatientFloor, setNewPatientFloor] = useState('1');
   const [error, setError] = useState('');
   
   // 통화 관련 상태
@@ -49,44 +54,42 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         const userData = userDocSnap.data();
         
         if (userData.role === '보호자') {
-          // 보호자인 경우 - guardians 추가 정보 로드
+          // 보호자인 경우 - guardians 추가 정보 로드 (없어도 계속 진행)
           const guardianDocRef = doc(db, 'guardians', currentUser.uid);
           const guardianDocSnap = await getDoc(guardianDocRef);
-          
-          if (guardianDocSnap.exists()) {
-            const guardianData = guardianDocSnap.data();
-            setGuardianInfo({ ...userData, ...guardianData });
 
-            // FamilyLinks에서 연결된 환자 찾기
-            const familyLinksRef = collection(db, 'family_links');
-            const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid), where('status', '==', '연결됨'));
-            const familySnapshot = await getDocs(familyQuery);
-            
-            if (!familySnapshot.empty) {
-              const linkData = familySnapshot.docs[0].data();
-              setFamilyLink(linkData);
-              console.log('가족 연결 정보:', linkData);
-              
-              const patientUserId = linkData.patient_id;
-              
-              // 연결된 환자 정보 로드
-              const patientUserRef = doc(db, 'users', patientUserId);
-              const patientUserSnap = await getDoc(patientUserRef);
-              const patientDocRef = doc(db, 'patients', patientUserId);
-              const patientDocSnap = await getDoc(patientDocRef);
-              
-              if (patientUserSnap.exists()) {
-                const pUserData = patientUserSnap.data();
-                const pData = patientDocSnap.exists() ? patientDocSnap.data() : {};
-                setPatientInfo({ ...pUserData, ...pData });
-                console.log('환자 정보 로드 완료:', pUserData.name);
-              }
-            } else {
-              // 연결된 환자가 없는 경우 팝업 표시
-              setShowPatientRegistrationPopup(true);
+          if (guardianDocSnap.exists()) {
+            setGuardianInfo({ ...userData, ...guardianDocSnap.data() });
+          } else {
+            setGuardianInfo(userData);
+          }
+
+          // FamilyLinks에서 연결된 환자 찾기 (guardians 문서 존재 여부와 무관하게 항상 확인)
+          const familyLinksRef = collection(db, 'family_links');
+          const familyQuery = query(familyLinksRef, where('guardian_id', '==', currentUser.uid), where('status', '==', '연결됨'));
+          const familySnapshot = await getDocs(familyQuery);
+
+          if (!familySnapshot.empty) {
+            const linkData = familySnapshot.docs[0].data();
+            setFamilyLink(linkData);
+            console.log('가족 연결 정보:', linkData);
+
+            const patientUserId = linkData.patient_id;
+
+            // 연결된 환자 정보 로드
+            const patientUserRef = doc(db, 'users', patientUserId);
+            const patientUserSnap = await getDoc(patientUserRef);
+            const patientDocRef = doc(db, 'patients', patientUserId);
+            const patientDocSnap = await getDoc(patientDocRef);
+
+            if (patientUserSnap.exists()) {
+              const pUserData = patientUserSnap.data();
+              const pData = patientDocSnap.exists() ? patientDocSnap.data() : {};
+              setPatientInfo({ ...pUserData, ...pData });
+              console.log('환자 정보 로드 완료:', pUserData.name);
             }
           } else {
-            // 연결된 환자가 없는 경우 팝업 표시
+            // 연결된 환자가 없는 경우에만 팝업 표시
             setShowPatientRegistrationPopup(true);
           }
         } else if (userData.role === '환자') {
@@ -192,9 +195,14 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         user_id: patientUser.uid,
         birth_date: newPatientBirthdate,
         gender: newPatientGender,
-        call_time: newPatientCallTime.replace(':', ''), // HHmm 형식으로 저장
-        is_notified: true, // 알림 설정 필드 추가
-        guardian_id: currentUser.uid
+        call_time: newPatientCallTime.replace(':', ''),
+        is_notified: true,
+        guardian_id: currentUser.uid,
+        // K-MMSE 장소 지남력 채점용
+        city: newPatientCity.trim(),
+        place_type: newPatientPlaceType,
+        place_name: newPatientPlaceName.trim(),
+        floor: newPatientFloor.trim(),
       });
 
       // 6. FamilyLinks 컬렉션에 가족 연결 정보 저장
@@ -548,6 +556,60 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
                   required
                 />
               </div>
+              {/* ── K-MMSE 장소 지남력 정보 ── */}
+              <div className="popup-section-divider">
+                <span>📍 어르신 거주 위치 정보 (K-MMSE 검사용)</span>
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientCity">거주 시/도</label>
+                <input
+                  type="text"
+                  id="patientCity"
+                  value={newPatientCity}
+                  onChange={(e) => setNewPatientCity(e.target.value)}
+                  placeholder="예: 서울, 경기도, 부산"
+                  disabled={loading}
+                />
+              </div>
+              <div className="popup-form-field">
+                <label>어르신이 계신 곳</label>
+                <div className="popup-gender-buttons">
+                  {['집','요양원','병원','기타'].map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      className={`popup-gender-btn ${newPatientPlaceType === type ? 'active' : ''}`}
+                      onClick={() => setNewPatientPlaceType(type)}
+                      disabled={loading}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientPlaceName">장소 이름</label>
+                <input
+                  type="text"
+                  id="patientPlaceName"
+                  value={newPatientPlaceName}
+                  onChange={(e) => setNewPatientPlaceName(e.target.value)}
+                  placeholder="예: 우리집, 행복 요양원"
+                  disabled={loading}
+                />
+              </div>
+              <div className="popup-form-field">
+                <label htmlFor="patientFloor">층수</label>
+                <input
+                  type="text"
+                  id="patientFloor"
+                  value={newPatientFloor}
+                  onChange={(e) => setNewPatientFloor(e.target.value)}
+                  placeholder="예: 1, 2, 3층"
+                  disabled={loading}
+                />
+              </div>
+
               <div className="popup-form-field">
                 <label htmlFor="patientId">아이디</label>
                 <input

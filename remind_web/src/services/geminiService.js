@@ -143,8 +143,33 @@ export const generatePhotoDescription = async (imageFile) => {
   });
 };
 
+// 난이도별 회상 치료 전략 생성 (파이썬 프로세스 기반)
+const getDifficultyStrategy = (difficulty, photoName, photoType) => {
+  const name = photoName || '제공된 사진';
+  const type = photoType || '개인적';
+
+  // 공통 규칙 (파이썬 base_rule과 동일)
+  const baseRule = '규칙: 1. 모든 응답은 2문장 이내로 짧고 명확하게 한다. 2. 어르신이 답변하기 쉽게 한 번에 하나만 질문한다.';
+
+  let strategy;
+  if (difficulty === '상') {
+    // 파이썬 high 전략과 동일
+    strategy = `0-10분: ${name}의 맥락/인물/대화를 심층 회상한다. 사진 속 배경, 함께한 사람, 당시 감정과 이후 이야기까지 개방형 질문으로 끌어낸다. 10-15분: 오늘 통화 소감 나누기. 15분: [END_CALL] 출력.`;
+  } else if (difficulty === '중') {
+    // 파이썬 medium 전략 기반
+    strategy = `0-10분: ${name} 관련 개인 경험/감정을 공유한다. 심층 회상보다는 "이 사진에서 기억나는 게 있으신가요?" 처럼 답하기 쉬운 질문을 하고, 어르신의 대답에 공감하며 자연스럽게 이어간다. 10-15분: 오늘 통화 소감 나누기. 15분: [END_CALL] 출력.`;
+  } else {
+    // 파이썬 low 전략 기반
+    strategy = `0-10분: ${name}의 이름/색깔/장소 등 단순 인식에 집중한다. "이 사진에 사람이 있나요?", "이 사진은 어디서 찍은 것 같으세요?" 처럼 예/아니오 또는 단답형으로 답할 수 있는 질문을 한다. 어르신이 틀려도 부드럽게 맞장구치며 긍정적 분위기를 유지한다. 10-15분: 오늘 통화 소감 나누기(아주 짧게). 15분: [END_CALL] 출력.`;
+  }
+
+  return `역할: 전문 요양보호사. 대상 사진: ${name}(${type}). ${baseRule} 전략: ${strategy}`;
+};
+
 // 채팅 기능 (클라이언트에서 직접 Gemini 호출)
-export const chatWithGemini = async (message, history = [], photoContext = null) => {
+// difficulty: '상' | '중' | '하' | null (기본값 '중')
+// elapsedMinutes: 통화 경과 시간(분) - 타이밍 기반 전략에 사용
+export const chatWithGemini = async (message, history = [], photoContext = null, difficulty = '중', elapsedMinutes = 0) => {
   // 사진 컨텍스트가 있으면 시스템 프롬프트에 추가
   let photoInfo = '';
   if (photoContext) {
@@ -160,15 +185,18 @@ export const chatWithGemini = async (message, history = [], photoContext = null)
 이 정보를 바탕으로 어르신과 사진에 대해 따뜻하게 대화하세요.`;
   }
 
-  const systemPrompt = `당신은 치매 노인을 위한 다정하고 침착한 '회상 치료사'입니다.
+  const photoName = photoContext?.location || photoContext?.situation || (photoContext?.keywords?.[0]) || '제공된 사진';
+  const photoType = photoContext ? '개인적' : '보편적';
+  const strategy = getDifficultyStrategy(difficulty || '중', photoName, photoType);
+
+  // 파이썬 프롬프트 구조를 따름
+  const systemPrompt = `${strategy}
 ${photoInfo}
-[대화 규칙]
-1. 답변은 어르신이 듣기 편하도록 1~2문장 이내로 짧고 천천히 하세요.
-2. 사진에 대한 대화라면, 사진 속 추억을 함께 나누듯 질문하고 반응하세요.
-3. 사용자가 피곤해하거나 대화를 그만하고 싶어 하면 따뜻한 마무리 인사를 건네세요.
-4. 마무리 인사 맨 마지막에는 [END_CALL] 태그를 붙이세요.
-5. 절대로 (살짝 놀라며), (웃으며), (조용히) 같은 괄호 안 지문/행동 표현을 쓰지 마세요. 음성으로 직접 말하는 것만 작성하세요.
-6. 사진을 이미 보여주고 있으므로, "사진을 준비하지 못했다"같은 말을 하지 마세요. 사진에 대해 자연스럽게 대화하세요.`;
+[추가 규칙]
+- 괄호 안 지문/행동 표현 금지 (예: (웃으며), (조용히)).
+- 사진을 이미 보여주고 있으므로 "사진을 준비하지 못했다"는 말 금지.
+- 어르신이 피곤해하거나 종료를 원하면 따뜻하게 마무리하고 [END_CALL] 출력.
+- [현재 경과 시간: ${elapsedMinutes}분] 전략 타이밍에 맞게 대화 진행.`;
 
   const contents = [
     { role: 'user', parts: [{ text: systemPrompt }] },
@@ -182,7 +210,7 @@ ${photoInfo}
     const resp = await fetch('/api/gemini/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history, photoContext }),
+      body: JSON.stringify({ message, history, photoContext, difficulty, elapsedMinutes }),
     });
     if (resp.ok) {
       const json = await resp.json();

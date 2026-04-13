@@ -17,6 +17,7 @@ import SignupScreen from './components/SignupScreen';
 import FindIdScreen from './components/FindIdScreen';
 import FindPasswordScreen from './components/FindPasswordScreen';
 import VoiceChatScreen from './components/VoiceChatScreen';
+import KMMSEScreen from './components/KMMSEScreen';
 import home_icon_on from './assets/home_icon_on.png'; 
 import home_icon_off from './assets/home_icon_off.png'; 
 import photo_icon_on from './assets/photo_icon_on.png'; 
@@ -35,6 +36,8 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [authScreen, setAuthScreen] = useState('login'); // 'login', 'signup', 'findId', 'findPassword'
   const [subScreen, setSubScreen] = useState(null); // { type: 'callHistory' | 'callDetail', data: {} }
+  const [showKMMSE, setShowKMMSE] = useState(false);
+  const [kmmseExistingDifficulty, setKmmseExistingDifficulty] = useState(null);
 
   const handleStatsNavigate = (type, data) => {
     setSubScreen({ type, data });
@@ -70,6 +73,39 @@ function App() {
     return () => clearTimeout(splashTimer);
   }, []);
 
+  // K-MMSE 필요 여부 체크 (환자 전용 / 30일마다 재검사)
+  const checkKMMSENeeded = async (uid) => {
+    try {
+      const patientSnap = await getDoc(doc(db, 'patients', uid));
+      if (!patientSnap.exists()) {
+        setShowKMMSE(true);
+        setKmmseExistingDifficulty(null);
+        return;
+      }
+      const data = patientSnap.data();
+      const lastDate = data.kmmse_last_date ? new Date(data.kmmse_last_date) : null;
+      const diff = data.difficulty || null;
+
+      if (!lastDate) {
+        // 한 번도 검사 안 한 경우
+        setShowKMMSE(true);
+        setKmmseExistingDifficulty(null);
+      } else {
+        // 30일 초과 시 재검사
+        const daysSince = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince > 30) {
+          setShowKMMSE(true);
+          setKmmseExistingDifficulty(diff);
+        } else {
+          setShowKMMSE(false);
+        }
+      }
+    } catch (e) {
+      console.warn('K-MMSE 체크 실패:', e);
+      setShowKMMSE(false);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -82,7 +118,12 @@ function App() {
             const role = userDocSnap.data().role || null;
             setUserRole(role);
             // On refresh, if user is logged in, set loggedInAccountType from role
-            setLoggedInAccountType(role === '환자' ? 'patient' : 'guardian');
+            const accountType = role === '환자' ? 'patient' : 'guardian';
+            setLoggedInAccountType(accountType);
+            // 환자인 경우 K-MMSE 체크
+            if (role === '환자') {
+              await checkKMMSENeeded(user.uid);
+            }
           }
         } catch (e) {
           console.error('역할 조회 실패:', e);
@@ -91,6 +132,7 @@ function App() {
         setUserRole(null);
         setLoggedInAccountType(null); // Clear loggedInAccountType on logout
         localStorage.removeItem('loggedInAccountType'); // Also clear from local storage
+        setShowKMMSE(false);
       }
       setLoading(false);
     });
@@ -156,11 +198,21 @@ function App() {
     );
   }
 
+  // 환자 K-MMSE 검사가 필요한 경우
+  if (currentUser && showKMMSE && userRole === '환자') {
+    return (
+      <KMMSEScreen
+        currentUser={currentUser}
+        existingDifficulty={kmmseExistingDifficulty}
+        onComplete={() => setShowKMMSE(false)}
+      />
+    );
+  }
+
   // 로그인된 경우
   return (
     <div className="app-container">
-      {!(loggedInAccountType === 'patient' && activeNav === 'home') && (
-        <aside className="sidebar">
+      <aside className="sidebar">
           <div className="app-logo">
             <div className="logo-icon">R</div>
             <span className="logo-text">REMIND CALL</span>
@@ -218,7 +270,6 @@ function App() {
             </button>
           </nav>
         </aside>
-      )}
 
       <main className="main-content">
         {activeNav === 'home' && (loggedInAccountType === 'patient' ? 

@@ -31,6 +31,10 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [newPatientId, setNewPatientId] = useState(''); // 환자 로그인 아이디
   const [newPatientPassword, setNewPatientPassword] = useState(''); // 환자 로그인 비밀번호
   const [newPatientCallTime, setNewPatientCallTime] = useState('12:00'); // 통화 시간 (HH:mm 형식)
+  const [newPatientCity, setNewPatientCity] = useState(''); // 위치 정보 - 도시
+  const [newPatientPlaceType, setNewPatientPlaceType] = useState('집'); // 위치 정보 - 장소 유형
+  const [newPatientPlaceName, setNewPatientPlaceName] = useState(''); // 위치 정보 - 장소 이름
+  const [newPatientFloor, setNewPatientFloor] = useState('1'); // 위치 정보 - 층수
   const [addPatientError, setAddPatientError] = useState(''); // 환자 추가 시 에러 메시지
 
   const [showExistingPatientPopup, setShowExistingPatientPopup] = useState(false); // 기존 환자 등록 팝업 표시 여부
@@ -98,6 +102,10 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                 gender: pData.gender || '',
                 phoneNumber: pUserData.phone_number || '',
                 callTime: pData.call_time || '1200', // 통화 시간 추가 (기본값 "1200")
+                city: pData.city || '',
+                placeType: pData.place_type || '집',
+                placeName: pData.place_name || '',
+                floor: pData.floor || '',
                 status: link.status // family_links에서 status 추가
               });
             }
@@ -134,7 +142,11 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               birthdate: pData.birth_date || '',
               gender: pData.gender || '',
               phoneNumber: userData.phone_number || '',
-              callTime: pData.call_time || '1200' // 통화 시간 추가 (기본값 "1200")
+              callTime: pData.call_time || '1200',
+              city: pData.city || '',
+              placeType: pData.place_type || '집',
+              placeName: pData.place_name || '',
+              floor: pData.floor || ''
             }]);
             setEditPatients([{
               id: currentUser.uid,
@@ -142,7 +154,11 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               birthdate: pData.birth_date || '',
               gender: pData.gender || '',
               phoneNumber: userData.phone_number || '',
-              callTime: pData.call_time || '1200'
+              callTime: pData.call_time || '1200',
+              city: pData.city || '',
+              placeType: pData.place_type || '집',
+              placeName: pData.place_name || '',
+              floor: pData.floor || ''
             }]);
             setSelectedPatientId(currentUser.uid);
           }
@@ -213,7 +229,11 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
       await updateDoc(patientDocRef, {
         birth_date: patientToSave.birthdate,
         gender: patientToSave.gender,
-        call_time: patientToSave.callTime.replace(':', '') // HHmm 형식으로 저장
+        call_time: patientToSave.callTime.replace(':', ''), // HHmm 형식으로 저장
+        city: patientToSave.city || '',
+        place_type: patientToSave.placeType || '집',
+        place_name: patientToSave.placeName || '',
+        floor: patientToSave.floor || ''
       });
 
       setPatients(editPatients); // 원본 patients 업데이트
@@ -270,6 +290,10 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     setNewPatientId('');
     setNewPatientPassword("");
     setNewPatientCallTime("12:00"); // 통화 시간 초기화
+    setNewPatientCity(''); // 위치 정보 초기화
+    setNewPatientPlaceType('집'); // 위치 정보 초기화
+    setNewPatientPlaceName(''); // 위치 정보 초기화
+    setNewPatientFloor('1'); // 위치 정보 초기화
     setAddPatientError('');
   };
 
@@ -397,7 +421,12 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
         gender: newPatientGender,
         call_time: newPatientCallTime.replace(':', ''), // HHmm 형식으로 저장
         is_notified: true, // 알림 설정 필드 추가
-        guardian_id: currentUser.uid
+        guardian_id: currentUser.uid,
+        // K-MMSE 장소 지남력 채점용
+        city: newPatientCity.trim(),
+        place_type: newPatientPlaceType,
+        place_name: newPatientPlaceName.trim(),
+        floor: newPatientFloor.trim(),
       });
 
       // 5. FamilyLinks 컬렉션에 가족 연결 정보 저장
@@ -591,6 +620,89 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               <div className="profile-info-value">{patient.gender || '미입력'}</div>
             )}
           </div>
+
+          {/* 위치 정보 표시 */}
+          {isEditingPatientInfo && isSelected && (
+            <>
+              <div style={{ margin: '10px 0', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>위치 정보</div>
+              </div>
+              <div className="profile-info-row">
+                <div className="profile-info-label">도시/지역</div>
+                <input
+                  type="text"
+                  value={currentEditPatient.city}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'city', e.target.value)}
+                  className="profile-info-input"
+                  placeholder="예: 서울"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div className="profile-info-row">
+                <div className="profile-info-label">장소 유형</div>
+                <select
+                  value={currentEditPatient.placeType}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'placeType', e.target.value)}
+                  className="profile-info-input"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                >
+                  <option value="집">집</option>
+                  <option value="요양원">요양원</option>
+                  <option value="병원">병원</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div className="profile-info-row">
+                <div className="profile-info-label">장소 이름</div>
+                <input
+                  type="text"
+                  value={currentEditPatient.placeName}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'placeName', e.target.value)}
+                  className="profile-info-input"
+                  placeholder="예: 우리집, 행복 요양원"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div className="profile-info-row">
+                <div className="profile-info-label">층수</div>
+                <input
+                  type="text"
+                  value={currentEditPatient.floor}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'floor', e.target.value)}
+                  className="profile-info-input"
+                  placeholder="예: 1층"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </>
+          )}
+          {!isEditingPatientInfo && (currentEditPatient.city || currentEditPatient.placeName) && (
+            <>
+              <div style={{ margin: '10px 0', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>위치 정보</div>
+              </div>
+              {currentEditPatient.city && (
+                <div className="profile-info-row">
+                  <div className="profile-info-label">도시/지역</div>
+                  <div className="profile-info-value">{currentEditPatient.city}</div>
+                </div>
+              )}
+              {currentEditPatient.placeName && (
+                <div className="profile-info-row">
+                  <div className="profile-info-label">장소</div>
+                  <div className="profile-info-value">{currentEditPatient.placeName} ({currentEditPatient.placeType})</div>
+                </div>
+              )}
+              {currentEditPatient.floor && (
+                <div className="profile-info-row">
+                  <div className="profile-info-label">층수</div>
+                  <div className="profile-info-value">{currentEditPatient.floor}</div>
+                </div>
+              )}
+            </>
+          )}
+
           {/* 연결 상태 표시 */}
           <div className="profile-info-row">
             <div className="profile-info-label">연결 상태</div>
@@ -917,6 +1029,58 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                   required
                 />
               </div>
+
+              {/* 위치 정보 섹션 */}
+              <hr style={{ margin: '15px 0', border: 'none', borderTop: '1px solid #ddd' }} />
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>위치 정보 (선택사항)</div>
+              
+              <div className="popup-form-field">
+                <label htmlFor="addPatientCity">도시/지역</label>
+                <input
+                  type="text"
+                  id="addPatientCity"
+                  value={newPatientCity}
+                  onChange={(e) => setNewPatientCity(e.target.value)}
+                  placeholder="예: 서울, 경기도"
+                />
+              </div>
+
+              <div className="popup-form-field">
+                <label htmlFor="addPatientPlaceType">장소 유형</label>
+                <select
+                  id="addPatientPlaceType"
+                  value={newPatientPlaceType}
+                  onChange={(e) => setNewPatientPlaceType(e.target.value)}
+                >
+                  <option value="집">집</option>
+                  <option value="요양원">요양원</option>
+                  <option value="병원">병원</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+
+              <div className="popup-form-field">
+                <label htmlFor="addPatientPlaceName">장소 이름</label>
+                <input
+                  type="text"
+                  id="addPatientPlaceName"
+                  value={newPatientPlaceName}
+                  onChange={(e) => setNewPatientPlaceName(e.target.value)}
+                  placeholder="예: 우리집, 행복 요양원"
+                />
+              </div>
+
+              <div className="popup-form-field">
+                <label htmlFor="addPatientFloor">층수</label>
+                <input
+                  type="text"
+                  id="addPatientFloor"
+                  value={newPatientFloor}
+                  onChange={(e) => setNewPatientFloor(e.target.value)}
+                  placeholder="예: 1층, 2층, B1"
+                />
+              </div>
+
               {addPatientError && <div className="error-message">{addPatientError}</div>}
               <div className="popup-actions">
                 <button type="button" className="cancel-button" onClick={handleCloseAddPatientPopup}>

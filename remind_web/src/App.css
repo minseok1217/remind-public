@@ -429,6 +429,8 @@ a {
   border-radius: 15px;
   width: 90%;
   max-width: 450px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
@@ -543,4 +545,29 @@ a {
 
 .popup-actions .confirm-button:hover {
   background-color: #00a85e;
+}
+
+.popup-section-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #41d17f;
+}
+
+.popup-section-divider::before,
+.popup-section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.popup-gender-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
