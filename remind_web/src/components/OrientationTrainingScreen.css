@@ -1,259 +1,615 @@
-/* OrientationTrainingScreen.css */
-.orientation-screen {
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   OrientationTrainingScreen.css
+   고령자 친화적 지남력 훈련 화면
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── 전체 화면 ── */
+.ot-screen {
   width: 100%;
   min-height: 100vh;
-  background: #f6f8f7;
+  background: linear-gradient(155deg, #f0fdf7 0%, #e8f8f0 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 16px 40px;
+  padding: 0 16px 48px;
   box-sizing: border-box;
+  position: relative;
+  overflow-x: hidden;
 }
 
-/* 헤더 */
-.orientation-header {
+/* ── 스파클 오버레이 ── */
+.ot-sparkle-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.25);
+  animation: sparkle-bg 0.5s ease-out forwards;
+}
+
+@keyframes sparkle-bg {
+  0%   { opacity: 0; }
+  30%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.ot-sparkle-text {
+  font-size: 42px;
+  font-weight: 800;
+  color: #16a34a;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
+  animation: sparkle-text 0.6s ease-out forwards;
+  z-index: 201;
+}
+
+@keyframes sparkle-text {
+  0%   { transform: scale(0.5); opacity: 0; }
+  50%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.ot-sparkle-particle {
+  position: absolute;
+  font-size: 36px;
+  animation: particle-fly 0.8s ease-out forwards;
+}
+
+.ot-p0 { top: 10%; left: 15%; animation-delay: 0s; }
+.ot-p1 { top: 15%; left: 75%; animation-delay: 0.05s; }
+.ot-p2 { top: 55%; left: 8%; animation-delay: 0.08s; }
+.ot-p3 { top: 60%; left: 82%; animation-delay: 0.03s; }
+.ot-p4 { top: 30%; left: 50%; animation-delay: 0.1s; }
+.ot-p5 { top: 80%; left: 30%; animation-delay: 0.06s; }
+.ot-p6 { top: 75%; left: 65%; animation-delay: 0.09s; }
+.ot-p7 { top: 40%; left: 20%; animation-delay: 0.04s; }
+.ot-p8 { top: 20%; left: 45%; animation-delay: 0.07s; }
+.ot-p9 { top: 50%; left: 60%; animation-delay: 0.02s; }
+
+@keyframes particle-fly {
+  0%   { transform: scale(0) rotate(0deg); opacity: 0; }
+  40%  { transform: scale(1.4) rotate(180deg); opacity: 1; }
+  100% { transform: scale(0.6) rotate(360deg) translateY(-30px); opacity: 0; }
+}
+
+/* ── 헤더 ── */
+.ot-header {
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 0;
+  padding: 18px 0 12px;
 }
 
-.orientation-back-btn {
+.ot-back-btn {
   background: none;
   border: none;
-  font-size: 15px;
+  font-size: 17px;
   color: #6b7280;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 6px 2px;
+  font-weight: 500;
+  transition: color 0.15s;
 }
 
-.orientation-back-btn:hover {
+.ot-back-btn:hover {
   color: #111827;
 }
 
-.orientation-header-title {
-  font-size: 17px;
+.ot-header-title {
+  font-size: 19px;
   font-weight: 700;
   color: #111827;
 }
 
-.orientation-header-step {
-  font-size: 14px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-/* 진행바 */
-.orientation-progress-track {
-  width: 100%;
-  max-width: 480px;
-  height: 6px;
-  background: #e5e7eb;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 24px;
-}
-
-.orientation-progress-fill {
-  height: 100%;
-  background: #41d17f;
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-/* 카드 */
-.orientation-card {
-  width: 100%;
-  max-width: 480px;
-  background: #ffffff;
+.ot-header-step {
+  font-size: 15px;
+  font-weight: 600;
+  color: #41d17f;
+  background: #f0fdf4;
+  padding: 4px 12px;
   border-radius: 20px;
-  padding: 28px 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ── 진행바 ── */
+.ot-progress-track {
+  width: 100%;
+  max-width: 520px;
+  height: 8px;
+  background: #d1fae5;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.ot-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #41d17f, #22c55e);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* ── 메인 카드 ── */
+.ot-card {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 28px 22px 24px;
+  box-shadow: 0 6px 32px rgba(0, 0, 0, 0.09);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   box-sizing: border-box;
+  transition: box-shadow 0.3s, border 0.3s;
 }
 
-/* 이모지 박스 */
-.orientation-emoji-box {
-  background: #f0fdf4;
+.ot-card-correct {
+  box-shadow: 0 6px 40px rgba(65, 209, 127, 0.35);
+  border: 3px solid #41d17f;
+}
+
+.ot-card-hint {
+  box-shadow: 0 6px 32px rgba(251, 191, 36, 0.25);
+  border: 3px solid #fbbf24;
+}
+
+/* ── 이미지 박스 ── */
+.ot-image-box {
+  width: 100%;
+  max-height: 280px;
   border-radius: 16px;
-  width: 140px;
-  height: 140px;
+  overflow: hidden;
+  background: #f9fafb;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.orientation-emoji {
+.ot-image {
+  width: 100%;
+  height: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── 아이콘 박스 (일반 문제) ── */
+.ot-icon-box {
+  width: 160px;
+  height: 160px;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #bbf7d0;
+}
+
+.ot-icon {
   font-size: 80px;
   line-height: 1;
 }
 
-/* 질문 */
-.orientation-question {
-  font-size: 20px;
-  font-weight: 600;
+/* ── 질문 텍스트 ── */
+.ot-question {
+  font-size: 24px;
+  font-weight: 700;
   color: #111827;
+  text-align: center;
+  line-height: 1.45;
+  margin: 0;
+  word-break: keep-all;
+}
+
+/* ── 힌트 박스 ── */
+.ot-hint-box {
+  width: 100%;
+  background: #fffbeb;
+  border: 2px solid #fde68a;
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.ot-hint-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ot-hint-text {
+  font-size: 18px;
+  color: #92400e;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+  word-break: keep-all;
+}
+
+/* ── 결과 박스 ── */
+.ot-result-box {
+  width: 100%;
+  background: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: 14px;
+  padding: 14px 18px;
+  box-sizing: border-box;
+}
+
+.ot-result-text {
+  font-size: 18px;
+  color: #166534;
+  font-weight: 600;
   text-align: center;
   line-height: 1.5;
   margin: 0;
+  word-break: keep-all;
 }
 
-/* 선택지 */
-.orientation-choices {
+/* ── 사용자 발화 ── */
+.ot-transcript {
+  width: 100%;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+.ot-transcript-label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ot-transcript-text {
+  font-size: 17px;
+  color: #374151;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+/* ── 인디케이터 영역 ── */
+.ot-indicator-area {
   width: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 90px;
+  justify-content: center;
+}
+
+.ot-indicator-label {
+  font-size: 16px;
+  color: #6b7280;
+  font-weight: 500;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── AI 말하기 웨이브 ── */
+.ot-speaking {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
 }
 
-.orientation-choice-btn {
-  width: 100%;
-  padding: 15px 16px;
-  background: #f9fafb;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 15px;
-  color: #374151;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s;
+.ot-wave {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 48px;
 }
 
-.orientation-choice-btn:hover {
-  background: #f0fdf4;
-  border-color: #41d17f;
-  color: #166534;
+.ot-wave-bar {
+  width: 8px;
+  background: linear-gradient(180deg, #41d17f, #22c55e);
+  border-radius: 4px;
+  animation: wave-bar 0.8s ease-in-out infinite;
 }
 
-.orientation-choice-btn:active {
-  transform: scale(0.98);
+.ot-bar1 { animation-delay: 0s;    height: 22px; }
+.ot-bar2 { animation-delay: 0.12s; height: 38px; }
+.ot-bar3 { animation-delay: 0.24s; height: 48px; }
+.ot-bar4 { animation-delay: 0.12s; height: 38px; }
+.ot-bar5 { animation-delay: 0s;    height: 22px; }
+
+@keyframes wave-bar {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.6; }
+  50%       { transform: scaleY(1.0); opacity: 1;   }
 }
 
-/* 피드백 */
-.orientation-feedback {
-  width: 100%;
+/* ── 마이크 펄스 ── */
+.ot-mic-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
-.orientation-feedback-banner {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  text-align: center;
-  box-sizing: border-box;
-}
-
-.orientation-feedback-banner.correct {
-  background: #f0fdf4;
-  color: #16a34a;
-  border: 2px solid #86efac;
-}
-
-.orientation-feedback-banner.incorrect {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 2px solid #fca5a5;
-}
-
-.orientation-correct-answer {
+.ot-mic-pulse {
+  position: relative;
+  width: 72px;
+  height: 72px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+}
+
+.ot-mic-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 3px solid #41d17f;
+  opacity: 0;
+  animation: mic-ring 2s ease-out infinite;
+}
+
+.ot-ring1 {
+  width: 72px;
+  height: 72px;
+  animation-delay: 0s;
+}
+
+.ot-ring2 {
+  width: 72px;
+  height: 72px;
+  animation-delay: 0.6s;
+}
+
+@keyframes mic-ring {
+  0%   { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.ot-mic-icon {
+  font-size: 38px;
+  z-index: 1;
+  filter: drop-shadow(0 2px 6px rgba(65, 209, 127, 0.4));
+}
+
+/* ── 처리 중 점 ── */
+.ot-processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ot-dots {
+  display: flex;
+  gap: 10px;
+}
+
+.ot-dot {
+  width: 14px;
+  height: 14px;
+  background: #41d17f;
+  border-radius: 50%;
+  animation: dot-bounce 0.9s ease-in-out infinite;
+}
+
+.ot-dot:nth-child(2) { animation-delay: 0.18s; }
+.ot-dot:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40%            { transform: translateY(-14px); opacity: 1; }
+}
+
+/* ── 정답 뱃지 ── */
+.ot-correct-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.ot-correct-icon {
+  font-size: 52px;
+}
+
+.ot-correct-label {
+  font-size: 22px;
+  font-weight: 800;
+  color: #16a34a;
+  margin: 0;
+}
+
+@keyframes badge-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+
+/* ── 하단 힌트 안내 ── */
+.ot-bottom-hint {
+  margin-top: 16px;
+  font-size: 17px;
+  color: #92400e;
+  font-weight: 600;
+  text-align: center;
   background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 10px;
-  padding: 10px 16px;
+  padding: 12px 24px;
+  border-radius: 12px;
+  max-width: 480px;
   width: 100%;
   box-sizing: border-box;
 }
 
-.orientation-correct-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #92400e;
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   완료 화면
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.ot-complete-card {
+  width: 100%;
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 48px 28px;
+  box-shadow: 0 6px 32px rgba(0, 0, 0, 0.09);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  box-sizing: border-box;
+  margin-top: 60px;
 }
 
-.orientation-correct-text {
-  font-size: 15px;
-  font-weight: 700;
-  color: #78350f;
-}
-
-.orientation-hint {
-  font-size: 14px;
-  color: #6b7280;
-  text-align: center;
-  margin: 0;
-  line-height: 1.5;
-}
-
-/* 완료 화면 */
-.orientation-complete-icon {
-  font-size: 72px;
+.ot-complete-icon {
+  font-size: 80px;
   line-height: 1;
   text-align: center;
+  animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.orientation-complete-title {
-  font-size: 26px;
-  font-weight: 700;
+@keyframes bounce-in {
+  0%   { transform: scale(0.3); opacity: 0; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+
+.ot-complete-title {
+  font-size: 30px;
+  font-weight: 800;
   color: #111827;
   margin: 0;
   text-align: center;
 }
 
-.orientation-complete-score {
-  font-size: 18px;
+.ot-complete-score {
+  font-size: 20px;
   color: #374151;
   text-align: center;
   margin: 0;
 }
 
-.orientation-complete-score strong {
+.ot-complete-score strong {
   color: #41d17f;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
 }
 
-.orientation-complete-msg {
-  font-size: 15px;
+.ot-complete-msg {
+  font-size: 17px;
   color: #6b7280;
   text-align: center;
   line-height: 1.7;
   margin: 0;
 }
 
-/* 기본 버튼 */
-.orientation-btn-primary {
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   버튼
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.ot-btn-primary {
   width: 100%;
-  padding: 15px;
-  background: #41d17f;
+  padding: 18px;
+  background: linear-gradient(135deg, #41d17f, #22c55e);
   color: #ffffff;
   border: none;
-  border-radius: 12px;
-  font-size: 16px;
+  border-radius: 16px;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(65, 209, 127, 0.4);
+  letter-spacing: 0.02em;
+}
+
+.ot-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(65, 209, 127, 0.5);
+}
+
+.ot-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.ot-btn-secondary {
+  width: 100%;
+  padding: 16px;
+  background: #f9fafb;
+  color: #6b7280;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  font-size: 17px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.orientation-btn-primary:hover {
-  background: #2eb872;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(65, 209, 127, 0.4);
+.ot-btn-secondary:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
 }
 
-.orientation-btn-primary:active {
-  transform: scale(0.98);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   로딩
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.ot-loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  height: 80vh;
 }
+
+.ot-spinner {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #d1fae5;
+  border-top-color: #41d17f;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ot-loading-text {
+  font-size: 19px;
+  color: #6b7280;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   반응형 (더 큰 화면)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+@media (min-width: 480px) {
+  .ot-question {
+    font-size: 26px;
+  }
+  .ot-hint-text {
+    font-size: 19px;
+  }
+  .ot-result-text {
+    font-size: 20px;
+  }
+  .ot-image-box {
+    max-height: 320px;
+  }
+  .ot-image {
+    max-height: 320px;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   레거시 클래스 (기존 코드 호환용)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.orientation-screen { display: none; }

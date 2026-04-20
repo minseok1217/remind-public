@@ -20,5 +20,6 @@ export const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+// Firebase SDK 12 + .firebasestorage.app 버킷: gs:// 경로 명시 필요
+export const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 export const auth = getAuth(app);

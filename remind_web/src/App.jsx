@@ -17,6 +17,7 @@ import SignupScreen from './components/SignupScreen';
 import FindIdScreen from './components/FindIdScreen';
 import FindPasswordScreen from './components/FindPasswordScreen';
 import VoiceChatScreen from './components/VoiceChatScreen';
+import OrientationTrainingScreen from './components/OrientationTrainingScreen';
 import KMMSEScreen from './components/KMMSEScreen';
 import home_icon_on from './assets/home_icon_on.png'; 
 import home_icon_off from './assets/home_icon_off.png'; 
@@ -38,6 +39,13 @@ function App() {
   const [subScreen, setSubScreen] = useState(null); // { type: 'callHistory' | 'callDetail', data: {} }
   const [showKMMSE, setShowKMMSE] = useState(false);
   const [kmmseExistingDifficulty, setKmmseExistingDifficulty] = useState(null);
+  // 환자 통화 플로우: 'orientation' → 'voice'
+  const [callPhase, setCallPhase] = useState('orientation');
+
+  // 통화 탭을 벗어나면 callPhase 리셋
+  useEffect(() => {
+    if (activeNav !== 'call') setCallPhase('orientation');
+  }, [activeNav]);
 
   const handleStatsNavigate = (type, data) => {
     setSubScreen({ type, data });
@@ -278,7 +286,20 @@ function App() {
         )}
         {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
-        {activeNav === 'call' && <VoiceChatScreen onBack={() => setActiveNav('home')} />}
+        {activeNav === 'call' && callPhase === 'orientation' && (
+          <OrientationTrainingScreen
+            onComplete={() => setCallPhase('voice')}
+            onBack={() => setActiveNav('home')}
+          />
+        )}
+        {activeNav === 'call' && callPhase === 'voice' && (
+          <VoiceChatScreen
+            onBack={() => {
+              setCallPhase('orientation');
+              setActiveNav('home');
+            }}
+          />
+        )}
         {activeNav === 'stats' && !subScreen && (
           <StatsScreen
             currentUser={currentUser}
