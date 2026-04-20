@@ -417,10 +417,14 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
   }, []);
 
   // ── Firestore에서 이미지 문제 로드 ──
+  const getImageUrl = (d) =>
+    d.imageURL || d.imageUrl || d.photoURL || d.url || d.image || '';
+
   const loadAndStart = async () => {
     try {
       const snap = await getDocs(collection(db, 'orientaion_images'));
       const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log('[OrientationTraining] Firestore 문서 수:', docs.length, docs);
 
       const recentIds = getRecentIds();
       const objects = docs.filter((d) => d.category === 'object');
@@ -431,6 +435,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
       const imageQs = shuffle([
         ...pickRandom(objects, 3, recentIds).map((q) => ({
           ...q, type: 'image',
+          imageUrl: getImageUrl(q),
           questionText: q.questionText || getDefaultQuestion('object'),
           answer: q.answer || '',
           hint: q.hint || `이 물건을 잘 보세요!`,
@@ -438,6 +443,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
         })),
         ...pickRandom(places, 2, recentIds).map((q) => ({
           ...q, type: 'image',
+          imageUrl: getImageUrl(q),
           questionText: q.questionText || getDefaultQuestion('place'),
           answer: q.answer || '',
           hint: q.hint || `이 장소를 잘 살펴보세요!`,
@@ -445,6 +451,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
         })),
         ...pickRandom(jobs, 3, recentIds).map((q) => ({
           ...q, type: 'image',
+          imageUrl: getImageUrl(q),
           questionText: q.questionText || getDefaultQuestion('job'),
           answer: q.answer || '',
           hint: q.hint || `이분이 무엇을 하고 계신지 생각해 보세요!`,
@@ -543,12 +550,12 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
     await tts(questionText);
-    isSpeakingRef.current = false;
     setIsSpeaking(false);
     if (!mountedRef.current) return;
 
-    // TTS 잔향이 마이크에 잡히지 않도록 딜레이
-    await new Promise((r) => setTimeout(r, 800));
+    // isSpeakingRef는 유지한 채 짧게 대기하여 TTS 잔향을 차단
+    await new Promise((r) => setTimeout(r, 350));
+    isSpeakingRef.current = false;
     if (!mountedRef.current) return;
     startListening('first');
   };
@@ -716,13 +723,13 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
         isSpeakingRef.current = true;
         await tts('아쉽네요! 제가 힌트를 드릴 테니 다시 한번 볼까요?');
         if (hintText) await tts(hintText);
-        isSpeakingRef.current = false;
         setIsSpeaking(false);
         if (!mountedRef.current) return;
         setTimeout(() => {
+          isSpeakingRef.current = false;
           processingAnswerRef.current = false;
           if (mountedRef.current) startListening('second');
-        }, 800);
+        }, 350);
       } else {
         // 2차 시도 후 정답 공개
         setPhase('result');
@@ -818,9 +825,9 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
       <div className={`ot-card ${phase === 'correct' ? 'ot-card-correct' : isHintPhase ? 'ot-card-hint' : ''}`}>
 
         {/* 이미지 또는 아이콘 */}
-        {q.type === 'image' && (q.imageURL || q.imageUrl) ? (
+        {q.type === 'image' && q.imageUrl ? (
           <div className="ot-image-box">
-            <img src={q.imageURL || q.imageUrl} alt="훈련 문제" className="ot-image" />
+            <img src={q.imageUrl} alt="훈련 문제" className="ot-image" />
           </div>
         ) : (
           <div className="ot-icon-box">
