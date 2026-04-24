@@ -20,17 +20,17 @@
 .kmmse-progress-text {
   display: block;
   text-align: right;
-  font-size: 13px;
+  font-size: 16px;
   color: #6b7280;
-  margin-bottom: 6px;
-  font-weight: 500;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .kmmse-progress-track {
   width: 100%;
-  height: 8px;
+  height: 12px;
   background: #e5e7eb;
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -46,13 +46,13 @@
   width: 100%;
   max-width: 480px;
   background: #ffffff;
-  border-radius: 20px;
-  padding: 32px 28px;
+  border-radius: 24px;
+  padding: 36px 28px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   box-sizing: border-box;
 }
 
@@ -70,20 +70,20 @@
 
 /* 섹션 전환 헤더 배지 */
 .kmmse-section-header-badge {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 700;
   color: #ffffff;
   background: #41d17f;
-  padding: 6px 16px;
+  padding: 8px 20px;
   border-radius: 20px;
   margin-bottom: 4px;
 }
 
 /* 나레이션 텍스트 */
 .kmmse-narration-text {
-  font-size: 16px;
+  font-size: 20px;
   color: #374151;
-  line-height: 1.8;
+  line-height: 1.9;
   white-space: pre-line;
   text-align: left;
   margin: 0;
@@ -92,7 +92,7 @@
 
 /* 타이틀 */
 .kmmse-title {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: #111827;
   margin: 0;
@@ -100,10 +100,10 @@
 }
 
 .kmmse-subtitle {
-  font-size: 16px;
+  font-size: 20px;
   color: #4b5563;
   text-align: center;
-  line-height: 1.6;
+  line-height: 1.7;
   margin: 0;
 }
 
@@ -139,21 +139,19 @@
 
 /* 섹션 라벨 */
 .kmmse-section-label {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   color: #41d17f;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   background: #f0fdf4;
-  padding: 4px 12px;
+  padding: 6px 16px;
   border-radius: 20px;
   margin-bottom: 4px;
 }
 
 /* 질문 텍스트 */
 .kmmse-question {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 700;
   color: #111827;
   line-height: 1.5;
   margin: 0;
@@ -194,22 +192,22 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 8px;
 }
 
 .kmmse-choice-btn {
   width: 100%;
-  padding: 14px 16px;
+  padding: 18px 20px;
   background: #f9fafb;
   border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 16px;
+  border-radius: 14px;
+  font-size: 22px;
   color: #374151;
   cursor: pointer;
   text-align: left;
   transition: all 0.15s;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .kmmse-choice-btn:hover {
@@ -242,15 +240,15 @@
 .kmmse-memory-word {
   background: #41d17f;
   color: #ffffff;
-  font-size: 22px;
+  font-size: 32px;
   font-weight: 700;
-  padding: 14px 24px;
-  border-radius: 14px;
+  padding: 18px 32px;
+  border-radius: 16px;
   box-shadow: 0 4px 12px rgba(65, 209, 127, 0.3);
 }
 
 .kmmse-timer-text {
-  font-size: 14px;
+  font-size: 18px;
   color: #9ca3af;
   margin: 0;
   text-align: center;
@@ -268,7 +266,7 @@
 }
 
 .kmmse-object-emoji {
-  font-size: 80px;
+  font-size: 110px;
   line-height: 1;
 }
 
@@ -284,13 +282,13 @@
 /* 기본 버튼 */
 .kmmse-btn-primary {
   width: 100%;
-  padding: 15px;
+  padding: 18px;
   background: #41d17f;
   color: #ffffff;
   border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
+  border-radius: 14px;
+  font-size: 20px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -309,12 +307,12 @@
 
 .kmmse-btn-secondary {
   width: 100%;
-  padding: 15px;
+  padding: 18px;
   background: #f3f4f6;
   color: #6b7280;
   border: none;
-  border-radius: 12px;
-  font-size: 16px;
+  border-radius: 14px;
+  font-size: 20px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
@@ -383,15 +381,111 @@
 }
 
 .kmmse-voice-result-label {
-  font-size: 12px;
+  font-size: 15px;
   color: #92400e;
   font-weight: 600;
 }
 
 .kmmse-voice-result-text {
-  font-size: 16px;
+  font-size: 22px;
   color: #1c1917;
+  font-weight: 600;
+}
+
+/* 음성 읽는 중 표시 */
+.kmmse-speaking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f0fdf4;
+  border-radius: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kmmse-speaking-icon {
+  font-size: 26px;
+}
+
+.kmmse-speaking-label {
+  font-size: 18px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.kmmse-speaking-hint {
+  font-size: 16px;
+  color: #9ca3af;
+  text-align: center;
+  margin: 0;
+}
+
+/* 음성 인식 대기 애니메이션 */
+.kmmse-listening-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 28px 20px;
+  background: #f0fdf4;
+  border: 2px solid #41d17f;
+  border-radius: 18px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kmmse-listening-waves {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 56px;
+}
+
+.kmmse-listening-waves span {
+  display: block;
+  width: 9px;
+  background: #41d17f;
+  border-radius: 5px;
+  animation: kmmse-wave 1.1s ease-in-out infinite;
+}
+
+.kmmse-listening-waves span:nth-child(2) { animation-delay: 0.15s; }
+.kmmse-listening-waves span:nth-child(3) { animation-delay: 0.3s; }
+.kmmse-listening-waves span:nth-child(4) { animation-delay: 0.45s; }
+.kmmse-listening-waves span:nth-child(5) { animation-delay: 0.6s; }
+
+@keyframes kmmse-wave {
+  0%, 100% { height: 12px; opacity: 0.5; }
+  50% { height: 52px; opacity: 1; }
+}
+
+.kmmse-listening-label {
+  font-size: 22px;
+  font-weight: 700;
+  color: #166534;
+  margin: 0;
+}
+
+/* 건너뛰기 버튼 (항상 노출되는 비상 탈출) */
+.kmmse-btn-skip {
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  color: #9ca3af;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 18px;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 4px;
+}
+
+.kmmse-btn-skip:hover {
+  background: #f9fafb;
+  color: #6b7280;
+  border-color: #d1d5db;
 }
 
 /* 선택지 힌트 텍스트 */
@@ -416,27 +510,27 @@
 }
 
 .kmmse-score-num {
-  font-size: 48px;
+  font-size: 56px;
   font-weight: 800;
   line-height: 1;
 }
 
 .kmmse-score-max {
-  font-size: 14px;
+  font-size: 18px;
   color: #9ca3af;
   margin-top: 2px;
 }
 
 .kmmse-diff-badge {
-  padding: 8px 24px;
+  padding: 10px 28px;
   border-radius: 20px;
   color: #ffffff;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
 }
 
 .kmmse-diff-label {
-  font-size: 14px;
+  font-size: 18px;
   color: #6b7280;
   margin: 0;
   text-align: center;

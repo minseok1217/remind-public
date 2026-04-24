@@ -4,9 +4,6 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { textToSpeech } from '../services/textToSpeechService';
 import './KMMSEScreen.css';
 
-// ─────────────────────────────────────────────
-// 단어 은행 (기억 등록용)
-// ─────────────────────────────────────────────
 const WORD_BANK = [
   '사과','오렌지','포도','귤','수박','딸기','바나나','참외','복숭아','토마토',
   '감자','고구마','양파','마늘','당근','오이','배추','상추','고추','무',
@@ -25,9 +22,6 @@ const WORD_BANK = [
   '냄비','주전자','그릇','접시','컵','숟가락','젓가락','칼','도마','국자',
 ];
 
-// ─────────────────────────────────────────────
-// 따라 말하기 문장 목록
-// ─────────────────────────────────────────────
 const PROVERBS = [
   '가는 날이 장날이다.', '소 잃고 외양간 고친다.', '누워서 침 뱉기.',
   '발 없는 말이 천리 간다.', '돌다리도 두들겨 보고 건너라.',
@@ -56,13 +50,11 @@ const TONGUE_TWISTERS = [
   '들의 콩깍지는 깐 콩깍지인가 안 깐 콩깍지인가.',
 ];
 
-// 유틸 함수
 const pickRandom = (arr, n = 1) => {
   const shuffled = [...arr].sort(() => Math.random() - 0.5);
   return n === 1 ? shuffled[0] : shuffled.slice(0, n);
 };
 
-// 점수 → 난이도
 const getDifficulty = (score, maxScore) => {
   const normalized = Math.round((score / maxScore) * 30);
   if (normalized >= 21) return { level: '상', label: '경도인지장애~최경도', color: '#16a34a' };
@@ -70,9 +62,6 @@ const getDifficulty = (score, maxScore) => {
   return { level: '하', label: '중등도', color: '#ef4444' };
 };
 
-// ─────────────────────────────────────────────
-// 단계(step) 목록 빌더
-// ─────────────────────────────────────────────
 const buildSteps = (memoryWords, followPhrase, loc = {}) => {
   const now = new Date();
   const dayNames = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
@@ -81,15 +70,12 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
   const day = dayNames[now.getDay()], season = seasons[mo];
 
   return [
-    // ── 도입 나레이션 ──
     {
       type: 'narration',
       title: '시작 전 안내',
       text: `안녕하세요, 어르신. '리마인드' 서비스를 시작하기에 앞서, 어르신의 현재 기억력을 확인해보는 시간을 가지려고 합니다.\n\n지금부터 몇 가지 질문을 드릴 거예요. 시험이라고 생각하지 마시고, 편안하게 대답해 주시면 됩니다.\n\n잘 모르겠다면 '잘 모르겠어요'라고 말씀하셔도 괜찮습니다.\n\n준비가 되셨다면 '시작하기' 버튼을 눌러주세요.`,
       btnLabel: '시작하기',
     },
-
-    // ── 영역 1: 시간/장소 지남력 ──
     {
       type: 'section_narration',
       title: '영역 1 / 시간·장소 지남력',
@@ -122,30 +108,6 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
         const cityKey = loc.city.replace(/특별시$|광역시$|특별자치시$|특별자치도$|도$|시$/, '');
         return a.includes(cityKey) ? 1 : 0;
       }},
-    { type:'question', id:'p3', section:'시간·장소 지남력', maxScore:1,
-      question:'이곳은 무엇을 하는 곳인가요?',
-      inputType: loc.placeType ? 'choice' : 'text',
-      choices: ['집','요양원','병원','기타'],
-      placeholder:'예: 집, 요양원, 병원',
-      evaluate:(a) => {
-        if (!loc.placeType) return a.trim().length > 0 ? 1 : 0;
-        return a.includes(loc.placeType) ? 1 : 0;
-      }},
-    { type:'question', id:'p4', section:'시간·장소 지남력', maxScore:1,
-      question:'이 건물(또는 장소)의 이름은 무엇인가요?', inputType:'text', placeholder:'예: 우리집, 행복 요양원',
-      evaluate:(a) => {
-        if (!loc.placeName) return a.trim().length > 0 ? 1 : 0;
-        const key = loc.placeName.slice(0, Math.min(2, loc.placeName.length));
-        return a.includes(key) ? 1 : 0;
-      }},
-    { type:'question', id:'p5', section:'시간·장소 지남력', maxScore:1,
-      question:'지금 몇 층에 계신가요?', inputType:'text', placeholder:'예: 1층',
-      evaluate:(a) => {
-        if (!loc.floor) return a.trim().length > 0 ? 1 : 0;
-        return a.replace(/[^0-9]/g,'') === loc.floor.replace(/[^0-9]/g,'') ? 1 : 0;
-      }},
-
-    // ── 영역 2: 기억 등록 ──
     {
       type: 'section_narration',
       title: '영역 2 / 기억 등록',
@@ -158,8 +120,6 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
       maxScore: 3,
       evaluate: () => 3,
     },
-
-    // ── 영역 3: 주의집중 및 계산 ──
     {
       type: 'section_narration',
       title: '영역 3 / 주의집중 및 계산',
@@ -180,8 +140,6 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
     { type:'question', id:'c5', section:'주의집중 및 계산', maxScore:1,
       question:'거기서 또 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
       evaluate:(a) => a.trim().replace(/[^0-9]/g,'') === '65' ? 1 : 0 },
-
-    // ── 영역 4: 기억 회상 ──
     {
       type: 'section_narration',
       title: '영역 4 / 기억 회상',
@@ -197,8 +155,6 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
         return score;
       },
     },
-
-    // ── 영역 5: 언어 및 실행 능력 ──
     {
       type: 'section_narration',
       title: '영역 5 / 언어 및 실행 능력',
@@ -225,8 +181,6 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
         return normalize(a).includes(normalize(followPhrase).slice(0, 6)) ? 1 : 0;
       },
     },
-
-    // ── 종료 나레이션 ──
     {
       type: 'outro',
       text: `어르신, 모든 질문에 대답하시느라 정말 고생 많으셨습니다.\n\n이제 어르신이 대답해주신 내용을 바탕으로, 다음 통화부터는 어르신께 꼭 맞는 재미있는 사진들을 준비해 올게요.\n\n오늘 고생하셨습니다. 곧 다시 봬요!`,
@@ -242,12 +196,14 @@ const useSpeechRecognition = () => {
   const recognitionRef = useRef(null);
   const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  const startListening = (onResult, onEnd) => {
+  const startListening = (onResult, onNoResult) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
+    // 기존 인식 안전하게 중단
     if (recognitionRef.current) {
-      recognitionRef.current.abort();
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
     }
 
     const recognition = new SpeechRecognition();
@@ -256,26 +212,50 @@ const useSpeechRecognition = () => {
     recognition.maxAlternatives = 3;
     recognition.continuous = false;
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => {
-      setIsListening(false);
-      onEnd?.();
-    };
-    recognition.onerror = () => {
-      setIsListening(false);
-      onEnd?.();
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      onResult(transcript);
+    // 로컬 플래그: onerror + onend 이중 콜백 방지
+    let resultReceived = false;
+    let callbackFired = false;
+
+    const fireNoResult = () => {
+      if (!callbackFired) {
+        callbackFired = true;
+        onNoResult?.();
+      }
     };
 
-    recognition.start();
-    recognitionRef.current = recognition;
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (event) => {
+      resultReceived = true;
+      callbackFired = true; // noResult는 더 이상 호출하지 않음
+      onResult(event.results[0][0].transcript);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      if (!resultReceived) fireNoResult();
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error === 'aborted') return;
+      setIsListening(false);
+      fireNoResult();
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch {
+      setIsListening(false);
+      fireNoResult();
+    }
   };
 
   const stopListening = () => {
-    recognitionRef.current?.stop();
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
+    }
     setIsListening(false);
   };
 
@@ -286,24 +266,26 @@ const useSpeechRecognition = () => {
 // 메인 컴포넌트
 // ─────────────────────────────────────────────
 export default function KMMSEScreen({ currentUser, existingDifficulty, onComplete }) {
-  // 마운트 시 1회 결정되는 랜덤값 (ref)
   const memoryWords = useRef(pickRandom(WORD_BANK, 3)).current;
   const followPhrase = useRef(
     existingDifficulty === '상' ? pickRandom(TONGUE_TWISTERS) : pickRandom(PROVERBS)
   ).current;
 
-  // ── 모든 state/hook 선언 (early return 이전) ──
   const [steps, setSteps] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [stepIdx, setStepIdx] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [currentInput, setCurrentInput] = useState('');
   const [memoryTimer, setMemoryTimer] = useState(10);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [enableNarration, setEnableNarration] = useState(true);
+  const [autoListenTrigger, setAutoListenTrigger] = useState(0);
+
+  // 항상 최신 submitAnswer를 가리키는 ref (stale closure 방지)
+  const submitAnswerRef = useRef(null);
+  const autoListenStepRef = useRef(-1);
 
   const { isListening, supported, startListening, stopListening } = useSpeechRecognition();
 
@@ -323,7 +305,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
           };
         }
       } catch (e) {
-        console.warn('위치 정보 로드 실패, 기본값으로 진행:', e);
+        console.warn('위치 정보 로드 실패:', e);
       }
       setSteps(buildSteps(memoryWords, followPhrase, loc));
       setLoadingLocation(false);
@@ -333,73 +315,149 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
 
   const STEPS = steps || [];
 
-  // 기억 등록 타이머
+  // 기억 등록 타이머 - 0이 되면 submitAnswerRef로 자동 제출
   useEffect(() => {
     if (!STEPS.length) return;
-    const currentStep = STEPS[stepIdx];
-    if (currentStep?.type === 'memory_show') {
-      setMemoryTimer(10);
-      const iv = setInterval(() => {
-        setMemoryTimer(prev => {
-          if (prev <= 1) { clearInterval(iv); return 0; }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(iv);
-    }
+    const step = STEPS[stepIdx];
+    if (step?.type !== 'memory_show') return;
+
+    setMemoryTimer(10);
+    const iv = setInterval(() => {
+      setMemoryTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(iv);
+          submitAnswerRef.current?.('shown');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
   }, [stepIdx, STEPS.length]);
 
-  // 스텝 이동 시 음성 인식 중단 및 입력 초기화
+  // 스텝 변경 시 음성 인식 중단 및 초기화
   useEffect(() => {
     stopListening();
     setVoiceTranscript('');
-    setCurrentInput('');
+    autoListenStepRef.current = -1;
   }, [stepIdx]);
 
-  // 각 스텝이 변경될 때 자동으로 나레이션 읽기
+  // TTS 재생 → section_narration 자동 진행 / question 자동 듣기 트리거
   useEffect(() => {
-    if (loadingLocation || !STEPS.length || !enableNarration) return;
+    if (loadingLocation || !STEPS.length) return;
+    const step = STEPS[stepIdx];
+    if (!step) return;
 
-    const currentStep = STEPS[stepIdx];
-    if (!currentStep) return;
+    let cancelled = false;
 
-    const timer = setTimeout(async () => {
+    const run = async () => {
+      // TTS로 읽을 텍스트 결정
       let textToRead = '';
-
-      if (currentStep.type === 'narration' || currentStep.type === 'section_narration' || currentStep.type === 'intro') {
-        textToRead = currentStep.text;
-      } else if (currentStep.type === 'question') {
-        textToRead = currentStep.question;
+      if (step.type === 'narration' || step.type === 'section_narration') {
+        textToRead = step.text;
+      } else if (step.type === 'question') {
+        textToRead = step.question;
+      } else if (step.type === 'memory_show') {
+        textToRead = `아래 세 가지 단어를 기억해 주세요. ${step.words.join(', ')}`;
       }
 
-      if (!textToRead) return;
-
-      try {
-        if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.getVoices();
-        }
-
-        await textToSpeech.speak(textToRead, {
-          lang: 'ko-KR',
-          rate: 0.9,
-          pitch: 1,
-          volume: 1,
-          onStart: () => setIsSpeaking(true),
-          onEnd: () => setIsSpeaking(false),
-          onError: (error) => {
-            console.error('음성 재생 오류:', error);
-            setIsSpeaking(false);
+      // TTS 재생 (활성화된 경우)
+      if (textToRead && enableNarration) {
+        await new Promise(resolve => {
+          try {
+            if (window.speechSynthesis) {
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.getVoices();
+            }
+            textToSpeech.speak(textToRead, {
+              lang: 'ko-KR',
+              rate: 0.9,
+              pitch: 1,
+              volume: 1,
+              onStart: () => { if (!cancelled) setIsSpeaking(true); },
+              onEnd: () => { if (!cancelled) setIsSpeaking(false); resolve(); },
+              onError: () => { if (!cancelled) setIsSpeaking(false); resolve(); },
+            });
+          } catch {
+            if (!cancelled) setIsSpeaking(false);
+            resolve();
           }
         });
-      } catch (error) {
-        console.error('TTS 오류:', error);
-        setIsSpeaking(false);
       }
-    }, 300); // 300ms 딜레이
 
-    return () => clearTimeout(timer);
+      if (cancelled) return;
+
+      // TTS 완료 후 동작
+      if (step.type === 'section_narration') {
+        // 1초 뒤 자동으로 다음 스텝
+        await new Promise(r => setTimeout(r, 1000));
+        if (!cancelled) setStepIdx(p => p + 1);
+      } else if (step.type === 'question') {
+        // 자동 음성 인식 시작 트리거
+        if (!cancelled) {
+          autoListenStepRef.current = stepIdx;
+          setAutoListenTrigger(t => t + 1);
+        }
+      }
+    };
+
+    const timer = setTimeout(run, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    };
   }, [loadingLocation, stepIdx, STEPS.length, enableNarration]);
+
+  // 자동 음성 인식 (질문 TTS 완료 후 호출됨)
+  useEffect(() => {
+    if (autoListenTrigger === 0 || !supported) return;
+
+    const capturedStepIdx = autoListenStepRef.current;
+    const step = STEPS[capturedStepIdx];
+    if (!step || step.type !== 'question') return;
+
+    const norm = (s) => s.replace(/[.,!?\s🌸☀️🍂❄️]/g, '').toLowerCase();
+
+    const doListen = () => {
+      // 스텝이 바뀌었으면 중단
+      if (autoListenStepRef.current !== capturedStepIdx) return;
+
+      startListening(
+        (transcript) => {
+          setVoiceTranscript(transcript);
+          const normalized = norm(transcript);
+
+          if (/모르겠|잘모르|잘 모르/.test(normalized)) {
+            setTimeout(() => submitAnswerRef.current?.('잘 모르겠어요'), 600);
+            return;
+          }
+
+          if (step.inputType === 'choice') {
+            const match = step.choices.find(c => {
+              const cn = norm(c);
+              return cn.includes(normalized) || normalized.includes(cn);
+            });
+            if (match) {
+              setTimeout(() => submitAnswerRef.current?.(match), 700);
+            } else {
+              // 매칭 안 됨 → 1.2초 후 재시도
+              setTimeout(() => doListen(), 1200);
+            }
+          } else {
+            // text / object_name → 0.8초 후 자동 제출
+            setTimeout(() => submitAnswerRef.current?.(transcript), 800);
+          }
+        },
+        () => {
+          // 음성 미감지 → 800ms 후 재시도 (브라우저가 마이크 해제할 시간 확보)
+          setTimeout(() => doListen(), 800);
+        }
+      );
+    };
+
+    doListen();
+  }, [autoListenTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 로딩 중 early return ──
   if (loadingLocation) {
@@ -441,12 +499,12 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
 
   const submitAnswer = (value) => {
     const step = STEPS[stepIdx];
-    const inputValue = value ?? currentInput;
-    const scored = step.evaluate ? step.evaluate(inputValue) : 0;
-    const newAnswers = { ...answers, [step.id]: { value: inputValue, score: scored } };
+    if (!step) return;
+    const scored = step.evaluate ? step.evaluate(value) : 0;
+    const newAnswers = { ...answers, [step.id]: { value, score: scored } };
     setAnswers(newAnswers);
-    setCurrentInput('');
     setVoiceTranscript('');
+    autoListenStepRef.current = -1;
     const nextIdx = stepIdx + 1;
     if (STEPS[nextIdx]?.type === 'outro' || nextIdx >= STEPS.length) {
       finalizeAndSave(newAnswers);
@@ -454,58 +512,25 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     setStepIdx(nextIdx);
   };
 
-  const handleVoiceText = () => {
-    if (isListening) { stopListening(); return; }
-    startListening((transcript) => {
-      setCurrentInput(transcript);
-      setVoiceTranscript(transcript);
-    }, null);
+  // 항상 최신 submitAnswer를 ref에 유지
+  submitAnswerRef.current = submitAnswer;
+
+  // 터치로 선택지 선택 시 (TTS/인식 즉시 중단 후 제출)
+  const handleChoiceTap = (choice) => {
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
+    stopListening();
+    autoListenStepRef.current = -1;
+    submitAnswer(choice);
   };
 
-  const handleVoiceChoice = (choices) => {
-    if (isListening) { stopListening(); return; }
-    startListening((transcript) => {
-      setVoiceTranscript(transcript);
-      const norm = (s) => s.replace(/[.,!?\s🌸☀️🍂❄️]/g, '').toLowerCase();
-      const normalized = norm(transcript);
-      
-      // "I don't know" 키워드 확인
-      if (/모르겠|모르겠어|잘모르|잘 모르|모르겠네/.test(normalized)) {
-        setTimeout(() => submitAnswer('잘 모르겠어요'), 300);
-        return;
-      }
-      
-      // 선택지와 매칭
-      const match = choices.find(c => {
-        const cn = norm(c);
-        return cn.includes(normalized) || normalized.includes(cn);
-      });
-      if (match) setTimeout(() => submitAnswer(match), 300);
-    }, null);
-  };
-
-  const handleSpeakNarration = async (text) => {
-    if (!enableNarration) return;
-    
-    try {
-      setIsSpeaking(true);
-      await textToSpeech.speak(text, {
-        lang: 'ko-KR',
-        rate: 0.9, // 조금 느리게 (환자 이해 용이)
-        pitch: 1,
-        volume: 1,
-        onEnd: () => {
-          setIsSpeaking(false);
-        },
-        onError: (error) => {
-          console.error('음성 재생 오류:', error);
-          setIsSpeaking(false);
-        }
-      });
-    } catch (error) {
-      console.error('TTS 오류:', error);
-      setIsSpeaking(false);
-    }
+  // "잘 모르겠어요" 탭 시
+  const handleGiveUp = () => {
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
+    stopListening();
+    autoListenStepRef.current = -1;
+    submitAnswer('잘 모르겠어요');
   };
 
   // ── 통계 ──
@@ -513,56 +538,22 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   const answeredCount = Object.keys(answers).length;
   const progress = STEPS.length > 1 ? stepIdx / (STEPS.length - 1) : 0;
 
-  // ── outro 화면 ──
+  // ── outro 화면 (점수/난이도 미표시 - 보호자 전용) ──
   if (currentStep?.type === 'outro') {
     return (
       <div className="kmmse-screen">
         <div className="kmmse-card">
           <div className="kmmse-logo">∞</div>
-          <h2 className="kmmse-title">검사 완료</h2>
           <p className="kmmse-narration-text" style={{ textAlign:'center', whiteSpace:'pre-line' }}>
             {currentStep.text}
           </p>
-          {result && (
-            <>
-              <div className="kmmse-score-circle" style={{ borderColor: result.diff.color }}>
-                <span className="kmmse-score-num" style={{ color: result.diff.color }}>{result.rawScore}</span>
-                <span className="kmmse-score-max">/ {result.maxScore}</span>
-              </div>
-              <div className="kmmse-diff-badge" style={{ backgroundColor: result.diff.color }}>
-                난이도 {result.diff.level}단계 설정 완료
-              </div>
-              <p className="kmmse-diff-label">{result.diff.label}</p>
-            </>
-          )}
           <button className="kmmse-btn-primary" onClick={onComplete} disabled={saving}>
-            {saving ? '저장 중...' : '홈으로 이동'}
+            {saving ? '잠시만요...' : '확인'}
           </button>
         </div>
       </div>
     );
   }
-
-  // ── 마이크 버튼 공통 컴포넌트 ──
-  const MicButton = ({ onClick }) => supported ? (
-    <button
-      className={`kmmse-mic-btn ${isListening ? 'listening' : ''}`}
-      onClick={onClick}
-      type="button"
-    >
-      <span className="kmmse-mic-icon">{isListening ? '🔴' : '🎤'}</span>
-      <span className="kmmse-mic-label">
-        {isListening ? '듣는 중... (탭하면 중지)' : '마이크로 말하기'}
-      </span>
-    </button>
-  ) : null;
-
-  const VoiceResult = () => voiceTranscript ? (
-    <div className="kmmse-voice-result">
-      <span className="kmmse-voice-result-label">인식된 내용:</span>
-      <span className="kmmse-voice-result-text">"{voiceTranscript}"</span>
-    </div>
-  ) : null;
 
   return (
     <div className="kmmse-screen">
@@ -576,26 +567,29 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
         </div>
       </div>
 
-      {/* 도입 나레이션 */}
+      {/* 도입 나레이션 (버튼으로 시작) */}
       {currentStep?.type === 'narration' && (
         <div className="kmmse-card">
           <div className="kmmse-logo">∞</div>
           <h2 className="kmmse-title">{currentStep.title}</h2>
           <p className="kmmse-narration-text">{currentStep.text}</p>
-          {isSpeaking && <p style={{ fontSize: '12px', color: '#999', marginTop: '10px' }}>🔊 음성 재생 중...</p>}
+          {isSpeaking && <p className="kmmse-speaking-hint">🔊 읽는 중...</p>}
           <button className="kmmse-btn-primary" onClick={goNext}>
             {currentStep.btnLabel || '다음'}
           </button>
         </div>
       )}
 
-      {/* 섹션 전환 나레이션 */}
+      {/* 섹션 전환 나레이션 (자동 진행 - 버튼은 비상용) */}
       {currentStep?.type === 'section_narration' && (
         <div className="kmmse-card">
           <div className="kmmse-section-header-badge">{currentStep.title}</div>
           <p className="kmmse-narration-text">{currentStep.text}</p>
-          {isSpeaking && <p style={{ fontSize: '12px', color: '#999', marginTop: '10px' }}>🔊 음성 재생 중...</p>}
-          <button className="kmmse-btn-primary" onClick={goNext}>시작하기</button>
+          {isSpeaking ? (
+            <p className="kmmse-speaking-hint">🔊 읽는 중...</p>
+          ) : (
+            <button className="kmmse-btn-secondary" onClick={goNext}>계속하기</button>
+          )}
         </div>
       )}
 
@@ -609,68 +603,67 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
               <div key={w} className="kmmse-memory-word">{w}</div>
             ))}
           </div>
-          {memoryTimer > 0 ? (
-            <p className="kmmse-timer-text">{memoryTimer}초 후 자동으로 넘어갑니다...</p>
-          ) : (
-            <button className="kmmse-btn-primary" onClick={() => submitAnswer('shown')}>
-              기억했어요, 다음으로
-            </button>
-          )}
+          <p className="kmmse-timer-text">
+            {memoryTimer > 0
+              ? `${memoryTimer}초 후 자동으로 넘어갑니다...`
+              : '잠시 후 넘어갑니다...'}
+          </p>
         </div>
       )}
 
-      {/* 질문 */}
+      {/* 질문 (완전 음성 자동화) */}
       {currentStep?.type === 'question' && (
         <div className="kmmse-card kmmse-question-card">
           <div className="kmmse-section-label">{currentStep.section}</div>
           <p className="kmmse-question">{currentStep.question}</p>
 
-          {/* 텍스트 / 물건 이름 */}
-          {(currentStep.inputType === 'text' || currentStep.inputType === 'object_name') && (
-            <div className="kmmse-input-area">
-              {currentStep.inputType === 'object_name' && (
-                <div className="kmmse-object-display">
-                  <span className="kmmse-object-emoji">{currentStep.emoji}</span>
-                </div>
-              )}
-              <MicButton onClick={handleVoiceText} />
-              <VoiceResult />
-              <input
-                className="kmmse-input"
-                type="text"
-                placeholder={currentStep.placeholder}
-                value={currentInput}
-                onChange={e => setCurrentInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && currentInput.trim() && submitAnswer()}
-              />
-              <button
-                className="kmmse-btn-primary"
-                disabled={!currentInput.trim()}
-                onClick={() => submitAnswer()}
-              >
-                다음 문항
-              </button>
-              <button className="kmmse-btn-secondary" onClick={() => submitAnswer('잘 모르겠어요')}>
-                잘 모르겠어요
-              </button>
+          {currentStep.inputType === 'object_name' && (
+            <div className="kmmse-object-display">
+              <span className="kmmse-object-emoji">{currentStep.emoji}</span>
             </div>
           )}
 
-          {/* 선택지 */}
-          {currentStep.inputType === 'choice' && (
-            <div className="kmmse-input-area">
-              <MicButton onClick={() => handleVoiceChoice(currentStep.choices)} />
-              <VoiceResult />
-              <p className="kmmse-choice-hint">또는 아래에서 직접 선택하세요</p>
-              <div className="kmmse-choices">
-                {currentStep.choices.map(c => (
-                  <button key={c} className="kmmse-choice-btn" onClick={() => submitAnswer(c)}>
-                    {c}
-                  </button>
-                ))}
-              </div>
+          {/* TTS 읽는 중 */}
+          {isSpeaking && (
+            <div className="kmmse-speaking-indicator">
+              <span className="kmmse-speaking-icon">🔊</span>
+              <span className="kmmse-speaking-label">질문을 읽는 중입니다...</span>
             </div>
           )}
+
+          {/* 음성 인식 대기 중 */}
+          {isListening && !voiceTranscript && (
+            <div className="kmmse-listening-indicator">
+              <div className="kmmse-listening-waves">
+                <span /><span /><span /><span /><span />
+              </div>
+              <p className="kmmse-listening-label">말씀해 주세요...</p>
+            </div>
+          )}
+
+          {/* 인식된 음성 표시 */}
+          {voiceTranscript && (
+            <div className="kmmse-voice-result">
+              <span className="kmmse-voice-result-label">인식된 내용</span>
+              <span className="kmmse-voice-result-text">"{voiceTranscript}"</span>
+            </div>
+          )}
+
+          {/* 선택지 버튼 (터치 fallback) */}
+          {currentStep.inputType === 'choice' && (
+            <div className="kmmse-choices">
+              {currentStep.choices.map(c => (
+                <button key={c} className="kmmse-choice-btn" onClick={() => handleChoiceTap(c)}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 잘 모르겠어요 (항상 노출 - 비상 탈출) */}
+          <button className="kmmse-btn-skip" onClick={handleGiveUp}>
+            잘 모르겠어요
+          </button>
         </div>
       )}
     </div>
