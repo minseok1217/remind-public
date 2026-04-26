@@ -41,8 +41,8 @@
   gap: 12px;
 }
 
-/* Info Card */
-.profile-info-card {
+/* Guardian Info Card (본인 정보 카드) */
+.guardian-info-card {
   background-color: white;
   border-radius: 12px;
   padding: 16px;
@@ -50,6 +50,23 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Patient Info Card (환자 정보 카드) */
+.profile-info-card.patient-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column; /* 자식 요소들을 세로로 정렬 */
+  overflow: hidden; /* 연결됨 헤더 둥근 모서리 처리 */
+  cursor: pointer;
+  padding: 0; /* 모든 패딩 제거 */
+}
+
+.profile-info-card.patient-card.selected {
+  border: 1px solid #00C16E; /* 선택된 카드 하이라이트 */
+  box-shadow: 0 2px 10px rgba(0, 193, 110, 0.5);
 }
 
 .icon-circle {
@@ -82,12 +99,16 @@
 
 .profile-info-content {
   flex: 1;
+  display: flex; /* 본인 정보 카드에서도 flex 사용 */
+  flex-direction: column;
 }
 
 .profile-info-label {
   font-size: 12px;
   color: var(--gray-600);
   margin-bottom: 2px;
+  width: 60px; /* 라벨 너비 고정 */
+  flex-shrink: 0;
 }
 
 .profile-info-value {
@@ -248,7 +269,9 @@
     margin-right: 12px; /* 아이콘과 내용 사이 간격 */
   }
 
-  .profile-info-content {
+  /* .profile-info-content를 guardian-info-card와 patient-card 모두에 적용 */
+  .guardian-info-card .profile-info-content,
+  .profile-info-card.patient-card .profile-info-content {
     flex: 1; /* 남은 공간 차지 */
     min-width: calc(100% - 70px); /* 아이콘 제외한 최소 너비 (아이콘 너비 40px + 마진 12px) */
     display: flex;
@@ -256,7 +279,9 @@
     gap: 8px; /* 정보 항목들 사이 간격 */
   }
 
-  .profile-info-row {
+  /* .profile-info-row를 guardian-info-card와 patient-card 모두에 적용 */
+  .guardian-info-card .profile-info-row,
+  .profile-info-card.patient-card .profile-info-row {
     flex-direction: row; /* 라벨과 값을 가로로 배치 */
     justify-content: flex-start; /* 라벨과 값을 왼쪽으로 정렬 */
     align-items: center;
@@ -264,14 +289,20 @@
     width: 100%; /* 전체 너비 사용 */
   }
 
-  .profile-info-label {
+  /* .profile-info-label를 guardian-info-card와 patient-card 모두에 적용 */
+  .guardian-info-card .profile-info-label,
+  .profile-info-card.patient-card .profile-info-label {
     width: auto; /* 고정 너비 해제 */
     flex-shrink: 0; /* 줄어들지 않도록 */
   }
 
-  .profile-info-value,
-  .profile-info-input,
-  .popup-gender-buttons {
+  /* .profile-info-value, .profile-info-input, .popup-gender-buttons를 guardian-info-card와 patient-card 모두에 적용 */
+  .guardian-info-card .profile-info-value,
+  .guardian-info-card .profile-info-input,
+  .guardian-info-card .popup-gender-buttons,
+  .profile-info-card.patient-card .profile-info-value,
+  .profile-info-card.patient-card .profile-info-input,
+  .profile-info-card.patient-card .popup-gender-buttons {
     flex: 1; /* 남은 공간을 채우도록 */
     text-align: left; /* 값을 왼쪽으로 정렬 */
   }
@@ -282,7 +313,7 @@
 
   .patient-card-actions {
     flex-direction: column; /* 버튼 세로 배열 */
-    gap: 8px; /* 버튼 사이 간격 */
+    gap: 8px;
     margin-left: auto; /* 왼쪽 공간 자동으로 확보하여 오른쪽으로 정렬 */
     margin-top: 10px; /* 정보와 버튼 사이 간격 */
     align-self: flex-end; /* 오른쪽으로 정렬 */
@@ -299,29 +330,31 @@
 }
 
 /* Multi-patient UI specific styles */
-.profile-info-card.patient-card {
-  cursor: pointer;
-  flex-direction: row; /* 환자 카드는 가로 배열 */
-  justify-content: space-between; /* 내용과 버튼을 양 끝으로 */
-  align-items: flex-start; /* 아이콘과 텍스트 상단 정렬 */
-  padding-right: 12px; /* 버튼 공간 확보 */
+/* .profile-info-card.patient-card는 위에서 이미 정의됨 */
+
+.connected-patients-header {
+  background-color: #00c16e; /* 초록색 배경 */
+  color: white; /* 흰색 텍스트 */
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 0; /* 상단 모서리 둥글게 하지 않음 */
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 0;
 }
 
-.profile-info-card.patient-card.selected {
-  border-color: #00C16E; /* 선택된 카드 하이라이트 */
-  box-shadow: 0 2px 10px rgba(0, 193, 110, 0.5);
+.patient-card-content-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
 }
 
 .connect-patient-btn {
-  color: #E2AD4C;
-  background-color: #fff3cd;
-  border: 1px solid #ffc107;
-}
-
-.profile-info-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  color: white;
+  background-color: #FFC107; /* 주황색 */
+  border: none;
 }
 
 .profile-info-row {
@@ -330,10 +363,13 @@
   gap: 10px; /* 라벨과 값 사이 간격 */
 }
 
-.profile-info-label {
-  width: 60px; /* 라벨 너비 고정 */
-  flex-shrink: 0;
+/* .profile-info-label과 .profile-info-content는 위에서 통합됨 */
+/* .profile-info-label은 미디어 쿼리 밖에서는 고정 너비 유지 */
+.profile-info-content:not(.patient-card-content-wrapper .profile-info-content) .profile-info-label {
+    width: 60px; /* 라벨 너비 고정 */
+    flex-shrink: 0;
 }
+
 
 .patient-list-header {
   margin-bottom: 12px;
@@ -362,7 +398,7 @@
   display: flex;
   flex-direction: column; /* 버튼 세로 배열 */
   gap: 8px;
-  margin-left: 12px;
+  margin-left: auto; /* 버튼들을 오른쪽으로 밀어냄 */
   flex-shrink: 0;
 }
 
@@ -389,10 +425,10 @@
 }
 
 .delete-patient-btn {
-  background-color: #F8F8F8;
-  border: 1px solid var(--gray-300);
+  background-color: white; /* 배경색 흰색 */
+  border: 1px solid #ddd; /* 회색 테두리 */
   color: var(--gray-700);
-  padding: 4px 8px; /* 아이콘 버튼이므로 패딩 조절 */
+  padding: 6px 10px; /* 패딩 조정 */
 }
 
 .delete-patient-btn:hover {
