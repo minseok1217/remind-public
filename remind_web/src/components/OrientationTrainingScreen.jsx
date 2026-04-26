@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { generateOrientationHint } from '../services/geminiService';
 import './OrientationTrainingScreen.css';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -422,15 +423,27 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
 
   const loadAndStart = async () => {
     try {
-      const snap = await getDocs(collection(db, 'orientaion_images'));
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log('[OrientationTraining] Firestore 문서 수:', docs.length, docs);
+      const [imageSnap, generalSnap] = await Promise.all([
+        getDocs(collection(db, 'orientaion_images')),
+        getDocs(collection(db, 'orientation_questions')).catch(() => ({ docs: [] })),
+      ]);
+
+      const docs = imageSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log('[OrientationTraining] 이미지 문서 수:', docs.length);
+
+      const firebaseGeneralDocs = generalSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        type: 'general',
+        questionText: d.data().questionText || d.data().question || '',
+      }));
+      console.log('[OrientationTraining] 일반 문제 수:', firebaseGeneralDocs.length);
 
       const recentIds = getRecentIds();
       const objects = docs.filter((d) => d.category === 'object');
       const places  = docs.filter((d) => d.category === 'place');
       const jobs    = docs.filter((d) => d.category === 'job');
-      const generalPool = buildGeneralPool();
+      const generalPool = firebaseGeneralDocs.length > 0 ? firebaseGeneralDocs : buildGeneralPool();
 
       const imageQs = shuffle([
         ...pickRandom(objects, 3, recentIds).map((q) => ({
@@ -713,16 +726,37 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
       }, 800);
     } else {
       if (attempt === 'first') {
-        // 힌트 모드
+        // 힌트 모드 - Gemini로 힌트 생성 (첫 TTS 재생 중 병렬 처리)
         playHintSound();
         setPhase('hint');
         phaseRef.current = 'hint';
-        const hintText = q.hint || '';
-        setStatusMsg(hintText ? `💡 ${hintText}` : '힌트를 잘 들어보세요!');
+        setStatusMsg('힌트를 준비하고 있어요...');
         setIsSpeaking(true);
         isSpeakingRef.current = true;
-        await tts('아쉽네요! 제가 힌트를 드릴 테니 다시 한번 볼까요?');
-        if (hintText) await tts(hintText);
+
+        const questionText = q.questionText || q.question || '';
+        const [generatedHint] = await Promise.all([
+          generateOrientationHint(questionText, q.answer || '').catch(() => q.hint || ''),
+          tts('아쉽네요! 제가 힌트를 드릴 테니 다시 한번 볼까요?'),
+        ]);
+
+        const hintText = (generatedHint || q.hint || '').trim();
+        if (hintText) {
+          // UI 힌트 박스 표시를 위해 질문 객체 힌트 업데이트
+          setQuestions((prev) =>
+            prev.map((item, i) =>
+              i === currentIdxRef.current ? { ...item, hint: hintText } : item
+            )
+          );
+          questionsRef.current = questionsRef.current.map((item, i) =>
+            i === currentIdxRef.current ? { ...item, hint: hintText } : item
+          );
+          setStatusMsg(`💡 ${hintText}`);
+          await tts(hintText);
+        } else {
+          setStatusMsg('힌트를 잘 들어보세요!');
+        }
+
         setIsSpeaking(false);
         if (!mountedRef.current) return;
         setTimeout(() => {

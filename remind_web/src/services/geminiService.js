@@ -294,6 +294,56 @@ const getDifficultyStrategy = (difficulty, photoName, photoType) => {
   return `역할: 전문 요양보호사. 대상 사진: ${name}(${type}). ${baseRule} 전략: ${strategy}`;
 };
 
+// ──────────────────────────────────────────────────────────
+// 지남력 훈련 힌트 생성 (Gemini 텍스트 전용)
+// ──────────────────────────────────────────────────────────
+export const generateOrientationHint = async (question, answer) => {
+  const prompt = `당신은 치매 어르신을 위한 인지 훈련 보조 AI입니다.
+아래 문제에 대한 힌트를 한 가지 제공해주세요.
+
+문제: ${question}
+정답: ${answer}
+
+규칙:
+- 정답을 직접 알려주지 마세요
+- 정답의 특징(색, 소리, 용도, 모양 등)을 이용한 단서를 주세요
+- 어르신이 쉽게 이해할 수 있는 짧고 친절한 1~2문장으로 작성하세요
+- 한국어로만 답변하세요
+- 힌트 문장만 반환하세요 (다른 설명 없이)`;
+
+  try {
+    const resp = await fetch('/api/gemini/hint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, answer }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      return (json.text || json.result || '').trim();
+    }
+  } catch (e) {
+    // 프록시 실패 시 직접 호출로 폴백
+  }
+
+  if (!GEMINI_API_KEY) throw new Error('Gemini API key가 설정되지 않았습니다.');
+
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Gemini 오류: ${error.error?.message}`);
+  }
+
+  const data = await response.json();
+  return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+};
+
 // 채팅 기능 (클라이언트에서 직접 Gemini 호출)
 // difficulty: '상' | '중' | '하' | null (기본값 '중')
 // elapsedMinutes: 통화 경과 시간(분) - 타이밍 기반 전략에 사용
