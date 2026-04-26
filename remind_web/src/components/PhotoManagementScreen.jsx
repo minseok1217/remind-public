@@ -5,6 +5,7 @@ import './PhotoManagementScreen.css';
 import trash_icon from '../assets/trash_icon.png';
 import infoicon from '../assets/info_icon.png';
 import backicon from '../assets/back_icon.png';
+import { getConnectedPatientId } from '../services/familyLinkService'; // Add this import
 
 const STATUS_PRE = '통화전';
 const STATUS_POST = '통화후';
@@ -18,18 +19,34 @@ function PhotoManagementScreen({ currentUser, onBack }) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTag, setSelectedTag] = useState('all');
   const [deletingId, setDeletingId] = useState(null);
+  const [patientId, setPatientId] = useState(null); // Add patientId state
 
   useEffect(() => {
     if (currentUser) {
-      loadPhotos();
+      const fetchPatientIdAndLoadPhotos = async () => {
+        const connectedPatientId = await getConnectedPatientId(currentUser.uid);
+        setPatientId(connectedPatientId);
+        if (connectedPatientId) {
+          loadPhotos(connectedPatientId); // Pass patientId to loadPhotos
+        } else {
+          setIsLoading(false); // No patient connected, stop loading
+        }
+      };
+      fetchPatientIdAndLoadPhotos();
     }
   }, [currentUser]);
 
-  const loadPhotos = async () => {
+  const loadPhotos = async (id) => { // Accept patientId as parameter
     setIsLoading(true);
     try {
-      // Firestore에서 사진 메타데이터 불러오기 (사용자별)
-      const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
+      // Firestore에서 사진 메타데이터 불러오기 (연결된 환자별)
+      const targetId = id || patientId; // Use passed id or state patientId
+      if (!targetId) {
+        console.warn('환자 ID를 찾을 수 없어 사진을 불러오지 못했습니다.');
+        setIsLoading(false);
+        return;
+      }
+      const userPhotosRef = collection(db, 'users', targetId, 'photos'); // Use patientId here
       const snapshot = await getDocs(userPhotosRef);
       
       const photoList = snapshot.docs.map(doc => ({
@@ -49,10 +66,15 @@ function PhotoManagementScreen({ currentUser, onBack }) {
       return;
     }
 
+    if (!patientId) { // Check for patientId before deleting
+      alert('환자 정보가 없어 사진을 삭제할 수 없습니다.');
+      return;
+    }
+
     setDeletingId(photoId);
     try {
       // Firestore에서 삭제
-      const photoRef = doc(db, 'users', currentUser.uid, 'photos', photoId);
+      const photoRef = doc(db, 'users', patientId, 'photos', photoId); // Use patientId here
       await deleteDoc(photoRef);
 
       // Storage에서 삭제 (필요한 경우)
