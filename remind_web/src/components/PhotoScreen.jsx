@@ -3,6 +3,7 @@ import { storage, db } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { extractKeywordsFromPhoto } from '../services/geminiService';
+import { getConnectedPatientId } from '../services/familyLinkService';
 import './PhotoScreen.css';
 import upload_icon from '../assets/photo_icon_on.png';
 
@@ -21,14 +22,14 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   };
 
   // 백그라운드에서 키워드 분석 및 업데이트 (사용자를 기다리게 하지 않음)
-  const analyzeAndUpdateKeywords = async (photoDocId, imageFile, description) => {
+  const analyzeAndUpdateKeywords = async (photoDocId, imageFile, description, patientUid) => {
     console.log('🔍 백그라운드 키워드 분석 시작:', { photoDocId, fileName: imageFile.name });
     try {
       const analysisResult = await extractKeywordsFromPhoto(imageFile, description);
       console.log('✅ 백그라운드 분석 완료 - 결과:', analysisResult);
       
       // Firestore 문서 업데이트
-      const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', photoDocId);
+      const photoDocRef = doc(db, 'users', patientUid, 'photos', photoDocId);
       await updateDoc(photoDocRef, {
         keywords: analysisResult.keywords || [],
         detailedDescription: analysisResult.detailedDescription || '',
@@ -54,13 +55,27 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       return;
     }
 
+    if (!currentUser || !currentUser.uid) {
+      alert('로그인된 보호자 정보가 없습니다.');
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
-      // Firebase Storage에 업로드 (사용자별 폴더)
+      const patientUid = await getConnectedPatientId(currentUser.uid);
+
+      if (!patientUid) {
+        alert('연결된 환자 계정을 찾을 수 없습니다. 먼저 환자를 연결해주세요.');
+        setIsUploading(false);
+        setUploadProgress(0);
+        return;
+      }
+
+      // Firebase Storage에 업로드 (환자별 폴더)
       const fileName = `${Date.now()}_${selectedFile.name}`;
-      const storageRef = ref(storage, `users/${currentUser.uid}/photos/${fileName}`);
+      const storageRef = ref(storage, `users/${patientUid}/photos/${fileName}`);
       
       setUploadProgress(50);
       
@@ -69,9 +84,9 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       
       setUploadProgress(75);
 
-      // Firestore에 메타데이터 저장 (사용자는 기다리지 않음)
-      console.log('📝 Firestore 저장 시작:', { uid: currentUser.uid, fileName });
-      const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
+      // Firestore에 메타데이터 저장 (환자 계정 하위)
+      console.log('📝 Firestore 저장 시작:', { uid: patientUid, fileName });
+      const userPhotosRef = collection(db, 'users', patientUid, 'photos');
       console.log('📝 Collection 참조:', userPhotosRef.path);
       
       const docRef = await addDoc(userPhotosRef, {
@@ -109,7 +124,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
       // 백그라운드에서 AI 분석 (비동기로 진행)
       console.log('🚀 백그라운드 분석 호출:', { docId: docRef.id, fileSize: selectedFile.size });
-      analyzeAndUpdateKeywords(docRef.id, selectedFile, photoDescription);
+      analyzeAndUpdateKeywords(docRef.id, selectedFile, photoDescription, patientUid);
       
     } catch (error) {
       console.error('업로드 실패:', error);

@@ -143,3 +143,29 @@ export const addFamilyLink = async (guardianId, patientId) => {
     throw error;
   }
 };
+
+/**
+ * 보호자와 연결된 환자의 ID를 가져옵니다.
+ * @param {string} guardianId 보호자 ID
+ * @returns {string | null} 연결된 환자 ID (없으면 null)
+ */
+export const getConnectedPatientId = async (guardianId) => {
+  const familyLinksRef = collection(db, 'family_links');
+  const q = query(familyLinksRef, where('guardian_id', '==', guardianId), where('status', '==', '연결됨'));
+
+  try {
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      // 첫 번째로 발견된 연결된 환자의 ID를 반환 (단일 연결을 가정)
+      const patientId = querySnapshot.docs[0].data().patient_id;
+      console.log(`[familyLinkService] 보호자 ${guardianId}에 연결된 환자 ID: ${patientId}`);
+      return patientId;
+    } else {
+      console.log(`[familyLinkService] 보호자 ${guardianId}에 연결된 환자를 찾을 수 없습니다.`);
+      return null;
+    }
+  } catch (error) {
+    console.error("[familyLinkService] 연결된 환자 ID 조회 중 오류 발생:", error);
+    throw error;
+  }
+};
