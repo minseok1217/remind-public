@@ -41,10 +41,19 @@ function App() {
   const [kmmseExistingDifficulty, setKmmseExistingDifficulty] = useState(null);
   // 환자 통화 플로우: 'orientation' → 'voice'
   const [callPhase, setCallPhase] = useState('orientation');
+  const [showCallButton, setShowCallButton] = useState(true);
 
-  // 통화 탭을 벗어나면 callPhase 리셋
+  const ORIENT_DATE_KEY = 'orient_done_date';
+  const isOrientationDoneToday = () =>
+    localStorage.getItem(ORIENT_DATE_KEY) === new Date().toDateString();
+
+  // 통화 탭 진입 시: 오늘 이미 완료했으면 바로 voice, 아니면 orientation 리셋
   useEffect(() => {
-    if (activeNav !== 'call') setCallPhase('orientation');
+    if (activeNav !== 'call') {
+      setCallPhase('orientation');
+    } else if (isOrientationDoneToday()) {
+      setCallPhase('voice');
+    }
   }, [activeNav]);
 
   const handleStatsNavigate = (type, data) => {
@@ -248,9 +257,9 @@ function App() {
               </button>
             )}
 
-            {/* 환자 전용: 통화 */}
-            {userRole === '환자' && (
-              <button 
+            {/* 통화 */}
+            {showCallButton && (
+              <button
                 className={`nav-item ${activeNav === 'call' ? 'active' : ''}`}
                 onClick={() => setActiveNav('call')}
                 title="통화"
@@ -288,7 +297,10 @@ function App() {
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
         {activeNav === 'call' && callPhase === 'orientation' && (
           <OrientationTrainingScreen
-            onComplete={() => setCallPhase('voice')}
+            onComplete={() => {
+              localStorage.setItem(ORIENT_DATE_KEY, new Date().toDateString());
+              setCallPhase('voice');
+            }}
             onBack={() => setActiveNav('home')}
           />
         )}

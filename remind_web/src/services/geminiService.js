@@ -297,6 +297,52 @@ const getDifficultyStrategy = (difficulty, photoName, photoType) => {
 // ──────────────────────────────────────────────────────────
 // 지남력 훈련 힌트 생성 (Gemini 텍스트 전용)
 // ──────────────────────────────────────────────────────────
+export const evaluateAnswerWithGemini = async (question, correctAnswer, userAnswer) => {
+  const prompt = `당신은 치매 어르신 인지 훈련 채점 AI입니다.
+문제: ${question}
+정답: ${correctAnswer}
+사용자 답변: ${userAnswer}
+
+사용자의 답변이 정답과 같은 의미인지 판단하세요.
+- 같은 의미이거나 정답을 포함한 표현이면 "정답"
+- 틀리거나 관련 없으면 "오답"
+
+반드시 "정답" 또는 "오답" 중 하나만 반환하세요.`;
+
+  try {
+    const resp = await fetch('/api/gemini/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, correctAnswer, userAnswer }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      const text = (json.text || json.result || '').trim();
+      return text.includes('정답');
+    }
+  } catch (e) {
+    // 프록시 실패 시 직접 호출로 폴백
+  }
+
+  if (!GEMINI_API_KEY) return false;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    return text.includes('정답');
+  } catch {
+    return false;
+  }
+};
+
 export const generateOrientationHint = async (question, answer) => {
   const prompt = `당신은 치매 어르신을 위한 인지 훈련 보조 AI입니다.
 아래 문제에 대한 힌트를 한 가지 제공해주세요.

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { generateOrientationHint } from '../services/geminiService';
+import { generateOrientationHint, evaluateAnswerWithGemini } from '../services/geminiService';
 import './OrientationTrainingScreen.css';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -53,103 +53,14 @@ const tts = async (text) => {
   }
 };
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 로컬 답변 평가 (Gemini API 없이 즉각 처리)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const KO_NUMBERS = {
-  '영': '0', '일': '1', '이': '2', '삼': '3', '사': '4',
-  '오': '5', '육': '6', '칠': '7', '팔': '8', '구': '9', '십': '10',
-  '하나': '1', '둘': '2', '셋': '3', '넷': '4', '다섯': '5',
-  '여섯': '6', '일곱': '7', '여덟': '8', '아홉': '9', '열': '10',
-  '열하나': '11', '열둘': '12', '스물': '20',
-  '한': '1', '두': '2', '세': '3', '네': '4',
-};
 
-// 동의어 그룹 (같은 그룹 안에 있으면 정답으로 인정)
-const SYNONYM_GROUPS = [
-  ['파란색', '파랑', '파란', '하늘색', '블루'],
-  ['빨간색', '빨강', '빨간', '레드'],
-  ['노란색', '노랑', '노란', '옐로'],
-  ['초록색', '초록', '녹색', '그린'],
-  ['흰색', '하얀색', '하얀', '흰', '화이트'],
-  ['검정색', '검은색', '검정', '검은', '블랙'],
-  ['강아지', '개', '멍멍이', '강아지요', '개요'],
-  ['고양이', '냥이', '야옹이', '고양이요'],
-  ['소', '황소', '암소', '송아지'],
-  ['동쪽', '동', '동방', '동쪽이요'],
-  ['서쪽', '서', '서방'],
-  ['남쪽', '남', '남방'],
-  ['북쪽', '북', '북방'],
-  ['봄', '봄이요', '봄이에요', '봄철'],
-  ['여름', '여름이요', '여름이에요', '여름철'],
-  ['가을', '가을이요', '가을이에요', '가을철'],
-  ['겨울', '겨울이요', '겨울이에요', '겨울철'],
-  ['월요일', '월', '월요'],
-  ['화요일', '화', '화요'],
-  ['수요일', '수', '수요'],
-  ['목요일', '목', '목요'],
-  ['금요일', '금', '금요'],
-  ['토요일', '토', '토요'],
-  ['일요일', '일', '일요'],
-  ['의사', '의사요', '의사선생님', '닥터', '의원'],
-  ['경찰', '경찰관', '경찰이요', '순경', '경관'],
-  ['소방관', '소방수', '소방대원', '소방이요', '소방관이요'],
-  ['선생님', '교사', '교사요', '선생요', '스승'],
-  ['요리사', '주방장', '셰프', '요리사요', '쉐프'],
-  ['간호사', '간호원', '간호사요'],
-  ['농부', '농민', '농부요'],
-  ['군인', '군인이요', '병사', '군관'],
-  ['사과', '사과요', '사과이요', '사과나무'],
-  ['바나나', '바나나요'],
-  ['포도', '포도요'],
-  ['배', '배요'],
-  ['귤', '귤이요', '오렌지'],
-  ['물', '물이요', '물이에요'],
-  ['가위', '가위요', '가이', '가이요'],
-  ['칫솔', '칫솔이요', '치솔'],
-  ['안경', '안경이요'],
-  ['우산', '우산이요'],
-  ['시계', '시계요'],
-  ['전화기', '전화기요', '핸드폰', '핸드폰이요', '전화'],
-  ['냉장고', '냉장고요'],
-  ['텔레비전', '티비', '티브이', '텔레비전이요', '티비요'],
-  ['남대문', '남대문이요', '숭례문'],
-  ['경복궁', '경복궁이요'],
-  ['한강', '한강이요'],
-  ['북한산', '북한산이요'],
-];
-
-const normalizeKo = (s) =>
-  (s || '')
-    .replace(/[^가-힣a-z0-9]/gi, '')
-    .toLowerCase()
-    .trim();
-
-const evalAnswerLocal = (correct, userAnswer) => {
-  const u = normalizeKo(userAnswer);
-  const c = normalizeKo(correct);
-
-  if (!u) return false;
-
-  // 직접 포함 관계
-  if (u === c || u.includes(c) || c.includes(u)) return true;
-
-  // 한글 숫자 ↔ 아라비아 숫자
-  const uNum = KO_NUMBERS[u] || u;
-  const cNum = KO_NUMBERS[c] || c;
-  if (uNum === cNum || uNum === c || u === cNum) return true;
-
-  // 동의어 그룹
-  const uGroup = SYNONYM_GROUPS.find((g) => g.some((s) => normalizeKo(s) === u));
-  const cGroup = SYNONYM_GROUPS.find((g) => g.some((s) => normalizeKo(s) === c));
-  if (uGroup && cGroup && uGroup === cGroup) return true;
-
-  // 정답이 여러 단어일 때 핵심 단어 포함 여부 (예: "바닥을 쓸 때 쓰는 물건" → "빗자루" 등은 불가, 그러나 "빗자루"를 answer에 넣으면 됨)
-  // 짧은 정답(3자 이하)이 사용자 답변에 포함되면 정답
-  if (c.length <= 3 && u.includes(c)) return true;
-  if (u.length <= 3 && c.includes(u)) return true;
-
-  return false;
+// 설명 문제 번호 파싱 (일번/이번/삼번 → '1'/'2'/'3')
+const parseOptionNumber = (text) => {
+  const t = (text || '').replace(/\s/g, '').toLowerCase();
+  if (/^[1일하나첫]|1번|일번|하나번|첫번/.test(t)) return '1';
+  if (/^[2이둘두]|2번|이번|둘번|두번/.test(t)) return '2';
+  if (/^[3삼셋세]|3번|삼번|셋번|세번/.test(t)) return '3';
+  return null;
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -192,125 +103,6 @@ const playHintSound = () => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 일반 상식 문제 풀 (충분히 많이)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const buildGeneralPool = () => {
-  const now = new Date();
-  const m = now.getMonth() + 1;
-  const d = now.getDay();
-  const DAYS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
-  const SEASON =
-    m >= 3 && m <= 5 ? '봄' : m >= 6 && m <= 8 ? '여름' : m >= 9 && m <= 11 ? '가을' : '겨울';
-
-  return [
-    // ── 날짜/시간 ──
-    {
-      id: 'g_season', question: '지금은 무슨 계절인가요?', answer: SEASON,
-      hint: `봄, 여름, 가을, 겨울 중 하나예요. 지금 창밖의 날씨를 생각해 보세요!`,
-      explanation: `지금은 ${SEASON}이에요! ${m}월은 ${SEASON}이랍니다.`,
-    },
-    {
-      id: 'g_day', question: '오늘은 무슨 요일인가요?', answer: DAYS[d],
-      hint: `월요일부터 일요일 중에 하나예요.`,
-      explanation: `오늘은 ${DAYS[d]}이에요! 잘 기억해 두세요.`,
-    },
-    // ── 색깔 ──
-    {
-      id: 'g_sky', question: '맑은 날 하늘은 무슨 색인가요?', answer: '파란색',
-      hint: `비가 안 오는 맑은 날 하늘을 생각해 보세요.`,
-      explanation: `하늘은 파란색이에요! 맑은 날 하늘을 보면 예쁜 파란색을 볼 수 있어요.`,
-    },
-    {
-      id: 'g_grass', question: '풀밭은 무슨 색인가요?', answer: '초록색',
-      hint: `나무 잎사귀나 잔디밭의 색깔을 생각해 보세요.`,
-      explanation: `풀밭은 초록색이에요! 봄이 되면 싱그러운 초록색 잔디를 볼 수 있죠.`,
-    },
-    {
-      id: 'g_snow', question: '눈은 무슨 색인가요?', answer: '흰색',
-      hint: `겨울에 내리는 눈의 색을 생각해 보세요.`,
-      explanation: `눈은 흰색이에요! 겨울에 내리는 하얀 눈은 참 예쁘죠.`,
-    },
-    // ── 덧셈 ──
-    {
-      id: 'g_math1', question: '둘 더하기 셋은 얼마인가요?', answer: '5',
-      hint: `손가락으로 세어보세요. 둘에서 셋을 더하면...`,
-      explanation: `2 더하기 3은 5예요!`,
-    },
-    {
-      id: 'g_math2', question: '넷 더하기 하나는 얼마인가요?', answer: '5',
-      hint: `손가락으로 세어보세요. 넷에서 하나를 더하면...`,
-      explanation: `4 더하기 1은 5예요!`,
-    },
-    {
-      id: 'g_math3', question: '하나 더하기 둘은 얼마인가요?', answer: '3',
-      hint: `손가락으로 세어보세요. 하나에서 둘을 더하면...`,
-      explanation: `1 더하기 2는 3이에요!`,
-    },
-    {
-      id: 'g_math4', question: '셋 더하기 하나는 얼마인가요?', answer: '4',
-      hint: `손가락으로 세어보세요.`,
-      explanation: `3 더하기 1은 4예요!`,
-    },
-    {
-      id: 'g_math5', question: '둘 더하기 둘은 얼마인가요?', answer: '4',
-      hint: `손가락으로 세어보세요. 둘에서 둘을 더하면...`,
-      explanation: `2 더하기 2는 4예요!`,
-    },
-    // ── 동물 ──
-    {
-      id: 'g_dog', question: '멍멍 짖는 동물은 무엇인가요?', answer: '강아지',
-      hint: `집에서 많이 키우는 동물이에요. 멍멍 짖는 소리를 내죠.`,
-      explanation: `맞아요, 강아지예요! 귀엽고 충직한 강아지랍니다.`,
-    },
-    {
-      id: 'g_cat', question: '야옹 하고 우는 동물은 무엇인가요?', answer: '고양이',
-      hint: `집에서 많이 키우는 동물이에요. 야옹 하는 소리를 내죠.`,
-      explanation: `맞아요, 고양이예요! 귀여운 고양이랍니다.`,
-    },
-    {
-      id: 'g_cow', question: '우유를 주는 동물은 무엇인가요?', answer: '소',
-      hint: `농장에서 키우는 큰 동물이에요. 음매 하고 울죠.`,
-      explanation: `맞아요, 소예요! 소에서 우유를 얻는답니다.`,
-    },
-    // ── 과일/음식 ──
-    {
-      id: 'g_apple', question: '빨갛고 달콤한 과일은 무엇인가요?', answer: '사과',
-      hint: `빨간색이고 달콤한 과일이에요. 하루에 하나씩 먹으면 좋다고 하죠.`,
-      explanation: `바로 사과예요! 새콤달콤한 사과는 참 맛있죠.`,
-    },
-    {
-      id: 'g_banana', question: '노랗고 길쭉한 과일은 무엇인가요?', answer: '바나나',
-      hint: `원숭이가 좋아하는 노란색 과일이에요.`,
-      explanation: `바로 바나나예요! 달콤한 바나나는 참 맛있죠.`,
-    },
-    {
-      id: 'g_water', question: '목이 마를 때 마시는 것은 무엇인가요?', answer: '물',
-      hint: `투명하고 맛이 없지만 우리 몸에 꼭 필요한 것이에요.`,
-      explanation: `바로 물이에요! 하루에 물을 충분히 마시면 건강에 좋아요.`,
-    },
-    // ── 방향/상식 ──
-    {
-      id: 'g_sun', question: '태양은 어느 방향에서 뜨나요?', answer: '동쪽',
-      hint: `아침에 해가 뜨는 방향을 생각해 보세요.`,
-      explanation: `태양은 동쪽에서 떠요! 아침 해가 뜨는 방향이 동쪽이랍니다.`,
-    },
-    {
-      id: 'g_fire', question: '불은 무슨 색인가요?', answer: '빨간색',
-      hint: `뜨겁고 타오르는 불꽃의 색깔을 생각해 보세요.`,
-      explanation: `불은 빨간색이에요! 위험하니까 조심해야 해요.`,
-    },
-    {
-      id: 'g_moon', question: '밤하늘에 빛나는 것은 무엇인가요?', answer: '달',
-      hint: `밤이 되면 하늘에 둥글게 떠있는 것이에요.`,
-      explanation: `바로 달이에요! 밤하늘에 빛나는 아름다운 달이랍니다.`,
-    },
-    {
-      id: 'g_salt', question: '음식에 짠맛을 내는 것은 무엇인가요?', answer: '소금',
-      hint: `하얀색 가루로 음식을 짭짤하게 만들 때 쓰는 것이에요.`,
-      explanation: `바로 소금이에요! 음식에 간을 맞출 때 꼭 필요하죠.`,
-    },
-  ];
-};
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 최근 문항 중복 방지 (localStorage)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const RECENT_KEY = 'orient_recent_q_ids';
@@ -339,24 +131,6 @@ const shuffle = (arr) => {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-};
-
-const pickRandom = (arr, n, excludeIds = []) => {
-  const preferred = arr.filter((q) => !excludeIds.includes(q.id));
-  const src = preferred.length >= n ? preferred : arr.length > 0 ? arr : [];
-  return shuffle(src).slice(0, n);
-};
-
-// 카테고리별 기본 질문 텍스트
-const DEFAULT_QUESTION_TEXT = {
-  object: ['이 물건의 이름은 무엇인가요?', '이 물건은 무엇에 쓰는 것인가요?'],
-  place: ['이곳은 어디인가요?', '이 장소의 이름은 무엇인가요?'],
-  job: ['이분은 무엇을 하는 사람인가요?', '이분의 직업은 무엇인가요?'],
-};
-
-const getDefaultQuestion = (category) => {
-  const opts = DEFAULT_QUESTION_TEXT[category] || ['이것은 무엇인가요?'];
-  return opts[Math.floor(Math.random() * opts.length)];
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -423,89 +197,87 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
 
   const loadAndStart = async () => {
     try {
-      const [imageSnap, generalSnap] = await Promise.all([
-        getDocs(collection(db, 'orientaion_images')),
-        getDocs(collection(db, 'orientation_questions')).catch(() => ({ docs: [] })),
-      ]);
+      const snap = await getDocs(collection(db, 'orientation_images'));
 
-      const docs = imageSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log('[OrientationTraining] 이미지 문서 수:', docs.length);
-
-      const firebaseGeneralDocs = generalSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        type: 'general',
-        questionText: d.data().questionText || d.data().question || '',
-      }));
-      console.log('[OrientationTraining] 일반 문제 수:', firebaseGeneralDocs.length);
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log('[OrientationTraining] 문서 수:', docs.length);
 
       const recentIds = getRecentIds();
-      const objects = docs.filter((d) => d.category === 'object');
-      const places  = docs.filter((d) => d.category === 'place');
-      const jobs    = docs.filter((d) => d.category === 'job');
-      const generalPool = firebaseGeneralDocs.length > 0 ? firebaseGeneralDocs : buildGeneralPool();
+      const pickOne = (type) => {
+        const pool = shuffle(docs.filter((d) => d.type === type && !recentIds.includes(d.id)));
+        return pool.length > 0 ? pool[0] : shuffle(docs.filter((d) => d.type === type))[0];
+      };
 
-      const imageQs = shuffle([
-        ...pickRandom(objects, 3, recentIds).map((q) => ({
-          ...q, type: 'image',
-          imageUrl: getImageUrl(q),
-          questionText: q.questionText || getDefaultQuestion('object'),
-          answer: q.answer || '',
-          hint: q.hint || `이 물건을 잘 보세요!`,
-          explanation: q.explanation || `${q.answer}이에요!`,
-        })),
-        ...pickRandom(places, 2, recentIds).map((q) => ({
-          ...q, type: 'image',
-          imageUrl: getImageUrl(q),
-          questionText: q.questionText || getDefaultQuestion('place'),
-          answer: q.answer || '',
-          hint: q.hint || `이 장소를 잘 살펴보세요!`,
-          explanation: q.explanation || `${q.answer}이에요!`,
-        })),
-        ...pickRandom(jobs, 3, recentIds).map((q) => ({
-          ...q, type: 'image',
-          imageUrl: getImageUrl(q),
-          questionText: q.questionText || getDefaultQuestion('job'),
-          answer: q.answer || '',
-          hint: q.hint || `이분이 무엇을 하고 계신지 생각해 보세요!`,
-          explanation: q.explanation || `${q.answer}이에요!`,
-        })),
-      ]);
+      const objectDoc  = pickOne('object');
+      const placeDoc   = pickOne('place');
+      const jobDoc     = pickOne('job');
+      const nameDocs   = [objectDoc, placeDoc, jobDoc].filter(Boolean);
 
-      const generalQs = pickRandom(generalPool, 2, recentIds).map((q) => ({
-        ...q, type: 'general',
+      // 설명 문제용: 이름 문제와 겹치지 않는 문서에서 타입별 1개
+      const usedIds = new Set(nameDocs.map((d) => d.id));
+      const pickOneExcluding = (type) => {
+        const pool = shuffle(docs.filter((d) => d.type === type && !usedIds.has(d.id)));
+        return pool.length > 0 ? pool[0] : shuffle(docs.filter((d) => d.type === type && d.id !== pickOne(type)?.id))[0];
+      };
+
+      const descDocs = [pickOneExcluding('object'), pickOneExcluding('place'), pickOneExcluding('job')].filter(Boolean);
+
+      if (nameDocs.length === 0) throw new Error('문서 부족');
+
+      // ── 이름 맞추기 3문제 ──
+      const NAME_QUESTION = {
+        job:    '이분의 직업은 무엇인가요?',
+        place:  '이곳의 이름은 무엇인가요?',
+        object: '이 물건의 이름은 무엇인가요?',
+      };
+
+      const nameQs = nameDocs.map((doc) => ({
+        id: doc.id,
+        type: 'name',
+        imageUrl: getImageUrl(doc),
+        questionText: NAME_QUESTION[doc.type] || '이 사진에 있는 것은 무엇인가요?',
+        answer: doc.name || '',
+        hint: '',
+        explanation: `정답은 "${doc.name}"이에요!`,
       }));
 
-      const allQs = shuffle([...imageQs, ...generalQs]);
-      // 문제가 너무 적으면 일반 상식으로 채움
-      const finalQs = allQs.length >= 3
-        ? allQs
-        : shuffle(buildGeneralPool()).slice(0, 8).map((q) => ({ ...q, type: 'general' }));
+      // ── 설명 맞추기 3문제 (같은 type의 다른 사진 설명을 보기로 활용) ──
+      const DESC_QUESTION = {
+        job:    '이분은 어떤 일을 하는 사람인가요?',
+        place:  '이곳은 어떤 일을 하는 곳인가요?',
+        object: '이 물건은 무엇에 쓰이는 것인가요?',
+      };
 
+      const descQs = descDocs.map((doc) => {
+        const correctDesc = doc.description || '';
+        const sameType = docs.filter((d) => d.type === doc.type && d.id !== doc.id && d.description);
+        const distractors = shuffle(sameType).slice(0, 2).map((d) => d.description);
+        const opts = shuffle([correctDesc, ...distractors]);
+        while (opts.length < 3) opts.push('알 수 없음');
+        const correctIdx = opts.indexOf(correctDesc);
+        return {
+          id: `desc_${doc.id}`,
+          type: 'description',
+          imageUrl: getImageUrl(doc),
+          questionText: DESC_QUESTION[doc.type] || '이 사진에 맞는 설명은 몇 번인가요?',
+          options: opts.slice(0, 3),
+          answer: String(correctIdx + 1),
+          hint: '',
+          explanation: `정답은 ${correctIdx + 1}번이에요! "${correctDesc}"`,
+        };
+      });
+
+      const allQs = shuffle([...nameQs, ...descQs]);
       if (!mountedRef.current) return;
-      setQuestions(finalQs);
-      questionsRef.current = finalQs;
-      appendRecentIds(finalQs.map((q) => q.id));
+      setQuestions(allQs);
+      questionsRef.current = allQs;
+      appendRecentIds(allQs.map((q) => q.id));
       await runIntro();
     } catch (e) {
       console.error('지남력 훈련 로딩 오류:', e);
-      if (e?.code === 'permission-denied') {
-        console.warn(
-          '[Firestore 규칙 필요] Firebase 콘솔 → Firestore → 규칙에 추가하세요:\n' +
-          'match /orientaion_images/{doc} { allow read: if request.auth != null; }'
-        );
-      }
       if (!mountedRef.current) return;
-      // 일반 상식 문제로 대체 (이번 세션에 아직 안 쓴 것 우선)
-      const recentIds = getRecentIds();
-      const pool = buildGeneralPool();
-      const fallback = shuffle(pickRandom(pool, pool.length, recentIds)).map((q) => ({
-        ...q, type: 'general',
-      }));
-      setQuestions(fallback);
-      questionsRef.current = fallback;
-      appendRecentIds(fallback.map((q) => q.id));
-      await runIntro();
+      setPhase('loading');
+      setStatusMsg('문제를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
     }
   };
 
@@ -563,6 +335,15 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
     await tts(questionText);
+
+    // 설명 문제: 보기 3개를 순서대로 읽어줌
+    if (q.type === 'description' && q.options) {
+      for (let i = 0; i < q.options.length; i++) {
+        if (!mountedRef.current) return;
+        await tts(`${i + 1}번, ${q.options[i]}`);
+      }
+    }
+
     setIsSpeaking(false);
     if (!mountedRef.current) return;
 
@@ -687,8 +468,14 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
     const q = questionsRef.current[currentIdxRef.current];
     const correctAns = q.answer || '';
 
-    // 로컬 평가 (동기, 즉각 처리)
-    const isCorrect = evalAnswerLocal(correctAns, answer);
+    // 타입별 평가: 설명 문제는 번호 파싱, 나머지는 Gemini
+    const isCorrect = q.type === 'description'
+      ? parseOptionNumber(answer) === correctAns
+      : await evaluateAnswerWithGemini(
+          q.questionText || q.question || '',
+          correctAns,
+          answer
+        );
 
     if (!mountedRef.current) return;
 
@@ -734,9 +521,14 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
         setIsSpeaking(true);
         isSpeakingRef.current = true;
 
-        const questionText = q.questionText || q.question || '';
+        const questionForHint = q.type === 'description' && q.options
+          ? `${q.questionText}\n1번: ${q.options[0]}\n2번: ${q.options[1]}\n3번: ${q.options[2]}`
+          : (q.questionText || q.question || '');
+        const answerForHint = q.type === 'description'
+          ? `${q.answer}번 (${q.options?.[parseInt(q.answer) - 1] ?? ''})`
+          : (q.answer || '');
         const [generatedHint] = await Promise.all([
-          generateOrientationHint(questionText, q.answer || '').catch(() => q.hint || ''),
+          generateOrientationHint(questionForHint, answerForHint).catch(() => q.hint || ''),
           tts('아쉽네요! 제가 힌트를 드릴 테니 다시 한번 볼까요?'),
         ]);
 
@@ -859,18 +651,30 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
       <div className={`ot-card ${phase === 'correct' ? 'ot-card-correct' : isHintPhase ? 'ot-card-hint' : ''}`}>
 
         {/* 이미지 또는 아이콘 */}
-        {q.type === 'image' && q.imageUrl ? (
+        {(q.type === 'name' || q.type === 'description') && q.imageUrl ? (
           <div className="ot-image-box">
             <img src={q.imageUrl} alt="훈련 문제" className="ot-image" />
           </div>
         ) : (
           <div className="ot-icon-box">
-            <span className="ot-icon">{q.type === 'general' ? '🧠' : '🖼️'}</span>
+            <span className="ot-icon">🖼️</span>
           </div>
         )}
 
         {/* 질문 */}
         <p className="ot-question">{questionText}</p>
+
+        {/* 설명 문제 보기 목록 */}
+        {q.type === 'description' && q.options && (
+          <div className="ot-options-list">
+            {q.options.map((opt, i) => (
+              <div key={i} className="ot-option-item">
+                <span className="ot-option-num">{i + 1}번</span>
+                <span className="ot-option-text">{opt}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* 힌트 박스 */}
         {isHintPhase && q.hint && (
