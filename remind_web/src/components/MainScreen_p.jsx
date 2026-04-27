@@ -20,12 +20,30 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
   const [connectionMessage, setConnectionMessage] = useState(null);
   const isInitialMount = useRef(true);
   const prevConnectedGuardianIdsRef = useRef([]); // 이전 연결된 보호자 ID 목록을 추적하기 위한 ref 추가
+  const [debugToken, setDebugToken] = useState("토큰 대기 중...");
 
   useEffect(() => {
     if (currentUser) {
       loadUserInfo();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    window.onReceiveFcmToken = async (token) => {      
+      // 1. 화면 확인용 (성공했으니 나중엔 지우셔도 됩니다)
+      setDebugToken(token); 
+      // 2. 실제 DB 저장 함수 호출
+      await handleUpdateFcmToken(token);
+    };
+
+    if (window.AndroidBridge && window.AndroidBridge.onReady) {
+      window.AndroidBridge.onReady();
+    }
+
+    return () => {
+      delete window.onReceiveFcmToken;
+    };
+  }, [currentUser]); // currentUser가 로드된 후 저장해야 하므로 의존성 배열에 추가
 
   useEffect(() => {
     let timer;
@@ -80,6 +98,29 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
     }
   }, [currentUser]); // connectedGuardianIds를 의존성 배열에서 제거
 
+  const handleUpdateFcmToken = async (token) => {
+
+    if (!auth.currentUser) {
+      console.error("저장 실패: Auth 세션이 아직 없습니다.");
+      return;
+    }
+
+    try {
+      const uid = auth.currentUser.uid; // props로 받은 currentUser 대신 auth 직접 참조
+      const patientDocRef = doc(db, 'patients', uid);
+
+      await setDoc(patientDocRef, {
+        fcmToken: token,
+        token_last_updated: new Date().toISOString()
+      }, { merge: true });
+
+      console.log("Firestore 저장 최종 성공!");
+    } catch (error) {
+      // 여기서 어떤 에러가 찍히는지 꼭 확인해야 합니다.
+      console.error('최종 저장 에러 상세:', error);
+    }
+  };
+
   const loadUserInfo = async () => {
     try {
       console.log('현재 사용자 UID:', currentUser.uid);
@@ -97,7 +138,6 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
           const patientDocRef = doc(db, 'patients', currentUser.uid);
           const patientDocSnap = await getDoc(patientDocRef);
           if (patientDocSnap.exists()) {
-            console.log("1");
             setPatientInfo({ ...userData, ...patientDocSnap.data() });
           }
         } else {
@@ -141,6 +181,13 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
       // Convert HH:MM to HHMM for Firestore
       const newCallTime = selectedCallTime.replace(':', '');
       await setDoc(patientDocRef, { call_time: newCallTime }, { merge: true });
+
+      //안드로이드 네이티브 브릿지 호출 (추가된 부분)
+      if (window.AndroidBridge && window.AndroidBridge.setAlarmTimeOnce) {
+        // "14:30" 형태 그대로 앱에 전달
+        window.AndroidBridge.setAlarmTimeOnce(selectedCallTime);
+      }
+      
       setPatientInfo(prev => ({ ...prev, call_time: newCallTime }));
       setShowTimePicker(false);
       alert('통화 시간이 성공적으로 저장되었습니다.');

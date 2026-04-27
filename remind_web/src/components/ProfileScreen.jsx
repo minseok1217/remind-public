@@ -215,30 +215,57 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     setIsSaving(true);
     try {
       const patientToSave = editPatients.find(p => p.id === selectedPatientId);
-      if (!patientToSave) return;
+      // 수정 전 기존 데이터 찾기 (시간 변경 여부 확인용)
+      const originalPatient = patients.find(p => p.id === selectedPatientId);
+      
+      if (!patientToSave || !originalPatient) return;
 
-      // Users 컬렉션의 환자 정보 업데이트
+      // 1. 통화 시간 변경 여부 체크
+      const oldTime = originalPatient.callTime?.replace(':', '');
+      const newTime = patientToSave.callTime?.replace(':', '');
+      const isTimeChanged = oldTime !== newTime;
+
+      // --- DB 업데이트 시작 ---
+      // Users 컬렉션 업데이트
       const patientUserRef = doc(db, 'users', selectedPatientId);
       await updateDoc(patientUserRef, {
         name: patientToSave.name,
-        phone_number: patientToSave.phoneNumber // 전화번호도 users 컬렉션에 있음
+        phone_number: patientToSave.phoneNumber
       });
       
-      // Patients 컬렉션의 환자 정보 업데이트
+      // Patients 컬렉션 업데이트
       const patientDocRef = doc(db, 'patients', selectedPatientId);
       await updateDoc(patientDocRef, {
         birth_date: patientToSave.birthdate,
         gender: patientToSave.gender,
-        call_time: patientToSave.callTime.replace(':', ''), // HHmm 형식으로 저장
+        call_time: newTime,
         city: patientToSave.city || '',
         place_type: patientToSave.placeType || '집',
         place_name: patientToSave.placeName || '',
         floor: patientToSave.floor || ''
       });
+      // --- DB 업데이트 끝 ---
 
-      setPatients(editPatients); // 원본 patients 업데이트
+      // 2. 시간이 변경되었다면 푸시 전송
+      if (isTimeChanged) {
+        console.log("통화 시간 변경 감지, 푸시 전송 준비...");
+        
+        // 환자의 최신 FCM 토큰 가져오기
+        const patientSnap = await getDoc(patientDocRef);
+        const fcmToken = patientSnap.data()?.fcmToken;
+
+        if (fcmToken) {
+          // 푸시 전송 함수 호출 (아래에 정의)
+          await sendPushNotification(fcmToken, patientToSave.callTime);
+        } else {
+          console.warn("환자의 FCM 토큰이 없어 푸시를 보내지 못했습니다.");
+        }
+      }
+
+      setPatients([...editPatients]); 
       setIsEditingPatientInfo(false);
-      alert('✅ 환자 정보가 저장되었습니다.');
+      alert(isTimeChanged ? '✅ 정보 저장 및 시간 변경 알림이 전송되었습니다.' : '✅ 환자 정보가 저장되었습니다.');
+
     } catch (error) {
       console.error('환자 정보 저장 실패:', error);
       alert('❌ 환자 정보 저장 실패: ' + error.message);
@@ -246,6 +273,29 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
       setIsSaving(false);
     }
   };
+
+  /** 푸시 전송 API 호출 함수 */
+  const sendPushNotification = async (token, formattedTime) => {
+  try {
+    const response = await fetch(
+      "https://us-central1-remind-aa99f.cloudfunctions.net/pushSend",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: token,
+          data: {
+            time: formattedTime, // "14:30" 형태
+          },
+        }),
+      }
+    );
+    const result = await response.json();
+    console.log("푸시 서버 응답:", result);
+  } catch (error) {
+    console.error("푸시 알림 전송 중 네트워크 에러:", error);
+  }
+};
 
   const handleGuardianInputChange = (field, value) => {
     setEditGuardianData(prev => ({
@@ -510,16 +560,14 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   };
 
   const handleLogout = async () => {
-    if (window.confirm('로그아웃 하시겠습니까?')) {
-      try {
-        await signOut(auth);
-        if (onLogout) {
-          onLogout();
-        }
-      } catch (error) {
-        console.error('로그아웃 실패:', error);
-        alert('로그아웃 실패: ' + error.message);
+    try {
+      await signOut(auth);
+      if (onLogout) {
+        onLogout();
       }
+    } catch (error) {
+      console.error('로그아웃 실패:', error);
+      alert('로그아웃 실패: ' + error.message);
     }
   };
 
