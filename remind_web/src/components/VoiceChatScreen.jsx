@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, getDoc, query, where, limit } from 'firebase/firestore';
-import { chatWithGemini } from '../services/geminiService';
+import { collection, getDocs, doc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { chatWithPhoto } from '../services/geminiService';
 import { analyzeConversation } from '../services/conversationAnalysisService';
 import './VoiceChatScreen.css';
 
@@ -17,7 +17,6 @@ function VoiceChatScreen({ onBack }) {
 
   // 사진 관련 상태
   const [currentPhoto, setCurrentPhoto] = useState(null);
-  const [photoKeywords, setPhotoKeywords] = useState(null);
   const [hasPhoto, setHasPhoto] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
 
@@ -28,7 +27,7 @@ function VoiceChatScreen({ onBack }) {
   const ttsQueueRef = useRef([]);
   const isSpeakingRef = useRef(false);
   const currentPhotoIdRef = useRef(null);
-  const currentPhotoOwnerIdRef = useRef(null);
+  const currentPhotoDataRef = useRef(null); // { name, type, url }
   const callStartTimeRef = useRef(null);
   const difficultyRef = useRef('중');
   const isEndingCallRef = useRef(false);
@@ -100,7 +99,7 @@ function VoiceChatScreen({ onBack }) {
   const cleanStageDirections = (text) => {
     return text
       .replace(/\([^)]*\)/g, '')
-      .replace(/\[[^\]]*\]/g, (match) => (match === '[END_CALL]' ? match : ''))
+      .replace(/\[[^\]]*\]/g, (match) => (match === '[통화끝]' ? match : ''))
       .replace(/\s{2,}/g, ' ')
       .trim();
   };
@@ -113,47 +112,6 @@ function VoiceChatScreen({ onBack }) {
     if (normalized.length < 3) return true;
     if (/^(어+|음+|아+|그+|저+|에+)[.!?\s]*$/i.test(normalized)) return true;
     return false;
-  };
-
-  const normalizeStatus = (value) => (value || '').replace(/\s+/g, '');
-
-  const extractPhotoContext = (photoData) => {
-    const keywordsObj =
-      photoData?.keywords && typeof photoData.keywords === 'object' && !Array.isArray(photoData.keywords)
-        ? photoData.keywords
-        : {};
-    const keywordList = Array.isArray(photoData?.keywords) ? photoData.keywords : keywordsObj.keywords || [];
-
-    return {
-      keywords: keywordList,
-      detailedDescription: photoData?.detailedDescription || keywordsObj.detailedDescription || photoData?.description || '',
-      description: photoData?.description || keywordsObj.description || '',
-      people: photoData?.people || keywordsObj.people || [],
-      location: photoData?.location || keywordsObj.location || '',
-      emotion: photoData?.emotion || keywordsObj.emotion || '',
-      situation: photoData?.situation || keywordsObj.situation || '',
-      conversationStarters: photoData?.conversationStarters || keywordsObj.conversationStarters || []
-    };
-  };
-
-  const resolvePhotoOwnerId = async (userId) => {
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-
-    if (!userSnap.exists()) return userId;
-
-    const role = userSnap.data()?.role;
-    if (role !== '환자') return userId;
-
-    const linksRef = collection(db, 'family_links');
-    const linkQuery = query(linksRef, where('patient_id', '==', userId), limit(1));
-    const linkSnap = await getDocs(linkQuery);
-
-    if (!linkSnap.empty) {
-      return linkSnap.docs[0].data()?.guardian_id || userId;
-    }
-
-    return userId;
   };
 
   const stopSpeaking = () => {
@@ -223,24 +181,6 @@ function VoiceChatScreen({ onBack }) {
     if (!isSpeakingRef.current) processTTSQueue();
   };
 
-  const markPhotoAsCompleted = async () => {
-    const photoId = currentPhotoIdRef.current;
-    const ownerId = currentPhotoOwnerIdRef.current;
-
-    if (!photoId || !ownerId) return;
-
-    try {
-      const photoRef = doc(db, 'users', ownerId, 'photos', photoId);
-      await updateDoc(photoRef, {
-        callStatus: '통화후',
-        tag: '통화 후',
-        lastCallDate: new Date().toISOString()
-      });
-      currentPhotoIdRef.current = null;
-    } catch (error) {
-      console.error('❌ 상태 업데이트 오류:', error);
-    }
-  };
 
   const saveCallLog = async () => {
     try {
@@ -395,145 +335,113 @@ function VoiceChatScreen({ onBack }) {
     isRecordingRef.current = false;
   };
 
-  const startPhotoConversation = async (photoData, context) => {
+  const startPhotoConversation = async () => {
     if (firstQuestionAskedRef.current) return;
     firstQuestionAskedRef.current = true;
-    const description = context.detailedDescription || context.description || photoData.description || '';
-    const people = context.people || [];
-    const location = context.location || '';
-    const emotion = context.emotion || '';
-    const conversationStarters = context.conversationStarters || [];
 
-    let firstQuestion = '';
-    if (conversationStarters.length > 0) {
-      firstQuestion = conversationStarters[0];
-    } else if (description) {
-      firstQuestion = `이 사진 보니까 ${description} 같네요. 이때 기억나세요?`;
-    } else if (people.length > 0) {
-      firstQuestion = `사진에 ${people.join(', ')}님이 보이네요. 함께한 추억 이야기해 주세요.`;
-    } else if (location) {
-      firstQuestion = `이곳이 ${location}인 것 같아요. 여기 언제 가셨어요?`;
-    } else if (emotion) {
-      firstQuestion = `사진 분위기가 ${emotion}하네요. 어떤 날이었나요?`;
-    } else if (photoData.description) {
-      firstQuestion = `이 사진은 "${photoData.description}"라고 하네요. 이때 기억나시나요?`;
-    } else {
-      firstQuestion = '사진이 참 좋아 보여요. 어떤 추억이 담겨 있나요?';
+    const photoData = currentPhotoDataRef.current;
+    if (!photoData) return;
+
+    try {
+      const introResponse = await chatWithPhoto(
+        '안녕하세요',
+        [],
+        photoData.name,
+        photoData.type,
+        difficultyRef.current
+      );
+
+      const hasEndTag = introResponse.includes('[통화끝]');
+      const displayText = cleanStageDirections(introResponse.replace('[통화끝]', '')).trim();
+
+      chatHistoryRef.current.push({ role: 'user', parts: [{ text: '안녕하세요' }] });
+      chatHistoryRef.current.push({ role: 'model', parts: [{ text: introResponse }] });
+
+      if (displayText) {
+        setCaption(`AI: ${displayText}`);
+        addToTTSQueue(displayText);
+      }
+
+      if (hasEndTag) {
+        isEndingCallRef.current = true;
+        setAutoListenEnabled(false);
+      } else {
+        setUiState('ready');
+        setStatus('천천히 말씀해 주세요.');
+      }
+    } catch (error) {
+      console.error('❌ 인트로 오류:', error);
+      const fallback = '안녕하세요. 사진 보면서 이야기 나눠봐요.';
+      chatHistoryRef.current.push({ role: 'model', parts: [{ text: fallback }] });
+      setCaption(`AI: ${fallback}`);
+      addToTTSQueue(fallback);
+      setUiState('ready');
+      setStatus('천천히 말씀해 주세요.');
     }
-
-    chatHistoryRef.current.push({ role: 'model', parts: [{ text: firstQuestion }] });
-    setCaption(`AI: ${firstQuestion}`);
-    addToTTSQueue(firstQuestion);
-    setUiState('ready');
-    setStatus('AI가 질문했어요. 천천히 말씀해 주세요.');
   };
 
   const loadPhotoAndStart = async () => {
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        setStatus('로그인이 필요합니다.');
-        return;
+      const snapshot = await getDocs(collection(db, 'orientation_images'));
+      if (snapshot.empty) {
+        throw new Error('orientation_images 비어있음');
       }
 
-      const ownerId = await resolvePhotoOwnerId(user.uid);
-      currentPhotoOwnerIdRef.current = ownerId;
+      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const picked = docs[Math.floor(Math.random() * docs.length)];
+      const photoUrl = picked.imageUrl || picked.photoURL || picked.url || '';
 
-      const photosRef = collection(db, 'users', ownerId, 'photos');
-      const snapshot = await getDocs(photosRef);
-      let pendingPhotos = snapshot.docs.filter((d) => {
-        const data = d.data();
-        const statusValue = normalizeStatus(data.callStatus || data.tag);
-        return statusValue === '통화전' || !statusValue;
-      });
-
-      if (pendingPhotos.length === 0 && snapshot.docs.length > 0) {
-        pendingPhotos = snapshot.docs;
-      }
-
-      if (pendingPhotos.length === 0) {
-        const greeting = '안녕하세요. 오늘 기분은 어떠세요?';
-        setHasPhoto(false);
-        setShowPhoto(false);
-        setUiState('ready');
-        setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
-        setCaption(`AI: ${greeting}`);
-        chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-        addToTTSQueue(greeting);
-        return;
-      }
-
-      const photos = pendingPhotos.map((d) => ({ id: d.id, ...d.data() }));
-      photos.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || a.uploadDate?.toDate?.() || new Date(a.date || 0);
-        const dateB = b.createdAt?.toDate?.() || b.uploadDate?.toDate?.() || new Date(b.date || 0);
-        return dateB - dateA;
-      });
-
-      const photoData = photos[0];
-      const photoUrl = photoData.photoURL || photoData.imageUrl || photoData.url || '';
-      const context = extractPhotoContext(photoData);
-
-      setCurrentPhoto({
-        id: photoData.id,
-        ownerId,
+      currentPhotoDataRef.current = {
+        name: picked.name || '',
+        type: picked.type || '',
         url: photoUrl,
-        ...photoData
-      });
-      currentPhotoIdRef.current = photoData.id;
-      setPhotoKeywords(context);
+      };
+      currentPhotoIdRef.current = picked.id;
 
       const validPhoto = Boolean(photoUrl);
+      setCurrentPhoto(validPhoto ? { url: photoUrl } : null);
       setHasPhoto(validPhoto);
       setShowPhoto(validPhoto);
       setUiState('ready');
+      setStatus('사진을 불러왔어요. 대화를 시작할게요.');
 
-      if (validPhoto) {
-        setStatus('사진을 불러왔어요. 사진을 보며 대화를 시작할게요.');
-        clearIntroTimer();
-        introTimerRef.current = setTimeout(() => {
-          if (!isMountedRef.current) return;
-          startPhotoConversation(photoData, context);
-        }, 1000);
-      } else {
-        const greeting = '안녕하세요. 오늘 기억나는 일부터 천천히 이야기해 주세요.';
-        setStatus('사진 URL을 찾지 못해 일반 대화를 시작합니다.');
-        setCaption(`AI: ${greeting}`);
-        chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-        addToTTSQueue(greeting);
-      }
+      clearIntroTimer();
+      introTimerRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
+        startPhotoConversation();
+      }, 800);
     } catch (error) {
       console.error('❌ 사진 로드 오류:', error);
-      const greeting = '안녕하세요. 오늘 어떤 하루였는지 들려주세요.';
+      currentPhotoDataRef.current = { name: '', type: '', url: '' };
       setHasPhoto(false);
       setShowPhoto(false);
       setUiState('ready');
       setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
-      setCaption(`AI: ${greeting}`);
-      chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-      addToTTSQueue(greeting);
+      clearIntroTimer();
+      introTimerRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
+        startPhotoConversation();
+      }, 800);
     }
   };
 
   const sendTextToGemini = async (text) => {
     processingRef.current = true;
     try {
-      const elapsedMinutes = callStartTimeRef.current
-        ? Math.floor((Date.now() - callStartTimeRef.current) / 60000)
-        : 0;
-      const fullText = await chatWithGemini(
+      const photoData = currentPhotoDataRef.current || {};
+      const fullText = await chatWithPhoto(
         text,
         chatHistoryRef.current,
-        hasPhoto ? photoKeywords : null,
-        difficultyRef.current,
-        elapsedMinutes
+        photoData.name || '',
+        photoData.type || '',
+        difficultyRef.current
       );
 
       chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
       chatHistoryRef.current.push({ role: 'model', parts: [{ text: fullText }] });
 
-      const hasEndTag = fullText.includes('[END_CALL]');
-      const displayText = cleanStageDirections(fullText.replace('[END_CALL]', '')).trim();
+      const hasEndTag = fullText.includes('[통화끝]');
+      const displayText = cleanStageDirections(fullText.replace('[통화끝]', '')).trim();
       if (displayText) {
         setCaption(`AI: ${displayText}`);
         addToTTSQueue(displayText);
@@ -545,7 +453,6 @@ function VoiceChatScreen({ onBack }) {
           setAutoListenEnabled(false);
           setStatus('대화를 마무리할게요.');
           await saveCallLog();
-          if (hasPhoto) await markPhotoAsCompleted();
           setTimeout(() => {
             alert('대화를 종료합니다. 건강하세요!');
             onBack();
@@ -610,7 +517,6 @@ function VoiceChatScreen({ onBack }) {
     setAutoListenEnabled(false);
     stopRecording();
     await saveCallLog();
-    if (hasPhoto && currentPhotoIdRef.current) await markPhotoAsCompleted();
     onBack();
   };
 
@@ -638,12 +544,6 @@ function VoiceChatScreen({ onBack }) {
         {showPhoto && hasPhoto && currentPhoto ? (
           <div className="photo-display visible">
             <img src={currentPhoto.url} alt="추억 사진" />
-            {photoKeywords && (
-              <div className="photo-keywords">
-                {photoKeywords.emotion && <span className="keyword-tag">{photoKeywords.emotion}</span>}
-                {photoKeywords.location && <span className="keyword-tag">📍 {photoKeywords.location}</span>}
-              </div>
-            )}
           </div>
         ) : (
           <div className="ai-avatar">
