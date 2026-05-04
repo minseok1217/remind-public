@@ -3,6 +3,7 @@ import { storage, db } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { generateFollowUpQuestions, generateFinalCaption, extractKeywordsFromPhoto, extractAnswerKeywords } from '../services/geminiService';
+import { getConnectedPatientId } from '../services/familyLinkService';
 import './PhotoScreen.css';
 import upload_icon from '../assets/photo_icon_on.png';
 
@@ -134,7 +135,9 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   const uploadPhotoEarly = async () => {
     const rand = Math.random().toString(36).slice(2, 8);
     const fileName = `${Date.now()}_${rand}_${selectedFile.name}`;
-    const filePath = `users/${currentUser.uid}/photos/${fileName}`;
+    const patientId = await getConnectedPatientId(currentUser.uid);
+    if (!patientId) throw new Error('연결된 환자 ID를 찾을 수 없습니다.');
+    const filePath = `users/${patientId}/photos/${fileName}`;
 
     let downloadURL = null;
     let storedInFirestore = false;
@@ -165,7 +168,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       storedInFirestore = true;
     }
 
-    const userPhotosRef = collection(db, 'users', currentUser.uid, 'photos');
+    const userPhotosRef = collection(db, 'users', patientId, 'photos');
     const docRef = await addDoc(userPhotosRef, {
       imageUrl: downloadURL,
       photoURL: downloadURL,
@@ -182,9 +185,9 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   };
 
   // 캡션 완성 후 기존 문서 업데이트
-  const updateCaption = async (docId, step1Data, answersData, caption) => {
+  const updateCaption = async (patientId, docId, step1Data, answersData, caption) => {
     if (!docId) return;
-    const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', docId);
+    const photoDocRef = doc(db, 'users', patientId, 'photos', docId);
     const starters = buildConversationStarters(step1Data, answersData);
     const desc = caption || buildSimpleCaption(step1Data);
     await updateDoc(photoDocRef, {
@@ -203,9 +206,9 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   };
 
   // 백그라운드 AI 분석 (keywords, emotion, situation, conversationStarters 보강 + 정답 키워드 추출)
-  const runBackgroundAnalysis = async (docId, caption, step1DataForKeywords) => {
+  const runBackgroundAnalysis = async (patientId, docId, caption, step1DataForKeywords) => {
     if (!docId) return;
-    const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', docId);
+    const photoDocRef = doc(db, 'users', patientId, 'photos', docId);
 
     // 이미지 분석 (파일이 있을 때만)
     if (selectedFile) {
@@ -289,8 +292,10 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       try {
         const docId = await resolveDocId();
         if (docId) {
-          await updateCaption(docId, savedStep1, [], caption);
-          runBackgroundAnalysis(docId, caption, savedStep1);
+          const patientId = await getConnectedPatientId(currentUser.uid);
+          if (!patientId) throw new Error("연결된 환자 ID를 찾을 수 없습니다.");
+          await updateCaption(patientId, docId, savedStep1, [], caption);
+          runBackgroundAnalysis(patientId, docId, caption, savedStep1);
         }
       } catch (err) {
         console.error('백그라운드 저장 실패:', err);
@@ -358,18 +363,22 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     (async () => {
       try {
         const docId = await resolveDocId();
+        const patientId = await getConnectedPatientId(currentUser.uid);
+        if (!patientId) throw new Error("연결된 환자 ID를 찾을 수 없습니다.");
         const aiCaption = await generateFinalCaption(imageBase64, step1Data, answers);
         const finalText = aiCaption || simpleCaption;
         setFinalCaption(finalText); // AI 캡션 완료되면 화면 업데이트
         if (docId) {
-          await updateCaption(docId, step1Data, answers, finalText);
-          runBackgroundAnalysis(docId, finalText, step1Data);
+          await updateCaption(patientId, docId, step1Data, answers, finalText);
+          runBackgroundAnalysis(patientId, docId, finalText, step1Data);
         }
       } catch (err) {
         console.error('백그라운드 캡션 생성/저장 실패:', err);
         try {
           const docId = await resolveDocId();
-          if (docId) await updateCaption(docId, step1Data, answers, simpleCaption);
+          const patientId = await getConnectedPatientId(currentUser.uid);
+          if (!patientId) throw new Error("연결된 환자 ID를 찾을 수 없습니다.");
+          if (docId) await updateCaption(patientId, docId, step1Data, answers, simpleCaption);
         } catch {}
       }
     })();
