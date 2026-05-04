@@ -258,7 +258,7 @@ function App() {
             )}
 
             {/* 통화 */}
-            {showCallButton && (
+            {userRole === '환자' && (
               <button
                 className={`nav-item ${activeNav === 'call' ? 'active' : ''}`}
                 onClick={() => setActiveNav('call')}
