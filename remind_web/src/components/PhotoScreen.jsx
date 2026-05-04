@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { storage, db } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { generateFollowUpQuestions, generateFinalCaption, extractKeywordsFromPhoto } from '../services/geminiService';
+import { generateFollowUpQuestions, generateFinalCaption, extractKeywordsFromPhoto, extractAnswerKeywords } from '../services/geminiService';
 import './PhotoScreen.css';
 import upload_icon from '../assets/photo_icon_on.png';
 
@@ -202,22 +202,36 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     });
   };
 
-  // 백그라운드 AI 분석 (keywords, emotion, situation, conversationStarters 보강)
-  const runBackgroundAnalysis = async (docId, caption) => {
-    if (!docId || !selectedFile) return;
+  // 백그라운드 AI 분석 (keywords, emotion, situation, conversationStarters 보강 + 정답 키워드 추출)
+  const runBackgroundAnalysis = async (docId, caption, step1DataForKeywords) => {
+    if (!docId) return;
+    const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', docId);
+
+    // 이미지 분석 (파일이 있을 때만)
+    if (selectedFile) {
+      try {
+        const analysis = await extractKeywordsFromPhoto(selectedFile, caption);
+        const update = {
+          keywords: analysis.keywords || [],
+          emotion: analysis.emotion || '',
+          situation: analysis.situation || '',
+        };
+        if (analysis.detailedDescription) update.detailedDescription = analysis.detailedDescription;
+        if (analysis.conversationStarters?.length) update.conversationStarters = analysis.conversationStarters;
+        await updateDoc(photoDocRef, update);
+      } catch (err) {
+        console.warn('백그라운드 이미지 분석 실패 (무시):', err);
+      }
+    }
+
+    // 정답 키워드 추출 (사진 + 캡션 + 보호자 입력 멀티모달 분석)
     try {
-      const analysis = await extractKeywordsFromPhoto(selectedFile, caption);
-      const photoDocRef = doc(db, 'users', currentUser.uid, 'photos', docId);
-      const update = {
-        keywords: analysis.keywords || [],
-        emotion: analysis.emotion || '',
-        situation: analysis.situation || '',
-      };
-      if (analysis.detailedDescription) update.detailedDescription = analysis.detailedDescription;
-      if (analysis.conversationStarters?.length) update.conversationStarters = analysis.conversationStarters;
-      await updateDoc(photoDocRef, update);
+      const answerKeywords = await extractAnswerKeywords(imageBase64, caption, step1DataForKeywords);
+      if (answerKeywords.length > 0) {
+        await updateDoc(photoDocRef, { answerKeywords });
+      }
     } catch (err) {
-      console.warn('백그라운드 AI 분석 실패 (무시):', err);
+      console.warn('정답 키워드 추출 실패 (무시):', err);
     }
   };
 
@@ -276,7 +290,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
         const docId = await resolveDocId();
         if (docId) {
           await updateCaption(docId, savedStep1, [], caption);
-          runBackgroundAnalysis(docId, caption);
+          runBackgroundAnalysis(docId, caption, savedStep1);
         }
       } catch (err) {
         console.error('백그라운드 저장 실패:', err);
@@ -349,7 +363,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
         setFinalCaption(finalText); // AI 캡션 완료되면 화면 업데이트
         if (docId) {
           await updateCaption(docId, step1Data, answers, finalText);
-          runBackgroundAnalysis(docId, finalText);
+          runBackgroundAnalysis(docId, finalText, step1Data);
         }
       } catch (err) {
         console.error('백그라운드 캡션 생성/저장 실패:', err);

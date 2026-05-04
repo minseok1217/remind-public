@@ -5,7 +5,6 @@ import { chatWithGemini } from '../services/geminiService';
 import { analyzeConversation } from '../services/conversationAnalysisService';
 import './VoiceChatScreen.css';
 
-import tempPhoto from '../assets/temp.png';
 
 const SILENCE_TIMEOUT_MS = 1700;
 const AUTO_LISTEN_DELAY_MS = 700;
@@ -768,21 +767,7 @@ function VoiceChatScreen({ onBack }) {
     startRecording();
   };
 
-  // 🔧 TEST BUTTON: assets/temp.png 사용
-  const handleTestPhoto = () => {
-    setShowPhoto(prev => {
-      const next = !prev;
-      if (next) {
-        setCurrentPhoto(cur => ({ ...(cur || { id: 'test' }), url: tempPhoto }));
-        setHasPhoto(true);
-        const context = photoKeywords || {};
-        startPhotoConversation(currentPhoto || { id: 'test' }, context);
-      }
-      return next;
-    });
-  };
-
-  const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking' : uiState;
+const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking' : uiState;
   const pillColor =
     currentStateKey === 'recording' ? '#41d17f' :
     currentStateKey === 'speaking'  ? '#ff6996' :
@@ -848,11 +833,7 @@ function VoiceChatScreen({ onBack }) {
 
         {/* 마이크 버튼 */}
         <div className="vc_control-area">
-          {/* 🔧 TEST BUTTON - 메인 버튼 위 */}
-          <button className="vc_test-photo-btn" onClick={handleTestPhoto}>
-            {showPhoto ? '사진 숨기기' : '사진 적용 테스트'}
-          </button>
-          <button
+<button
             className={`vc_mic-btn ${uiState}`}
             onClick={handleMicClick}
             disabled={uiState === 'loading' || uiState === 'processing'}

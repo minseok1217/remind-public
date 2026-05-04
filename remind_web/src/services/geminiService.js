@@ -232,6 +232,89 @@ ${summary}
   }
 };
 
+// 텍스트 전용 Gemini 호출 (이미지 없이 텍스트만)
+const callGeminiTextOnly = async (prompt) => {
+  try {
+    const resp = await fetch('/api/gemini/caption', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customPrompt: prompt }),
+    });
+    if (resp.ok) {
+      const json = await resp.json();
+      return json.text || json.result || '';
+    }
+  } catch (e) {
+    // 프록시 실패 시 직접 호출로 폴백
+  }
+
+  if (!GEMINI_API_KEY) throw new Error('Gemini API key가 설정되지 않았습니다.');
+
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Gemini API 오류: ${error.error?.message || '알 수 없는 오류'}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+};
+
+// 사진 + 캡션을 함께 분석해서 통화 평가용 정답 키워드 추출 (멀티모달)
+export const extractAnswerKeywords = async (imageBase64, captionText, step1Data) => {
+  const parts = [];
+  if (step1Data?.year) parts.push(`연도/시기: ${step1Data.year}`);
+  if (step1Data?.location) parts.push(`장소(선택 항목): ${step1Data.location}`);
+  if (step1Data?.people?.length) parts.push(`함께한 사람(선택 항목): ${step1Data.people.join(', ')}`);
+  if (step1Data?.freeText) parts.push(`보호자 메모: ${step1Data.freeText}`);
+  if (captionText) parts.push(`생성된 캡션: ${captionText}`);
+
+  if (parts.length === 0 && !imageBase64) return [];
+
+  const prompt = `당신은 치매 어르신의 회상 치료를 위한 AI입니다.
+첨부된 사진과 보호자가 입력한 정보를 함께 분석하여, 어르신의 기억력 평가에 활용할 핵심 정답 키워드를 추출해주세요.
+
+보호자 입력 정보:
+${parts.length ? parts.join('\n') : '(입력 없음)'}
+
+추출 규칙:
+- 사진에서 확인되거나 보호자가 언급한 구체적인 명사만 추출하세요
+- 보호자가 직접 언급한 정보를 최우선으로 하고, 사진에서만 보이는 정보를 보완으로 활용하세요
+- "산", "바다"처럼 두루뭉술한 단어 대신 보호자 메모에 구체적인 이름이 있으면 그것을 사용하세요
+- 카테고리: 장소, 인물, 연도/시기, 행사/사건, 활동, 사물 중 해당하는 것만 사용
+- 불명확하거나 추상적인 정보는 제외하세요
+- 최대 6개까지만 추출하세요
+
+다음 JSON 형식으로만 반환하세요 (다른 텍스트 없이):
+{"answerKeywords": [{"category": "카테고리명", "value": "추출된값"}]}`;
+
+  try {
+    // 이미지가 있으면 멀티모달로, 없으면 텍스트만으로 호출
+    let response;
+    if (imageBase64) {
+      response = await callGeminiWithCustomPrompt(imageBase64, prompt);
+    } else {
+      response = await callGeminiTextOnly(prompt);
+    }
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed.answerKeywords || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('정답 키워드 추출 실패:', error);
+    return [];
+  }
+};
+
 // Step2 완료 후: 최종 캡션 생성
 export const generateFinalCaption = async (imageBase64, step1Data, questionsAndAnswers) => {
   const summaryParts = [summarizeStep1(step1Data)];
