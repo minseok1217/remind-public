@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- 로고 이미지: 위에서 40dp, 37x23dp -->
+    <ImageView
+        android:id="@+id/ic_logo"
+        android:layout_width="37dp"
+        android:layout_height="23dp"
+        android:src="@drawable/ic_logo"
+        android:scaleType="fitXY"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="40dp"/>
+
+    <!-- "REMIND CALL" 텍스트: 로고 16dp 아래, 13sp #A6ADB7 -->
+    <TextView
+        android:id="@+id/tv_remind_call"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="REMIND CALL"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:textColor="#A6ADB7"
+        app:layout_constraintTop_toBottomOf="@id/ic_logo"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"/>
+
+    <!-- 원형 배경 뷰: REMIND CALL과 슬로건 사이 정중앙, 지름 167dp -->
+    <View
+        android:id="@+id/view_circle_bg"
+        android:layout_width="167dp"
+        android:layout_height="167dp"
+        android:background="@drawable/shape_circle_green"
+        app:layout_constraintTop_toBottomOf="@id/tv_remind_call"
+        app:layout_constraintBottom_toTopOf="@id/tv_slogan"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <!-- ic_user: 원 정중앙, 120x120dp -->
+    <ImageView
+        android:id="@+id/ic_user"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@drawable/ic_user"
+        android:scaleType="fitXY"
+        app:layout_constraintTop_toTopOf="@id/view_circle_bg"
+        app:layout_constraintBottom_toBottomOf="@id/view_circle_bg"
+        app:layout_constraintStart_toStartOf="@id/view_circle_bg"
+        app:layout_constraintEnd_toEndOf="@id/view_circle_bg"/>
+
+    <!-- "기억을 잇다, 마음을 잇다": 버튼 묶음 위에서 109dp, 13sp #A6ADB7 -->
+    <TextView
+        android:id="@+id/tv_slogan"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="기억을 잇다, 마음을 잇다"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:textColor="#A6ADB7"
+        app:layout_constraintBottom_toTopOf="@id/ll_btn_reject"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="50dp"/>
+
+    <!-- 중앙 가이드라인 (화면 50%) -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5"/>
+
+    <!-- 왼쪽 버튼 영역 (거절): 아래에서 54dp, 중앙에서 44dp -->
+    <LinearLayout
+        android:id="@+id/ll_btn_reject"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guideline_center"
+        android:layout_marginBottom="54dp"
+        android:layout_marginEnd="44dp">
+
+        <!-- 거절 버튼: 지름 60dp, #EF4444, elevation 3dp -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/btn_reject"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            app:cardCornerRadius="30dp"
+            app:cardBackgroundColor="#EF4444"
+            app:cardElevation="3dp">
+
+            <!-- ic_call: 27x27dp, 135도 시계방향 회전 -->
+            <ImageView
+                android:layout_width="27dp"
+                android:layout_height="27dp"
+                android:src="@drawable/ic_call"
+                android:scaleType="fitXY"
+                android:rotation="135"
+                android:layout_gravity="center"/>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- 거절 텍스트: 13dp 아래, 13sp #EF4444 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="거절"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#EF4444"
+            android:layout_marginTop="13dp"/>
+
+    </LinearLayout>
+
+    <!-- 오른쪽 버튼 영역 (수락): 아래에서 54dp, 중앙에서 44dp -->
+    <LinearLayout
+        android:id="@+id/ll_btn_accept"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@id/guideline_center"
+        android:layout_marginBottom="54dp"
+        android:layout_marginStart="44dp">
+
+        <!-- 수락 버튼: 지름 60dp, #00C16E, elevation 3dp -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/btn_accept"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            app:cardCornerRadius="30dp"
+            app:cardBackgroundColor="#00C16E"
+            app:cardElevation="3dp">
+
+            <!-- ic_call: 27x27dp, 회전 없음 -->
+            <ImageView
+                android:layout_width="27dp"
+                android:layout_height="27dp"
+                android:src="@drawable/ic_call"
+                android:scaleType="fitXY"
+                android:layout_gravity="center"/>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- 수락 텍스트: 13dp 아래, 13sp #00C16E -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="수락"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#00C16E"
+            android:layout_marginTop="13dp"/>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

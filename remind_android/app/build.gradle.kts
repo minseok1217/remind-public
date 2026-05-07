@@ -1,23 +1,22 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.hilt.android)
-    kotlin("kapt")
-    id("com.google.gms.google-services")
+
+    id("com.google.gms.google-services") version "4.4.4"
 }
 
 android {
-    namespace = "com.example.remind"
-    compileSdk = 36
+    namespace = "com.example.remind_webapp"
+    compileSdk {
+        version = release(36)
+    }
 
     defaultConfig {
-        applicationId = "com.example.remind"
-        minSdk = 24
+        applicationId = "com.example.remind_webapp"
+        minSdk = 27
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -30,55 +29,27 @@ android {
             )
         }
     }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = "17"
-    }
-    buildFeatures {
-        compose = true
+        jvmTarget = "11"
     }
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
+    implementation(libs.firebase.messaging)
+
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.foundation)
-    implementation("androidx.compose.material:material-icons-extended")
-    // [Hilt & Navigation]
-    implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
-    implementation(libs.hilt.navigation.compose)
-
-    // [Firebase - 여기가 중요!]
-    // 1. 사용자님이 쓰던 Firestore (DB) 복구!
-    implementation(libs.firebase.firestore)
-    implementation("com.google.firebase:firebase-database:21.0.0")
-    // 2. 로그인 (Auth)
-    implementation(libs.firebase.auth)
-
-    // 3. 팀원이 추가한 Analytics (앱 통계) - 있으면 좋음
-    // (libs.firebase.analytics가 없다면 아래 줄은 지우거나 팀원처럼 직접 적어야 함)
-    // implementation("com.google.firebase:firebase-analytics-ktx:22.1.2")
-
-    // [주의] 팀원은 'Realtime Database'도 넣었었는데,
-    // 우리는 Firestore를 쓰기로 했으니 굳이 둘 다 쓸 필요 없습니다. (충돌 방지 위해 제외함)
-
-    // Test
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

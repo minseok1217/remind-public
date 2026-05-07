@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- 상단 로고 + REMIND CALL -->
+    <LinearLayout
+        android:id="@+id/ll_top"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_centerHorizontal="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginTop="80dp">
+
+        <ImageView
+            android:id="@+id/iv_logo"
+            android:layout_width="37dp"
+            android:layout_height="23dp"
+            android:src="@drawable/ic_logo"
+            android:scaleType="fitCenter"/>
+
+        <TextView
+            android:id="@+id/tv_remind_call"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/pretendard_bold"
+            android:text="@string/logo"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#A6ADB7"
+            android:layout_marginTop="7dp"/>
+
+    </LinearLayout>
+
+    <!-- 원형 프로필 (화면 중앙보다 살짝 위) -->
+    <FrameLayout
+        android:id="@+id/fl_circle"
+        android:layout_width="167dp"
+        android:layout_height="167dp"
+        android:layout_centerHorizontal="true"
+        android:layout_centerVertical="true"
+        android:layout_marginBottom="80dp">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/shape_circle_green"/>
+
+        <ImageView
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:src="@drawable/ic_user"
+            android:scaleType="fitCenter"
+            android:layout_gravity="center"/>
+
+    </FrameLayout>
+
+    <!-- 슬로건 (버튼 위에 고정) -->
+    <TextView
+        android:id="@+id/tv_slogan"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/slogan"
+        android:fontFamily="@font/pretendard_bold"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="#A6ADB7"
+        android:layout_centerHorizontal="true"
+        android:layout_above="@id/ll_buttons"
+        android:layout_marginBottom="36dp"/>
+
+    <!-- 버튼 영역 (하단 고정) -->
+    <LinearLayout
+        android:id="@+id/ll_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="60dp">
+
+        <!-- 거절 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_marginEnd="48dp">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/btn_reject"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                app:cardCornerRadius="30dp"
+                app:cardBackgroundColor="#EF4444"
+                app:cardElevation="4dp"
+                app:cardPreventCornerOverlap="true">
+
+                <ImageView
+                    android:layout_width="27dp"
+                    android:layout_height="27dp"
+                    android:src="@drawable/ic_call"
+                    android:scaleType="fitCenter"
+                    android:rotation="135"
+                    android:layout_gravity="center"/>
+
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:id="@+id/tv_reject"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/refuse"
+                android:fontFamily="@font/pretendard_bold"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#EF4444"
+                android:layout_marginTop="13dp"/>
+
+        </LinearLayout>
+
+        <!-- 수락 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_marginStart="48dp">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/btn_accept"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                app:cardCornerRadius="30dp"
+                app:cardBackgroundColor="#00C16E"
+                app:cardElevation="4dp"
+                app:cardPreventCornerOverlap="true">
+
+                <ImageView
+                    android:layout_width="27dp"
+                    android:layout_height="27dp"
+                    android:src="@drawable/ic_call"
+                    android:scaleType="fitCenter"
+                    android:layout_gravity="center"/>
+
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:id="@+id/tv_accept"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/pretendard_bold"
+                android:text="@string/accept"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#00C16E"
+                android:layout_marginTop="13dp"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

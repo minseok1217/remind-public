@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "REMIND"
+rootProject.name = "remind_webapp"
 include(":app")
-include(":test")
+ 

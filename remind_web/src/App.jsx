@@ -163,6 +163,19 @@ function App() {
     return unsubscribe;
   }, []); // Empty dependency array means this runs once on mount and unmount
 
+  useEffect(() => {
+    window.openVoiceChatScreenPage = () => {
+      console.log('VoiceChatScreen 이동');
+
+      setActiveNav('call');
+      setCallPhase('voice');
+    };
+
+    return () => {
+      delete window.openVoiceChatScreenPage;
+    };
+  }, []);
+
   const handleLogout = async () => {
     if (window.confirm('로그아웃 하시겠습니까?')) {
       try {

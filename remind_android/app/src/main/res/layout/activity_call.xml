@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- 상단 텍스트 영역 -->
+    <LinearLayout
+        android:id="@+id/ll_top_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_centerHorizontal="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginTop="56dp">
+
+        <!-- 리마인드 AI 통화 -->
+        <TextView
+            android:id="@+id/tv_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/call_name"
+            android:fontFamily="@font/pretendard_bold"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#00C16E"/>
+
+        <!-- 통화 시간 -->
+        <TextView
+            android:id="@+id/tv_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:15"
+            android:fontFamily="@font/pretendard_bold"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:textColor="#1A1A1A"
+            android:layout_marginTop="4dp"/>
+
+        <!-- 슬로건 -->
+        <TextView
+            android:id="@+id/tv_slogan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/slogan"
+            android:fontFamily="@font/pretendard_bold"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#A6ADB7"
+            android:layout_marginTop="6dp"/>
+
+    </LinearLayout>
+
+    <!-- 중앙 사진 영역 -->
+    <FrameLayout
+        android:id="@+id/fl_photo"
+        android:layout_width="match_parent"
+        android:layout_height="260dp"
+        android:layout_below="@id/ll_top_info"
+        android:layout_marginTop="20dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp">
+
+        <!-- 배경 이미지 (둥근 모서리) -->
+        <ImageView
+            android:id="@+id/iv_background"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/tmp_background_img"
+            android:scaleType="centerCrop"
+            android:background="@drawable/shape_photo_bg"/>
+
+        <!-- 우측 상단 프로필 원형 -->
+        <ImageView
+            android:id="@+id/iv_profile"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/ic_user"
+            android:scaleType="centerCrop"
+            android:background="@drawable/shape_profile_circle"
+            android:layout_gravity="top|end"
+            android:layout_margin="12dp"/>
+
+    </FrameLayout>
+
+    <!-- TODO : 음성 파형 (중간) -->
+
+    <!-- 하단 버튼 영역 -->
+    <LinearLayout
+        android:id="@+id/ll_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="52dp">
+
+        <!-- 음소거 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/btn_mute"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                app:cardCornerRadius="30dp"
+                app:cardBackgroundColor="#E4E4E4"
+                app:cardElevation="0dp">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_scilence"
+                    android:scaleType="fitCenter"
+                    android:layout_gravity="center"/>
+
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/scilence"
+                android:fontFamily="@font/pretendard_bold"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#767676"
+                android:layout_marginTop="10dp"/>
+
+        </LinearLayout>
+
+        <!-- 통화 종료 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_marginStart="28dp"
+            android:layout_marginEnd="28dp">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/btn_end"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                app:cardCornerRadius="30dp"
+                app:cardBackgroundColor="#EF4444"
+                app:cardElevation="4dp">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_call"
+                    android:scaleType="fitCenter"
+                    android:rotation="135"
+                    android:layout_gravity="center"/>
+
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/end_call"
+                android:fontFamily="@font/pretendard_bold"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#EF4444"
+                android:layout_marginTop="10dp"/>
+
+        </LinearLayout>
+
+        <!-- 스피커폰 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/btn_speaker"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                app:cardCornerRadius="30dp"
+                app:cardBackgroundColor="#00C16E"
+                app:cardElevation="4dp">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_spicker"
+                    android:scaleType="fitCenter"
+                    android:layout_gravity="center"/>
+
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/spicker"
+                android:fontFamily="@font/pretendard_bold"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#00C16E"
+                android:layout_marginTop="10dp"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

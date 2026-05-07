@@ -1,5 +1,0 @@
-      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND
-       82      81      82      28380  pty0      197609 21:31:10 /usr/bin/bash
-      229     180     229      28352  cons0     197609 21:38:34 /usr/bin/PS
-       81       1      81      28536  ?         197609 21:31:10 /usr/bin/mintty
-      180       1     180       6172  cons0     197609 21:38:31 /usr/bin/bash

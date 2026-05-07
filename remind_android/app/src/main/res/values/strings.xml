@@ -1,3 +1,11 @@
 <resources>
-    <string name="app_name">REMIND</string>
+    <string name="app_name">remind_webapp</string>
+    <string name="slogan">기억을 잇다, 마음을 잇다</string>
+    <string name="logo">REMIND CALL</string>
+    <string name="refuse">거절</string>
+    <string name="accept">수락</string>
+    <string name="call_name">리마인드 AI 통화</string>
+    <string name="scilence">음소거</string>
+    <string name="end_call">통화 종료</string>
+    <string name="spicker">스피커폰</string>
 </resources>
