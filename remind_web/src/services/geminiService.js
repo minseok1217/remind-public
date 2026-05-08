@@ -315,6 +315,69 @@ ${parts.length ? parts.join('\n') : '(입력 없음)'}
   }
 };
 
+export const evaluateConversationReport = async (chatHistory, photoContext = null) => {
+  const conversation = (chatHistory || [])
+    .map((msg) => `${msg.role === 'user' ? '환자' : 'AI'}: ${msg.parts?.[0]?.text || ''}`)
+    .join('\n');
+
+  const photoInfo = photoContext ? `
+[보호자 입력 사진 정보]
+- 연도/시기: ${photoContext.year || '정보 없음'}
+- 인물: ${(photoContext.people || []).join(', ') || '정보 없음'}
+- 장소: ${photoContext.location || '정보 없음'}
+- 설명/캡션: ${photoContext.finalCaption || photoContext.description || '정보 없음'}
+- 상세 설명: ${photoContext.detailedDescription || '정보 없음'}
+- 정서/분위기: ${photoContext.emotion || '정보 없음'}
+- 상황: ${photoContext.situation || '정보 없음'}
+- 정답 키워드: ${JSON.stringify(photoContext.answerKeywords || [], null, 2)}
+` : '[보호자 입력 사진 정보 없음]';
+
+  const prompt = `
+당신은 치매 어르신과 AI의 회상 대화를 평가하는 임상 보조 분석가입니다.
+아래 대화를 바탕으로 리포트 항목을 평가하세요.
+
+평가 원칙:
+- 문장의 완성도, 정서 상태, 주제 이탈률은 반드시 대화 맥락을 보고 판단하세요.
+- 보호자 입력 캡션은 보호자 사진 정보가 있을 때만 평가하세요.
+- 보호자 입력 캡션은 연도/시기, 인물, 장소, 활동, 사물 5개 범주 각각이 환자 답변에서 맞게 언급되었는지 판단하세요.
+- 모르면 낮게 추정하지 말고 "판단 근거 부족"이라고 적으세요.
+- score는 0~100 정수입니다. topicDeviationRate는 낮을수록 좋은 이탈률(0~100)입니다.
+
+${photoInfo}
+
+[대화]
+${conversation || '(대화 없음)'}
+
+다음 JSON 형식으로만 반환하세요:
+{
+  "sentenceCompleteness": {"score": 0, "passed": false, "detail": "평가 근거"},
+  "emotionalState": {"score": 0, "passed": false, "detail": "평가 근거"},
+  "topicDeviation": {"score": 0, "topicDeviationRate": 0, "passed": false, "detail": "평가 근거"},
+  "guardianCaption": {
+    "score": 0,
+    "passed": false,
+    "detail": "평가 근거",
+    "categories": [
+      {"category": "연도/시기", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
+      {"category": "인물", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
+      {"category": "장소", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
+      {"category": "활동", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
+      {"category": "사물", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"}
+    ]
+  }
+}`;
+
+  try {
+    const response = await callGeminiTextOnly(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    console.error('대화 리포트 LLM 평가 실패:', error);
+    return null;
+  }
+};
+
 // Step2 완료 후: 최종 캡션 생성
 export const generateFinalCaption = async (imageBase64, step1Data, questionsAndAnswers) => {
   const summaryParts = [summarizeStep1(step1Data)];

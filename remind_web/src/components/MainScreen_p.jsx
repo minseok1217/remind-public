@@ -18,6 +18,7 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
   const [countdown, setCountdown] = useState(0); // 초 단위
   const [isCodeGenerating, setIsCodeGenerating] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState(null);
+  const [latestReport, setLatestReport] = useState(null);
   const isInitialMount = useRef(true);
   const prevConnectedGuardianIdsRef = useRef([]); // 이전 연결된 보호자 ID 목록을 추적하기 위한 ref 추가
   const [debugToken, setDebugToken] = useState("토큰 대기 중...");
@@ -25,8 +26,64 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
   useEffect(() => {
     if (currentUser) {
       loadUserInfo();
+      loadLatestReport();
     }
   }, [currentUser]);
+
+  const getEvaluationItems = (analysis) => {
+    const items = analysis?.report?.items;
+    if (items?.length) {
+      return items.map((item) => ({
+        label: item.label,
+        score: item.score ?? 0,
+        passed: item.passed,
+        detail: item.detail || ''
+      }));
+    }
+
+    return [
+      { label: '어휘의 다양성', score: analysis?.metrics?.vocabularyDiversityScore || analysis?.scores?.language || 0 },
+      { label: '문장의 완성도', score: analysis?.metrics?.sentenceCompletenessScore || analysis?.metrics?.fluencyScore || 0 },
+      { label: '정서 상태', score: analysis?.scores?.emotion || 0 },
+      { label: '주제 이탈률', score: 100 - (analysis?.metrics?.topicDeviationRate || 0) }
+    ];
+  };
+
+  const loadLatestReport = async () => {
+    try {
+      const callLogsRef = collection(db, 'call_logs');
+      const callQuery = query(callLogsRef, where('userId', '==', currentUser.uid));
+      const callSnapshot = await getDocs(callQuery);
+      const logs = callSnapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      })).sort((a, b) => {
+        const dateA = a.callDate?.toDate?.() || new Date(0);
+        const dateB = b.callDate?.toDate?.() || new Date(0);
+        return dateB - dateA;
+      });
+
+      if (logs.length === 0) {
+        setLatestReport(null);
+        return;
+      }
+
+      const latest = logs[0];
+      const analysis = latest.analysis || {};
+      const reportItems = getEvaluationItems(analysis);
+      const needsCheck = reportItems.find((item) => item.passed === false);
+      setLatestReport({
+        score: analysis.scores?.cognitive || latest.cognitiveScore || 0,
+        statusLabel: analysis.status?.label || latest.status || '분석 완료',
+        statusColor: analysis.status?.color || '#00C16E',
+        message: needsCheck?.detail || reportItems[0]?.detail || analysis.insights?.[0] || '최근 통화 리포트가 생성되었습니다.',
+        items: reportItems
+      });
+    } catch (error) {
+      console.error('최근 리포트 로드 실패:', error);
+      setLatestReport(null);
+    }
+  };
 
   useEffect(() => {
     window.onReceiveFcmToken = async (token) => {      
@@ -279,6 +336,43 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
             {connectionMessage}
           </div>
         )}
+
+        <div className="card-p report-card-p">
+          <div className="card-item-title-p">
+            <div className="icon-container-small-p" style={{ backgroundColor: '#DCFAED' }}>
+              <img src={info_icon} alt="Report Icon" className="item-icon-small-p" />
+            </div>
+            <span className="item-title-text-p">최근 통화 리포트</span>
+          </div>
+          {latestReport ? (
+            <>
+              <div className="report-summary-p">
+                <div>
+                  <div className="report-status-p">{latestReport.statusLabel}</div>
+                  <div className="report-message-p">{latestReport.message}</div>
+                </div>
+                <div className="report-score-p" style={{ color: latestReport.statusColor }}>
+                  {latestReport.score}<span>점</span>
+                </div>
+              </div>
+              <div className="report-metrics-p">
+                {latestReport.items.map((item) => (
+                  <div key={item.label} className="report-metric-p">
+                    <div className="report-metric-head-p">
+                      <span>{item.label}</span>
+                      <strong className={item.passed === false ? 'report-warning-p' : ''}>{item.score ?? 0}점</strong>
+                    </div>
+                    <div className="report-progress-p">
+                      <div className="report-progress-fill-p" style={{ width: `${Math.min(item.score ?? 0, 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <span className="card-subtitle-p">아직 통화 리포트가 없습니다.</span>
+          )}
+        </div>
 
         {/* Call Settings Card */}
         <div className="card-p">

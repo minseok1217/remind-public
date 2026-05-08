@@ -38,26 +38,58 @@
 }
 
 .cd-photo-label {
-  margin-top: 10px;
-  font-size: 18px;
-  font-weight: 500;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
   font-weight: 600;
+  color: #333;
 }
 
 .cd-photo-wrapper {
-  position: relative;
+  width: 100%;
   border-radius: 15px;
   overflow: hidden;
-  padding: 15px;
   background-color: white;
-  border: 1px solid #eee;
 }
 
 .cd-photo {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
-  border-radius: 15px;
+  display: block;
+}
+
+.cd-photo-summary-card {
+  align-items: stretch;
+  padding: 16px;
+  justify-content: flex-start;
+}
+
+.cd-photo-meta {
+  padding-top: 10px;
+}
+
+.cd-photo-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cd-photo-tag {
+  border-radius: 999px;
+  background: #dcfaed;
+  color: #008f54;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 9px;
+}
+
+.cd-photo-empty {
+  margin: auto 0;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
 }
 
 /* Score Section */
@@ -97,10 +129,17 @@
 }
 
 .cd-score-num {
-  font-size: 40px;
+  font-size: 32px;
   font-weight: 700;
   line-height: 1;
   color: #00C16E;
+}
+
+.cd-score-status {
+  display: block;
+  margin-top: 14px;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .cd-score-unit {
@@ -222,6 +261,88 @@
 .cd-metric-val {
   font-size: 18px;
   font-weight: 700;
+  color: #00C16E;
+}
+
+.cd-report-card {
+  margin-top: 16px;
+}
+
+.cd-report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cd-report-item {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.cd-report-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cd-report-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+
+.cd-report-badge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cd-report-badge.good {
+  background: #dcfaed;
+  color: #008f54;
+}
+
+.cd-report-badge.bad {
+  background: #fff1e8;
+  color: #d35400;
+}
+
+.cd-report-badge.neutral {
+  background: #f0f0f0;
+  color: #777;
+}
+
+.cd-report-detail {
+  margin: 8px 0 0;
+  color: #666;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cd-caption-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cd-caption-check {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+.cd-caption-check strong {
   color: #00C16E;
 }
 
@@ -356,6 +477,10 @@
 }
 
 @media (max-width: 768px) {
+  .cd-score-section {
+    flex-direction: column;
+  }
+
   .cd-score-circle {
     width: 100px;
     height: 100px;

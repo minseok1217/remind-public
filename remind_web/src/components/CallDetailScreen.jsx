@@ -19,8 +19,17 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const metrics = analysis.metrics || {};
   const status = analysis.status || {};
   const insights = analysis.insights || [];
+  const reportItems = analysis.report?.items || [];
+  const photoContext = callLog?.photoContext || {};
   const conversation = callLog?.conversation || '';
   const cognitiveScore = scores.cognitive || callLog?.cognitiveScore || 0;
+  const statusLabel = status.label || callLog?.status || '분석 완료';
+  const photoTags = [
+    photoContext.emotion,
+    photoContext.location,
+    photoContext.situation,
+    photoContext.year
+  ].filter(Boolean);
 
   useEffect(() => {
     loadPhoto();
@@ -28,16 +37,25 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
 
   const loadPhoto = async () => {
     try {
+      let nextPhotoUrl = photoContext.url || photoContext.photoURL || photoContext.imageUrl || null;
+      let nextPhotoDescription = photoContext.finalCaption || photoContext.description || photoContext.detailedDescription || "";
+
       if (callLog?.photoId && callLog?.userId) {
-        const photoDocRef = doc(db, 'users', callLog.userId, 'photos', callLog.photoId);
+        const photoDocRef = doc(db, 'users', callLog.photoOwnerId || callLog.userId, 'photos', callLog.photoId);
         const photoSnap = await getDoc(photoDocRef);
-        console.log(photoSnap.exists());
         if (photoSnap.exists()) {
           const photoData = photoSnap.data();
-          setPhotoUrl(photoData.imageUrl || photoData.url || null); 
-          setPhotoDescription(photoData.description || ""); 
+          nextPhotoUrl = photoData.photoURL || photoData.imageUrl || photoData.url || nextPhotoUrl;
+          nextPhotoDescription =
+            photoData.finalCaption ||
+            photoData.description ||
+            photoData.detailedDescription ||
+            nextPhotoDescription;
         }
       }
+
+      setPhotoUrl(nextPhotoUrl);
+      setPhotoDescription(nextPhotoDescription);
     } catch (error) {
       console.error('[CallDetailScreen] 사진 로드 실패:', error);
     } finally {
@@ -48,14 +66,6 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const getCallDateString = () => {
     const d = callLog?.callDate?.toDate?.() || new Date();
     return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
-  };
-
-  const getStatusBadgeType = () => {
-    const label = status.label || '';
-    if (label === '매우 양호' || label === '양호') return 'good';
-    if (label === '주의 필요' || label === '관심 필요') return 'warning';
-    if (label === '분석 불가') return 'unavailable';
-    return 'normal';
   };
 
   // Parse conversation into messages
@@ -89,6 +99,33 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
     </div>
   );
 
+  const ReportItem = ({ item }) => (
+    <div className="cd-report-item">
+      <div className="cd-report-head">
+        <span className="cd-report-label">{item.label}</span>
+        <span className={`cd-report-badge ${item.passed === false ? 'bad' : item.passed === null ? 'neutral' : 'good'}`}>
+          {item.passed === null ? '평가 제외' : item.passed ? '양호' : '확인 필요'}
+        </span>
+      </div>
+      {item.score !== null && item.score !== undefined && (
+        <div className="cd-score-bar-bg">
+          <div className="cd-score-bar-fill" style={{ width: `${Math.min(item.score, 100)}%`, backgroundColor: '#00C16E' }} />
+        </div>
+      )}
+      <p className="cd-report-detail">{item.detail}</p>
+      {item.categories?.length > 0 && (
+        <div className="cd-caption-checks">
+          {item.categories.map((category) => (
+            <div key={category.category} className="cd-caption-check">
+              <span>{category.category}</span>
+              <strong>{category.matched === null ? '-' : category.matched ? '일치' : '미일치'}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="call-detail-screen">
@@ -111,16 +148,6 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       </div>
       <div className="header-diver"></div>
       
-      {/* Photo Section */}
-      {photoUrl && ( 
-        <div className="cd-photo-section">
-          <div className="cd-photo-wrapper">
-              <img src={photoUrl} alt="통화에 사용된 사진" className="cd-photo" />
-            <h2 className="cd-photo-label">{photoDescription}</h2>
-          </div>
-        </div>
-      )}
-
       {/* Score Circle & Status */}
       <div className="cd-score-section">
         <div className="cd-status-card">
@@ -128,49 +155,78 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
           <div className="cd-score-circle" style={{ borderColor: status.color || '#00C16E' }}>
             <span className="cd-score-num" style={{ color: status.color || '#00C16E' }}>{cognitiveScore}점</span>
           </div>
+          <strong className="cd-score-status" style={{ color: status.color || '#00C16E' }}>{statusLabel}</strong>
         </div>
-        <div className="cd-status-card highlight">
-          <p className="cd-score-title">상태</p>
-          <div className="status-text-container">
-            <div className={`cd-status-badge ${getStatusBadgeType()}`}>
-              {status.label || '분석 완료'}
+        <div className="cd-status-card cd-photo-summary-card">
+          <p className="cd-score-title">통화 사진</p>
+          {photoUrl ? (
+            <div className="cd-photo-wrapper">
+              <img src={photoUrl} alt="통화에 사용된 사진" className="cd-photo" />
+              {(photoDescription || photoTags.length > 0) && (
+                <div className="cd-photo-meta">
+                  {photoDescription && <h2 className="cd-photo-label">{photoDescription}</h2>}
+                  {photoTags.length > 0 && (
+                    <div className="cd-photo-tags">
+                      {photoTags.map((tag) => (
+                        <span key={tag} className="cd-photo-tag">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="cd-photo-empty">사진 없이 진행된 통화입니다.</p>
+          )}
+        </div>
+      </div>
+
+      {reportItems.length > 0 && (
+        <div className="cd-analysis-card cd-report-card">
+          <div className="analysis-label">
+            <img src={charticon} className='icon-small' />
+            <div className="cd-analysis-title">평가 리포트</div>
+          </div>
+          <div className="cd-report-list">
+            {reportItems.map((item) => (
+              <ReportItem key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {reportItems.length === 0 && (
+        <div className="cd-analysis-card">
+          <div className="analysis-label">
+            <img src={charticon} className='icon-small' />
+            <div className="cd-analysis-title">기존 상세 분석</div>
+          </div>
+          <div className="cd-score-bars">
+            <ScoreBar label="유창성" value={metrics.fluencyScore || scores.language || 0} color="#00C16E" />
+            <ScoreBar label="기억력" value={scores.memory || 0} color="#00C16E" />
+            <ScoreBar label="정서" value={scores.emotion || 0} color="#00C16E" />
+          </div>
+
+          <div className="cd-metrics-grid">
+            <div className="cd-metric-item">
+              <span className="cd-metric-label">대명사 비율</span>
+              <span className="cd-metric-val">{metrics.pronounRatio || 0}%</span>
+            </div>
+            <div className="cd-metric-item">
+              <span className="cd-metric-label">분당 단어 수</span>
+              <span className="cd-metric-val">{metrics.wordsPerMinute || 0}</span>
+            </div>
+            <div className="cd-metric-item">
+              <span className="cd-metric-label">주제 이탈률</span>
+              <span className="cd-metric-val">{metrics.topicDeviationRate || 0}%</span>
+            </div>
+            <div className="cd-metric-item">
+              <span className="cd-metric-label">긍정 감정</span>
+              <span className="cd-metric-val">{metrics.emotionPositiveRatio || 0}%</span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Detailed Analysis Bars */}
-      <div className="cd-analysis-card">
-        <div className="analysis-label">
-          <img src={charticon} className='icon-small' />
-          <div className="cd-analysis-title">상세 분석</div>
-        </div>
-        <div className="cd-score-bars">
-          <ScoreBar label="유창성" value={metrics.fluencyScore || scores.language || 0} color="#00C16E" />
-          <ScoreBar label="기억력" value={scores.memory || 0} color="#00C16E" />
-          <ScoreBar label="정서" value={scores.emotion || 0} color="#00C16E" />
-        </div>
-
-        {/* Metric Details */}
-        <div className="cd-metrics-grid">
-          <div className="cd-metric-item">
-            <span className="cd-metric-label">대명사 비율</span>
-            <span className="cd-metric-val">{metrics.pronounRatio || 0}%</span>
-          </div>
-          <div className="cd-metric-item">
-            <span className="cd-metric-label">분당 단어 수</span>
-            <span className="cd-metric-val">{metrics.wordsPerMinute || 0}</span>
-          </div>
-          <div className="cd-metric-item">
-            <span className="cd-metric-label">주제 이탈률</span>
-            <span className="cd-metric-val">{metrics.topicDeviationRate || 0}%</span>
-          </div>
-          <div className="cd-metric-item">
-            <span className="cd-metric-label">긍정 감정</span>
-            <span className="cd-metric-val">{metrics.emotionPositiveRatio || 0}%</span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Conversation Section */}
       {messages.length > 0 && (
@@ -211,11 +267,11 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
           <div className="info-icon">
             <img className="icon-tiny" src={infoicon} alt="정보 아이콘" />
           </div>
-          <p className="info-text">
+          <div className="info-text">
             {insights.map((insight, i) => (
               <p key={i}>{insight}</p>
             ))}
-          </p>
+          </div>
         </div>
       )}
     </div>

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, getDoc, query, where, limit } from 'firebase/firestore';
-import { chatWithGemini } from '../services/geminiService';
+import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { chatWithGemini, evaluateConversationReport } from '../services/geminiService';
 import { analyzeConversation } from '../services/conversationAnalysisService';
+import { getConnectedPatientId } from '../services/familyLinkService';
 import './VoiceChatScreen.css';
 
 
@@ -31,6 +32,7 @@ function VoiceChatScreen({ onBack }) {
   const isSpeakingRef = useRef(false);
   const currentPhotoIdRef = useRef(null);
   const currentPhotoOwnerIdRef = useRef(null);
+  const currentPhotoRef = useRef(null);
   const callStartTimeRef = useRef(null);
   const isEndingCallRef = useRef(false);
   const endSignalCountRef = useRef(0);
@@ -378,6 +380,22 @@ function VoiceChatScreen({ onBack }) {
 
   const normalizeStatus = (value) => (value || '').replace(/\s+/g, '');
 
+  const isUncalledPhoto = (photoData) => {
+    const statusValue = normalizeStatus(photoData.callStatus || photoData.tag);
+    return statusValue === '통화전' || !statusValue;
+  };
+
+  const getPhotoCreatedTime = (photoData) => {
+    const date =
+      photoData.createdAt?.toDate?.() ||
+      photoData.uploadDate?.toDate?.() ||
+      photoData.createdAt ||
+      photoData.uploadDate ||
+      photoData.date;
+    const time = date ? new Date(date).getTime() : 0;
+    return Number.isNaN(time) ? 0 : time;
+  };
+
   const extractPhotoContext = (photoData) => {
     const keywordsObj = photoData?.keywords && typeof photoData.keywords === 'object' && !Array.isArray(photoData.keywords) ? photoData.keywords : {};
     const keywordList = Array.isArray(photoData?.keywords) ? photoData.keywords : keywordsObj.keywords || [];
@@ -389,20 +407,16 @@ function VoiceChatScreen({ onBack }) {
       location: photoData?.location || keywordsObj.location || '',
       emotion: photoData?.emotion || keywordsObj.emotion || '',
       situation: photoData?.situation || keywordsObj.situation || '',
-      conversationStarters: photoData?.conversationStarters || keywordsObj.conversationStarters || []
+      conversationStarters: photoData?.conversationStarters || keywordsObj.conversationStarters || [],
+      year: photoData?.year || '',
+      finalCaption: photoData?.finalCaption || '',
+      answerKeywords: photoData?.answerKeywords || []
     };
   };
 
   const resolvePhotoOwnerId = async (userId) => {
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) return userId;
-    const role = userSnap.data()?.role;
-    if (role !== '환자') return userId;
-    const linksRef = collection(db, 'family_links');
-    const linkQuery = query(linksRef, where('patient_id', '==', userId), limit(1));
-    const linkSnap = await getDocs(linkQuery);
-    if (!linkSnap.empty) return linkSnap.docs[0].data()?.guardian_id || userId;
+    const connectedPatientId = await getConnectedPatientId(userId);
+    if (connectedPatientId) return connectedPatientId;
     return userId;
   };
 
@@ -479,16 +493,27 @@ function VoiceChatScreen({ onBack }) {
       if (!user) return;
       const callDuration = Math.round((Date.now() - callStartTimeRef.current) / 1000);
       if (chatHistoryRef.current.length === 0) return;
-      const analysis = analyzeConversation(chatHistoryRef.current, callDuration);
+      const usedPhotoContext = hasPhoto ? {
+        ...(photoKeywords || {}),
+        ...(currentPhotoRef.current || {})
+      } : null;
+      const llmReport = await evaluateConversationReport(chatHistoryRef.current, usedPhotoContext);
+      const analysis = analyzeConversation(chatHistoryRef.current, callDuration, {
+        photoContext: usedPhotoContext,
+        llmReport
+      });
       const conversationText = chatHistoryRef.current.map((msg) => {
         const role = msg.role === 'user' ? '환자' : 'AI';
         return `${role}: ${msg.parts[0]?.text || ''}`;
       }).join('\n');
       const callLogData = {
-        userId: user.uid, callDate: serverTimestamp(), callDuration, photoId: currentPhotoIdRef.current || null,
+        userId: user.uid,
+        photoOwnerId: currentPhotoOwnerIdRef.current || user.uid,
+        callDate: serverTimestamp(), callDuration, photoId: currentPhotoIdRef.current || null,
         hasPhoto, conversation: conversationText, totalUtterances: analysis.totalUtterances,
         totalWords: analysis.totalWords,
-        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: analysis.insights },
+        photoContext: usedPhotoContext,
+        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: analysis.insights, report: analysis.report },
         status: analysis.status.label, cognitiveScore: analysis.scores.cognitive, createdAt: serverTimestamp()
       };
       await addDoc(collection(db, 'call_logs'), callLogData);
@@ -630,13 +655,10 @@ function VoiceChatScreen({ onBack }) {
       currentPhotoOwnerIdRef.current = ownerId;
       const photosRef = collection(db, 'users', ownerId, 'photos');
       const snapshot = await getDocs(photosRef);
-      let pendingPhotos = snapshot.docs.filter((d) => {
-        const data = d.data();
-        const statusValue = normalizeStatus(data.callStatus || data.tag);
-        return statusValue === '통화전' || !statusValue;
-      });
-      if (pendingPhotos.length === 0 && snapshot.docs.length > 0) pendingPhotos = snapshot.docs;
-      if (pendingPhotos.length === 0) {
+      const photos = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const pendingPhotos = photos.filter(isUncalledPhoto);
+      const selectablePhotos = pendingPhotos.length > 0 ? pendingPhotos : photos;
+      if (selectablePhotos.length === 0) {
         const greeting = '안녕하세요. 오늘 기분은 어떠세요?';
         setHasPhoto(false);
         setShowPhoto(false);
@@ -647,16 +669,13 @@ function VoiceChatScreen({ onBack }) {
         addToTTSQueue(greeting);
         return;
       }
-      const photos = pendingPhotos.map((d) => ({ id: d.id, ...d.data() }));
-      photos.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || a.uploadDate?.toDate?.() || new Date(a.date || 0);
-        const dateB = b.createdAt?.toDate?.() || b.uploadDate?.toDate?.() || new Date(b.date || 0);
-        return dateB - dateA;
-      });
-      const photoData = photos[0];
+      selectablePhotos.sort((a, b) => getPhotoCreatedTime(b) - getPhotoCreatedTime(a));
+      const photoData = selectablePhotos[0];
       const photoUrl = photoData.photoURL || photoData.imageUrl || photoData.url || '';
       const context = extractPhotoContext(photoData);
-      setCurrentPhoto({ id: photoData.id, ownerId, url: photoUrl, ...photoData });
+      const selectedPhoto = { id: photoData.id, ownerId, url: photoUrl, ...photoData };
+      setCurrentPhoto(selectedPhoto);
+      currentPhotoRef.current = selectedPhoto;
       currentPhotoIdRef.current = photoData.id;
       setPhotoKeywords(context);
       setHasPhoto(Boolean(photoUrl));
