@@ -14,17 +14,19 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
+      // 모든 서명된 사용자가 사용자 문서 생성 가능 (환자 등록용)
       allow create: if isSignedIn();
       // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
       allow update, delete: if isSignedIn() && (request.auth.uid == userId || isGuardianOfPatient(request.auth.uid, userId));
     }
     match /guardians/{guardianId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == guardianId;
       allow create: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == guardianId;
     }
     match /patients/{patientId} {
       allow read: if isSignedIn();
+      // 환자 문서는 모든 서명된 사용자가 생성 가능 (환자 등록용)
       allow create: if isSignedIn();
       // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
       allow update, delete: if isSignedIn() && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
@@ -60,7 +62,12 @@ service cloud.firestore {
     match /cognitive_scores/{scoreId} {
       allow read, write: if isSignedIn();
     }
-
+    match /orientation_images/{docId} {
+      allow read: if isSignedIn();
+    }
+    match /orientation_questions/{doc} {
+      allow read: if request.auth != null;
+    }
     match /temp_codes/{codeId} {
       // 환자만 임시 코드를 생성할 수 있습니다.
       allow create: if isSignedIn() 
