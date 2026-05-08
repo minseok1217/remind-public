@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { chatWithGemini, evaluateConversationReport } from '../services/geminiService';
@@ -57,7 +57,8 @@ function VoiceChatScreen({ onBack }) {
   const waitingDotsRef = useRef(null);
   const userPausedRef = useRef(false);
 
-  const GOOGLE_TTS_API_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY || '';
+  const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
+  const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -437,19 +438,31 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const playHighQualityTTS = async (text) => {
-    if (!GOOGLE_TTS_API_KEY || GOOGLE_TTS_API_KEY.includes('입력')) return fallbackSpeak(text);
-    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_API_KEY}`;
-    const requestBody = {
-      input: { text },
-      voice: { languageCode: 'ko-KR', name: 'ko-KR-Neural2-B' },
-      audioConfig: { audioEncoding: 'MP3', speakingRate: 0.9, pitch: 0.0 }
-    };
+    if (!ELEVENLABS_API_KEY) return fallbackSpeak(text);
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`;
     try {
-      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
-      const data = await response.json();
-      if (data.error) return fallbackSpeak(text);
-      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
-      return new Promise((resolve) => { audio.onended = () => resolve(); audio.play(); });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, 
+            similarity_boost: 0.75 },
+        }),
+      });
+      if (!response.ok) return fallbackSpeak(text);
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      return new Promise((resolve) => {
+        audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve(); };
+        audio.onerror = () => { URL.revokeObjectURL(audioUrl); resolve(); };
+        audio.play().catch(() => { URL.revokeObjectURL(audioUrl); resolve(); });
+      });
     } catch {
       return fallbackSpeak(text);
     }

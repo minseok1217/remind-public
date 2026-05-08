@@ -7,11 +7,12 @@ import './OrientationTrainingScreen.css';
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 환경 변수
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const GOOGLE_TTS_KEY = import.meta.env.VITE_GOOGLE_TTS_API_KEY || '';
+const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
+const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
 const SILENCE_MS = 2000; // 침묵 감지 대기 시간
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// TTS (Google Cloud Neural2 + 브라우저 폴백)
+// TTS (ElevenLabs + 브라우저 폴백)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const webSpeak = (text) =>
   new Promise((resolve) => {
@@ -26,27 +27,31 @@ const webSpeak = (text) =>
   });
 
 const tts = async (text) => {
-  if (!GOOGLE_TTS_KEY) return webSpeak(text);
+  if (!ELEVENLABS_API_KEY) return webSpeak(text);
   try {
     const r = await fetch(
-      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          input: { text },
-          voice: { languageCode: 'ko-KR', name: 'ko-KR-Neural2-B' },
-          audioConfig: { audioEncoding: 'MP3', speakingRate: 0.82, pitch: 0.0 },
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
         }),
       }
     );
-    const d = await r.json();
-    if (!d.audioContent) return webSpeak(text);
-    const audio = new Audio(`data:audio/mp3;base64,${d.audioContent}`);
+    if (!r.ok) return webSpeak(text);
+    const blob = await r.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    const audio = new Audio(audioUrl);
     return new Promise((res) => {
-      audio.onended = res;
-      audio.onerror = res;
-      audio.play();
+      audio.onended = () => { URL.revokeObjectURL(audioUrl); res(); };
+      audio.onerror = () => { URL.revokeObjectURL(audioUrl); res(); };
+      audio.play().catch(() => { URL.revokeObjectURL(audioUrl); res(); });
     });
   } catch {
     return webSpeak(text);
@@ -164,6 +169,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
   const [isListening, setIsListening] = useState(false);
 
   const mountedRef = useRef(true);
+  const initRef = useRef(false);
   const questionsRef = useRef([]);
   const currentIdxRef = useRef(0);
   const correctCountRef = useRef(0);
@@ -182,6 +188,8 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    if (initRef.current) return;
+    initRef.current = true;
     loadAndStart();
     return () => {
       mountedRef.current = false;
