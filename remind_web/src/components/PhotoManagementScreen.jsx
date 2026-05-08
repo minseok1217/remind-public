@@ -10,6 +10,16 @@ import { getConnectedPatientId } from '../services/familyLinkService'; // Add th
 const STATUS_PRE = '통화전';
 const STATUS_POST = '통화후';
 
+const buildShortCaption = (photo) => {
+  const parts = [];
+  if (photo.year) parts.push(photo.year);
+  if (photo.location) parts.push(photo.location);
+  if (photo.people?.length) parts.push(photo.people.join(', '));
+  if (parts.length > 0) return parts.join(' · ');
+  const text = photo.finalCaption || photo.description || '';
+  return text.length > 30 ? text.slice(0, 30) + '…' : text || '사진';
+};
+
 const normalizeCallStatus = (value) => (value || '').replace(/\s+/g, '');
 
 const getPhotoStatus = (photo) => normalizeCallStatus(photo.callStatus || photo.tag);
@@ -147,9 +157,9 @@ function PhotoManagementScreen({ currentUser, onBack }) {
                 />
               </div>
               <div className="photo-info">
-                <h3 className="photo-name">{photo.description || photo.name || '사진'}</h3>
-                {photo.keywords?.emotion && (
-                  <p className="photo-emotion">분위기: {photo.keywords.emotion}</p>
+                <h3 className="photo-name">{buildShortCaption(photo)}</h3>
+                {photo.emotion && (
+                  <p className="photo-emotion">분위기: {photo.emotion}</p>
                 )}
                 <div className="photo-meta">
                   <span className={`photo-tag ${isCompleted ? 'completed-tag' : 'pre-call-tag'}`}>

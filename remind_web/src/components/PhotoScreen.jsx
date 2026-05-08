@@ -198,8 +198,6 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       people: step1Data?.people?.length ? step1Data.people : null,
       location: step1Data?.location || null,
       freeText: step1Data?.freeText || null,
-      aiQuestions: answersData.map(qa => qa.question),
-      aiAnswers: answersData.map(qa => qa.answer),
       finalCaption: caption || null,
       conversationStarters: starters,
     });
@@ -210,18 +208,15 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     if (!docId) return;
     const photoDocRef = doc(db, 'users', patientId, 'photos', docId);
 
-    // 이미지 분석 (파일이 있을 때만)
+    // 이미지 분석 (파일이 있을 때만) — emotion, detailedDescription, conversationStarters 보강
     if (selectedFile) {
       try {
         const analysis = await extractKeywordsFromPhoto(selectedFile, caption);
-        const update = {
-          keywords: analysis.keywords || [],
-          emotion: analysis.emotion || '',
-          situation: analysis.situation || '',
-        };
+        const update = {};
+        if (analysis.emotion) update.emotion = analysis.emotion;
         if (analysis.detailedDescription) update.detailedDescription = analysis.detailedDescription;
         if (analysis.conversationStarters?.length) update.conversationStarters = analysis.conversationStarters;
-        await updateDoc(photoDocRef, update);
+        if (Object.keys(update).length > 0) await updateDoc(photoDocRef, update);
       } catch (err) {
         console.warn('백그라운드 이미지 분석 실패 (무시):', err);
       }

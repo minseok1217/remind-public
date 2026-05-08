@@ -144,7 +144,7 @@ function SignupScreen({ onSwitchToLogin }) {
       await setDoc(guardianDocRef, {
         user_id: guardianUser.uid,
         relationship: '보호자',
-        patient_id: patientUser.uid
+        patient_id: null
       });
       
       // 현재 로그인된 계정 로그아웃

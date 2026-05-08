@@ -105,14 +105,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         }
       }
     } catch (error) {
-      console.error('사용자 정보 로드 실패:', error);
-      console.error('에러 코드:', error.code);
-      console.error('에러 메시지:', error.message);
-      alert(
-        `사용자 정보 로드 실패: ${error.code} - ${error.message}\n\n` +
-        '원인: Firestore 보안 규칙 또는 인증(로그인) 문제일 수 있습니다.\n' +
-        '해결: Firebase 콘솔의 Firestore 규칙에서 `users/{uid}`, `guardians/{uid}`, `patients/{uid}`, `family_links` 읽기 권한을 확인하세요.'
-      );
+      console.error('사용자 정보 로드 실패:', error.code, error.message);
     } finally {
       setLoading(false);
     }
@@ -226,16 +219,16 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
       
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
-        setError('유효하지 않은 이메일입니다.');
+        setError('유효하지 않은 아이디 형식입니다.');
       } else if (err.code === 'auth/email-already-in-use') {
-        setError('이미 사용 중인 이메일입니다.');
+        setError('이미 사용 중인 환자 아이디입니다. 다른 아이디를 입력해주세요.');
       } else if (err.code === 'auth/weak-password') {
-        setError('비밀번호가 너무 약합니다.');
+        setError('비밀번호는 6자 이상이어야 합니다.');
       } else {
-        setError('회원가입에 실패했습니다. 다시 시도해주세요.');
+        setError(`등록에 실패했습니다: ${err.message}`);
       }
-      if (tempApp) await deleteApp(tempApp); // 에러 시에도 삭제
-      console.error('회원가입 오류:', err);
+      try { if (tempApp) await deleteApp(tempApp); } catch {}
+      console.error('환자 등록 오류:', err.code, err.message);
     } finally {
       setLoading(false);
     }
@@ -432,7 +425,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
                   <div className="status-label">전반적인 상태</div>
                   <div className="status-text">{cognitiveStatus?.statusLabel || '분석 중'}</div>
                 </div>
-                <div className="status-score">{cognitiveStatus?.score || 0}<span class="score-unit">점</span></div>
+                <div className="status-score">{cognitiveStatus?.score || 0}<span className="score-unit">점</span></div>
               </div>
                 
               <div className="stats-list">
