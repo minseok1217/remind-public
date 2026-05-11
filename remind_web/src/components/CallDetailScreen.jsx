@@ -19,7 +19,6 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const metrics = analysis.metrics || {};
   const status = analysis.status || {};
   const insights = analysis.insights || [];
-  const reportItems = analysis.report?.items || [];
   const photoContext = callLog?.photoContext || {};
   const conversation = callLog?.conversation || '';
   const cognitiveScore = scores.cognitive || callLog?.cognitiveScore || 0;
@@ -85,19 +84,69 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
 
   const messages = parseConversation();
 
-  // Score bar helper
-  const ScoreBar = ({ label, value, color }) => (
-    <div className="cd-score-row">
-      <span className="cd-score-label">{label}</span>
-      <div className="cd-score-bar-bg">
-        <div
-          className="cd-score-bar-fill"
-          style={{ width: `${Math.min(value, 100)}%`, backgroundColor: color || '#41d17f' }}
-        />
-      </div>
-      <span className="cd-score-value">{value}점</span>
-    </div>
-  );
+  const clampScore = (value) => Math.max(0, Math.min(Number(value) || 0, 100));
+
+  const buildFallbackReportItem = ({ id, label, score, passed, detail, categories = null }) => ({
+    id,
+    label,
+    score: score === null || score === undefined ? null : Math.round(clampScore(score)),
+    passed,
+    detail,
+    categories
+  });
+
+  const getEvaluationItems = () => {
+    const savedItems = analysis.report?.items || [];
+    const savedById = savedItems.reduce((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {});
+    const captionCategories = analysis.report?.captionMatches || [];
+    const hasPhotoEvaluationContext = Boolean(photoUrl || photoContext.description || photoContext.detailedDescription || photoContext.finalCaption);
+
+    return [
+      savedById.vocabularyDiversity || buildFallbackReportItem({
+        id: 'vocabularyDiversity',
+        label: '어휘의 다양성',
+        score: metrics.vocabularyDiversityScore ?? scores.language ?? 0,
+        passed: (metrics.vocabularyDiversityScore ?? scores.language ?? 0) >= 60,
+        detail: '대화에서 서로 다른 표현을 얼마나 다양하게 사용했는지 평가했습니다.'
+      }),
+      savedById.sentenceCompleteness || buildFallbackReportItem({
+        id: 'sentenceCompleteness',
+        label: '문장의 완성도',
+        score: metrics.sentenceCompletenessScore ?? metrics.fluencyScore ?? 0,
+        passed: (metrics.sentenceCompletenessScore ?? metrics.fluencyScore ?? 0) >= 60,
+        detail: '답변이 끝맺음 있는 문장으로 자연스럽게 완성되었는지 평가했습니다.'
+      }),
+      savedById.emotionalState || buildFallbackReportItem({
+        id: 'emotionalState',
+        label: '정서 상태',
+        score: scores.emotion ?? metrics.emotionPositiveRatio ?? 0,
+        passed: (scores.emotion ?? metrics.emotionPositiveRatio ?? 0) >= 50,
+        detail: '긍정/부정 정서 표현의 비율을 바탕으로 정서 흐름을 평가했습니다.'
+      }),
+      savedById.topicDeviation || buildFallbackReportItem({
+        id: 'topicDeviation',
+        label: '주제 이탈률',
+        score: 100 - (metrics.topicDeviationRate || 0),
+        passed: (metrics.topicDeviationRate || 0) <= 40,
+        detail: `대화 주제에서 벗어난 비율은 ${Math.round(metrics.topicDeviationRate || 0)}%입니다.`
+      }),
+      savedById.guardianCaption || buildFallbackReportItem({
+        id: 'guardianCaption',
+        label: '보호자 입력 캡션',
+        score: analysis.report?.captionMatchRate ?? null,
+        passed: hasPhotoEvaluationContext ? null : null,
+        detail: hasPhotoEvaluationContext
+          ? '저장된 보호자 입력 캡션 평가 결과가 없어 평가 제외로 표시합니다.'
+          : '사진 또는 보호자 입력 캡션 없이 진행된 통화입니다.',
+        categories: captionCategories
+      })
+    ];
+  };
+
+  const evaluationItems = getEvaluationItems();
 
   const ReportItem = ({ item }) => (
     <div className="cd-report-item">
@@ -181,52 +230,17 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
         </div>
       </div>
 
-      {reportItems.length > 0 && (
-        <div className="cd-analysis-card cd-report-card">
-          <div className="analysis-label">
-            <img src={charticon} className='icon-small' />
-            <div className="cd-analysis-title">평가 리포트</div>
-          </div>
-          <div className="cd-report-list">
-            {reportItems.map((item) => (
-              <ReportItem key={item.id} item={item} />
-            ))}
-          </div>
+      <div className="cd-analysis-card cd-report-card">
+        <div className="analysis-label">
+          <img src={charticon} className='icon-small' />
+          <div className="cd-analysis-title">평가 리포트</div>
         </div>
-      )}
-
-      {reportItems.length === 0 && (
-        <div className="cd-analysis-card">
-          <div className="analysis-label">
-            <img src={charticon} className='icon-small' />
-            <div className="cd-analysis-title">기존 상세 분석</div>
-          </div>
-          <div className="cd-score-bars">
-            <ScoreBar label="유창성" value={metrics.fluencyScore || scores.language || 0} color="#00C16E" />
-            <ScoreBar label="기억력" value={scores.memory || 0} color="#00C16E" />
-            <ScoreBar label="정서" value={scores.emotion || 0} color="#00C16E" />
-          </div>
-
-          <div className="cd-metrics-grid">
-            <div className="cd-metric-item">
-              <span className="cd-metric-label">대명사 비율</span>
-              <span className="cd-metric-val">{metrics.pronounRatio || 0}%</span>
-            </div>
-            <div className="cd-metric-item">
-              <span className="cd-metric-label">분당 단어 수</span>
-              <span className="cd-metric-val">{metrics.wordsPerMinute || 0}</span>
-            </div>
-            <div className="cd-metric-item">
-              <span className="cd-metric-label">주제 이탈률</span>
-              <span className="cd-metric-val">{metrics.topicDeviationRate || 0}%</span>
-            </div>
-            <div className="cd-metric-item">
-              <span className="cd-metric-label">긍정 감정</span>
-              <span className="cd-metric-val">{metrics.emotionPositiveRatio || 0}%</span>
-            </div>
-          </div>
+        <div className="cd-report-list">
+          {evaluationItems.map((item) => (
+            <ReportItem key={item.id} item={item} />
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Conversation Section */}
       {messages.length > 0 && (

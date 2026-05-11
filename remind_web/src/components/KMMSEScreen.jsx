@@ -1,8 +1,58 @@
 import { useState, useEffect, useRef } from 'react';
+import { useScribe } from '@elevenlabs/react';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { textToSpeech } from '../services/textToSpeechService';
 import './KMMSEScreen.css';
+
+const SCRIBE_TOKEN_ENDPOINT =
+  import.meta.env.VITE_ELEVENLABS_SCRIBE_TOKEN_ENDPOINT || '/api/elevenlabs/scribe-token';
+const SCRIBE_NO_RESULT_MS = 9000;
+const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
+const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
+
+const webSpeak = (text) =>
+  new Promise((resolve) => {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 0.86;
+    utterance.pitch = 1.0;
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  });
+
+const tts = async (text) => {
+  if (!ELEVENLABS_API_KEY) return webSpeak(text);
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+    });
+
+    if (!response.ok) return webSpeak(text);
+
+    const blob = await response.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    const audio = new Audio(audioUrl);
+    return new Promise((resolve) => {
+      audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve(); };
+      audio.onerror = () => { URL.revokeObjectURL(audioUrl); resolve(); };
+      audio.play().catch(() => { URL.revokeObjectURL(audioUrl); resolve(); });
+    });
+  } catch {
+    return webSpeak(text);
+  }
+};
 
 const WORD_BANK = [
   '사과','오렌지','포도','귤','수박','딸기','바나나','참외','복숭아','토마토',
@@ -53,6 +103,29 @@ const TONGUE_TWISTERS = [
 const pickRandom = (arr, n = 1) => {
   const shuffled = [...arr].sort(() => Math.random() - 0.5);
   return n === 1 ? shuffled[0] : shuffled.slice(0, n);
+};
+
+const CALC_STEP_IDS = ['c1', 'c2', 'c3', 'c4', 'c5'];
+const CALC_PROMPT_NUMBERS = {
+  c1: 100,
+  c2: 93,
+  c3: 86,
+  c4: 79,
+  c5: 72,
+};
+
+const isCalculationStep = (step) => CALC_STEP_IDS.includes(step?.id);
+
+const isGiveUpAnswer = (value) => {
+  const normalized = String(value || '').replace(/\s/g, '');
+  return /모르겠|잘모르/.test(normalized);
+};
+
+const getQuestionText = (step) => {
+  if (isCalculationStep(step)) {
+    return `${CALC_PROMPT_NUMBERS[step.id]}에서 7을 빼면 얼마인가요?`;
+  }
+  return step?.question || '';
 };
 
 const getDifficulty = (score, maxScore) => {
@@ -129,16 +202,16 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
       question:'100에서 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
       evaluate:(a) => a.trim().replace(/[^0-9]/g,'') === '93' ? 1 : 0 },
     { type:'question', id:'c2', section:'주의집중 및 계산', maxScore:1,
-      question:'거기서 또 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
+      question:'93에서 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
       evaluate:(a) => a.trim().replace(/[^0-9]/g,'') === '86' ? 1 : 0 },
     { type:'question', id:'c3', section:'주의집중 및 계산', maxScore:1,
-      question:'거기서 또 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
+      question:'86에서 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
       evaluate:(a) => a.trim().replace(/[^0-9]/g,'') === '79' ? 1 : 0 },
     { type:'question', id:'c4', section:'주의집중 및 계산', maxScore:1,
-      question:'거기서 또 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
+      question:'79에서 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
       evaluate:(a) => a.trim().replace(/[^0-9]/g,'') === '72' ? 1 : 0 },
     { type:'question', id:'c5', section:'주의집중 및 계산', maxScore:1,
-      question:'거기서 또 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
+      question:'72에서 7을 빼면 얼마인가요?', inputType:'text', placeholder:'숫자를 말씀해 주세요',
       evaluate:(a) => a.trim().replace(/[^0-9]/g,'') === '65' ? 1 : 0 },
     {
       type: 'section_narration',
@@ -189,73 +262,105 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
 };
 
 // ─────────────────────────────────────────────
-// 음성 인식 훅
+// ElevenLabs Scribe v2 Realtime 음성 인식 훅
 // ─────────────────────────────────────────────
-const useSpeechRecognition = () => {
+const useScribeSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
-  const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const supported = !!(navigator.mediaDevices?.getUserMedia && window.WebSocket);
+  const onResultRef = useRef(null);
+  const onNoResultRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const completedRef = useRef(false);
+  const disconnectRef = useRef(null);
 
-  const startListening = (onResult, onNoResult) => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+  const cleanupTimer = () => {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  };
 
-    // 기존 인식 안전하게 중단
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-      recognitionRef.current = null;
+  const finish = (text) => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    cleanupTimer();
+    setIsListening(false);
+    disconnectRef.current?.();
+
+    const trimmed = (text || '').trim();
+    if (trimmed) {
+      onResultRef.current?.(trimmed);
+    } else {
+      onNoResultRef.current?.();
+    }
+  };
+
+  const scribe = useScribe({
+    modelId: 'scribe_v2_realtime',
+    languageCode: 'ko',
+    commitStrategy: 'vad',
+    vadSilenceThresholdSecs: 1.2,
+    minSpeechDurationMs: 120,
+    minSilenceDurationMs: 250,
+    noVerbatim: true,
+    onCommittedTranscript: (data) => finish(data.text),
+    onCommittedTranscriptWithTimestamps: (data) => finish(data.text),
+    onError: () => finish(''),
+    onAuthError: () => finish(''),
+    onQuotaExceededError: () => finish(''),
+    onRateLimitedError: () => finish(''),
+    onInputError: () => finish(''),
+    onInsufficientAudioActivityError: () => finish(''),
+  });
+
+  disconnectRef.current = scribe.disconnect;
+
+  const fetchScribeToken = async () => {
+    const response = await fetch(SCRIBE_TOKEN_ENDPOINT);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.token) {
+      throw new Error(data.error || 'Scribe token request failed');
+    }
+    return data.token;
+  };
+
+  const startListening = async (onResult, onNoResult) => {
+    if (!supported) {
+      onNoResult?.();
+      return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ko-KR';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 3;
-    recognition.continuous = false;
+    scribe.disconnect();
+    cleanupTimer();
+    completedRef.current = false;
+    onResultRef.current = onResult;
+    onNoResultRef.current = onNoResult;
+    setIsListening(true);
 
-    // 로컬 플래그: onerror + onend 이중 콜백 방지
-    let resultReceived = false;
-    let callbackFired = false;
-
-    const fireNoResult = () => {
-      if (!callbackFired) {
-        callbackFired = true;
-        onNoResult?.();
-      }
-    };
-
-    recognition.onstart = () => setIsListening(true);
-
-    recognition.onresult = (event) => {
-      resultReceived = true;
-      callbackFired = true; // noResult는 더 이상 호출하지 않음
-      onResult(event.results[0][0].transcript);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      if (!resultReceived) fireNoResult();
-    };
-
-    recognition.onerror = (e) => {
-      if (e.error === 'aborted') return;
-      setIsListening(false);
-      fireNoResult();
-    };
-
+    timeoutRef.current = setTimeout(() => finish(''), SCRIBE_NO_RESULT_MS);
     try {
-      recognition.start();
-      recognitionRef.current = recognition;
+      const token = await fetchScribeToken();
+      await scribe.connect({
+        token,
+        modelId: 'scribe_v2_realtime',
+        languageCode: 'ko',
+        commitStrategy: 'vad',
+        vadSilenceThresholdSecs: 1.2,
+        minSpeechDurationMs: 120,
+        minSilenceDurationMs: 250,
+        noVerbatim: true,
+        microphone: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
     } catch {
-      setIsListening(false);
-      fireNoResult();
+      finish('');
     }
   };
 
   const stopListening = () => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-      recognitionRef.current = null;
-    }
+    completedRef.current = true;
+    cleanupTimer();
+    scribe.disconnect();
     setIsListening(false);
   };
 
@@ -287,7 +392,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   const submitAnswerRef = useRef(null);
   const autoListenStepRef = useRef(-1);
 
-  const { isListening, supported, startListening, stopListening } = useSpeechRecognition();
+  const { isListening, supported, startListening, stopListening } = useScribeSpeechRecognition();
 
   // 위치 정보 로드 후 STEPS 빌드
   useEffect(() => {
@@ -356,33 +461,17 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       if (step.type === 'narration' || step.type === 'section_narration') {
         textToRead = step.text;
       } else if (step.type === 'question') {
-        textToRead = step.question;
+        textToRead = getQuestionText(step);
       } else if (step.type === 'memory_show') {
         textToRead = `아래 세 가지 단어를 기억해 주세요. ${step.words.join(', ')}`;
       }
 
       // TTS 재생 (활성화된 경우)
       if (textToRead && enableNarration) {
-        await new Promise(resolve => {
-          try {
-            if (window.speechSynthesis) {
-              window.speechSynthesis.cancel();
-              window.speechSynthesis.getVoices();
-            }
-            textToSpeech.speak(textToRead, {
-              lang: 'ko-KR',
-              rate: 0.9,
-              pitch: 1,
-              volume: 1,
-              onStart: () => { if (!cancelled) setIsSpeaking(true); },
-              onEnd: () => { if (!cancelled) setIsSpeaking(false); resolve(); },
-              onError: () => { if (!cancelled) setIsSpeaking(false); resolve(); },
-            });
-          } catch {
-            if (!cancelled) setIsSpeaking(false);
-            resolve();
-          }
-        });
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        if (!cancelled) setIsSpeaking(true);
+        await tts(textToRead);
+        if (!cancelled) setIsSpeaking(false);
       }
 
       if (cancelled) return;
@@ -502,6 +591,23 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     if (!step) return;
     const scored = step.evaluate ? step.evaluate(value) : 0;
     const newAnswers = { ...answers, [step.id]: { value, score: scored } };
+
+    if (isCalculationStep(step) && isGiveUpAnswer(value)) {
+      const currentCalcIdx = CALC_STEP_IDS.indexOf(step.id);
+      CALC_STEP_IDS.slice(currentCalcIdx + 1).forEach((id) => {
+        newAnswers[id] = { value: '잘 모르겠어요', score: 0 };
+      });
+
+      const afterCalcIdx = STEPS.findIndex(
+        (item, idx) => idx > stepIdx && !isCalculationStep(item)
+      );
+      setAnswers(newAnswers);
+      setVoiceTranscript('');
+      autoListenStepRef.current = -1;
+      setStepIdx(afterCalcIdx === -1 ? stepIdx + 1 : afterCalcIdx);
+      return;
+    }
+
     setAnswers(newAnswers);
     setVoiceTranscript('');
     autoListenStepRef.current = -1;
@@ -615,7 +721,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       {currentStep?.type === 'question' && (
         <div className="kmmse-card kmmse-question-card">
           <div className="kmmse-section-label">{currentStep.section}</div>
-          <p className="kmmse-question">{currentStep.question}</p>
+          <p className="kmmse-question">{getQuestionText(currentStep)}</p>
 
           {currentStep.inputType === 'object_name' && (
             <div className="kmmse-object-display">

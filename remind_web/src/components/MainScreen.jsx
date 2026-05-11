@@ -41,6 +41,79 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
     }
   }, [currentUser]);
 
+  const clampScore = (value) => Math.max(0, Math.min(Number(value) || 0, 100));
+
+  const buildFallbackReportItem = ({ id, label, score, passed, detail }) => ({
+    id,
+    label,
+    score: score === null || score === undefined ? null : Math.round(clampScore(score)),
+    passed,
+    detail
+  });
+
+  const getEvaluationItems = (analysis, callLog = {}) => {
+    const scores = analysis?.scores || {};
+    const metrics = analysis?.metrics || {};
+    const savedItems = analysis?.report?.items || [];
+    const savedById = savedItems.reduce((acc, item) => {
+      if (!item.id) return acc;
+      acc[item.id] = {
+        ...item,
+        score: item.score === null || item.score === undefined ? null : Math.round(clampScore(item.score))
+      };
+      return acc;
+    }, {});
+    const photoContext = callLog?.photoContext || {};
+    const hasPhotoEvaluationContext = Boolean(
+      photoContext.url ||
+      photoContext.photoURL ||
+      photoContext.imageUrl ||
+      photoContext.description ||
+      photoContext.detailedDescription ||
+      photoContext.finalCaption
+    );
+
+    return [
+      savedById.vocabularyDiversity || buildFallbackReportItem({
+        id: 'vocabularyDiversity',
+        label: '어휘의 다양성',
+        score: metrics.vocabularyDiversityScore ?? scores.language ?? 0,
+        passed: (metrics.vocabularyDiversityScore ?? scores.language ?? 0) >= 60
+      }),
+      savedById.sentenceCompleteness || buildFallbackReportItem({
+        id: 'sentenceCompleteness',
+        label: '문장의 완성도',
+        score: metrics.sentenceCompletenessScore ?? metrics.fluencyScore ?? 0,
+        passed: (metrics.sentenceCompletenessScore ?? metrics.fluencyScore ?? 0) >= 60
+      }),
+      savedById.emotionalState || buildFallbackReportItem({
+        id: 'emotionalState',
+        label: '정서 상태',
+        score: scores.emotion ?? metrics.emotionPositiveRatio ?? 0,
+        passed: (scores.emotion ?? metrics.emotionPositiveRatio ?? 0) >= 50
+      }),
+      savedById.topicDeviation || buildFallbackReportItem({
+        id: 'topicDeviation',
+        label: '주제 이탈률',
+        score: 100 - (metrics.topicDeviationRate || 0),
+        passed: (metrics.topicDeviationRate || 0) <= 40
+      }),
+      savedById.guardianCaption || buildFallbackReportItem({
+        id: 'guardianCaption',
+        label: '보호자 입력 캡션',
+        score: analysis?.report?.captionMatchRate ?? null,
+        passed: null
+      })
+    ];
+  };
+
+  const getReportMessage = (analysis) => {
+    const reportItems = analysis?.report?.items || [];
+    const needsCheck = reportItems.find((item) => item.passed === false);
+    if (needsCheck) return `${needsCheck.label}: ${needsCheck.detail}`;
+    return reportItems[0]?.detail || analysis?.insights?.[0] || '통화가 완료되었습니다.';
+  };
+
   const loadUserInfo = async () => {
     try {
       console.log('현재 사용자 UID:', currentUser.uid);
@@ -298,7 +371,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
           lastCallDuration: `${durationMinutes}분 ${durationSeconds}초`,
           status: latestCall.status || '통화 완료',
           statusColor: latestCall.analysis?.status?.color || '#41d17f',
-          message: latestCall.analysis?.insights?.[0] || '통화가 완료되었습니다.'
+          message: getReportMessage(latestCall.analysis)
         });
         
         // 인지 상태 요약 (최근 7일 트렌드)
@@ -306,14 +379,10 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         const latestAnalysis = latestCall.analysis;
         
         setCognitiveStatus({
-          score: latestAnalysis?.scores?.cognitive || 0,
+          score: latestAnalysis?.scores?.cognitive || latestCall.cognitiveScore || 0,
           statusLabel: latestAnalysis?.status?.label || '분석 중',
           statusColor: latestAnalysis?.status?.color || '#999',
-          recent: [
-            { label: '언어', score: latestAnalysis?.scores?.language || 0 },
-            { label: '기억력', score: latestAnalysis?.scores?.memory || 0 },
-            { label: '정서', score: latestAnalysis?.scores?.emotion || 0 }
-          ],
+          recent: getEvaluationItems(latestAnalysis, latestCall),
           trend: weeklyTrend.trend,
           trendMessage: weeklyTrend.message
         });
@@ -336,7 +405,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
             status: log.status || '통화 완료',
             statusColor: log.analysis?.status?.color || '#41d17f',
             isRecent: index === 0,
-            cognitiveScore: log.cognitiveScore || 0
+            cognitiveScore: log.cognitiveScore || log.analysis?.scores?.cognitive || 0
           };
         });
         
@@ -354,9 +423,10 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
           score: 0,
           statusLabel: '데이터 없음',
           recent: [
-            { label: '언어', score: 0 },
-            { label: '기억력', score: 0 },
-            { label: '정서', score: 0 }
+            { label: '어휘의 다양성', score: 0 },
+            { label: '문장의 완성도', score: 0 },
+            { label: '정서 상태', score: 0 },
+            { label: '주제 이탈률', score: 0 }
           ]
         });
         
@@ -419,7 +489,6 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
             <h2 className="card-section-title">최근 인지 상태 요약</h2>
             
             <div className="status-card">
-              <p className="section-desc">{cognitiveStatus?.trendMessage || '최근 통화를 분석했습니다.'}</p>
               <div className="status-header">
                 <div>
                   <div className="status-label">전반적인 상태</div>
@@ -433,14 +502,18 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
                 <div key={index} className="metric-item">
                   <div className="metric-header">
                     <label className="metric-label">{metric.label}</label>
-                    <span className="metric-value">{metric.score}점</span>
+                    <span className={`metric-value ${metric.passed === false ? 'metric-warning' : ''}`}>
+                      {metric.score === null || metric.score === undefined ? '평가 제외' : `${metric.score}점`}
+                    </span>
                   </div>
-                  <div className="main-progress-bar">
-                    <div 
-                      className="progress-fill" 
-                      style={{ width: `${metric.score}%` }}
-                    ></div>
-                  </div>
+                  {metric.score !== null && metric.score !== undefined && (
+                    <div className="main-progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${Math.min(metric.score, 100)}%` }}
+                      ></div>
+                    </div>
+                  )}
                 </div>
               ))}
               </div>

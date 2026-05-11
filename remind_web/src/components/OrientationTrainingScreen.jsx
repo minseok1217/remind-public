@@ -4,10 +4,10 @@ import { collection, getDocs } from 'firebase/firestore';
 import './OrientationTrainingScreen.css';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 환경 변수
+// TTS 설정
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
+const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 const SILENCE_MS = 2000; // 침묵 감지 대기 시간
 const HINT_REVIEW_MS = 2500; // 힌트를 듣고 생각할 시간
 
@@ -28,22 +28,20 @@ const webSpeak = (text) =>
 
 const tts = async (text) => {
   if (!ELEVENLABS_API_KEY) return webSpeak(text);
+
   try {
-    const r = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      }
-    );
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+    });
     if (!r.ok) return webSpeak(text);
     const blob = await r.blob();
     const audioUrl = URL.createObjectURL(blob);
@@ -65,6 +63,8 @@ const waitForBrowserPaint = () =>
 
 
 // 설명 문제 번호 파싱 (일번/이번/삼번 → '1'/'2'/'3')
+const SPOKEN_OPTION_LABELS = ['일번', '이번', '삼번'];
+
 const parseOptionNumber = (text) => {
   const t = (text || '').replace(/\s/g, '').toLowerCase();
   if (/^(1|일|한|하나|첫|첫번째|첫째|일번|1번)/.test(t)) return '1';
@@ -189,7 +189,7 @@ function SparkleOverlay() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 메인 컴포넌트
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-export default function OrientationTrainingScreen({ onComplete, onBack }) {
+export default function OrientationTrainingScreen({ currentUser, onComplete, onBack }) {
   const [phase, setPhase] = useState('loading');
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -233,13 +233,56 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
 
   // ── Firestore에서 이미지 문제 로드 ──
   const getImageUrl = (d) =>
-    d.imageURL || d.imageUrl || d.photoURL || d.url || d.image || '';
+    d.imageURL || d.imageUrl || d.photoURL || d.photoUrl || d.url || d.image || '';
+
+  const toOrientationPhotoDocs = (snap) => {
+    const types = ['object', 'place', 'job'];
+    return snap.docs.map((d, index) => {
+      const data = d.data();
+      const description =
+        data.detailedDescription ||
+        data.finalCaption ||
+        data.description ||
+        data.location ||
+        '보호자가 등록한 추억 사진입니다.';
+      const name =
+        data.location ||
+        data.finalCaption ||
+        data.description ||
+        data.fileName ||
+        '추억 사진';
+
+      return {
+        id: `photo_${d.id}`,
+        ...data,
+        type: data.type || types[index % types.length],
+        name,
+        description,
+        imageUrl: getImageUrl(data),
+      };
+    }).filter((d) => d.imageUrl && d.description);
+  };
+
+  const loadOrientationDocs = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'orientation_images'));
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (docs.length > 0) return docs;
+      console.warn('[OrientationTraining] orientation_images 문서가 비어 있어 환자 사진 fallback을 시도합니다.');
+    } catch (error) {
+      console.warn('[OrientationTraining] orientation_images 로드 실패, 환자 사진 fallback을 시도합니다:', error);
+    }
+
+    if (!currentUser?.uid) return [];
+    const photoSnap = await getDocs(collection(db, 'users', currentUser.uid, 'photos'));
+    const photoDocs = toOrientationPhotoDocs(photoSnap);
+    console.log('[OrientationTraining] 환자 사진 fallback 문서 수:', photoDocs.length);
+    return photoDocs;
+  };
 
   const loadAndStart = async () => {
     try {
-      const snap = await getDocs(collection(db, 'orientation_images'));
-
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const docs = await loadOrientationDocs();
       console.log('[OrientationTraining] 문서 수:', docs.length);
 
       const recentIds = getRecentIds();
@@ -386,7 +429,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
     if (q.type === 'description' && q.options) {
       for (let i = 0; i < q.options.length; i++) {
         if (!mountedRef.current) return;
-        await tts(`${i + 1}번, ${q.options[i]}`);
+        await tts(`${SPOKEN_OPTION_LABELS[i] || `${i + 1}번`}, ${q.options[i]}`);
       }
     }
 

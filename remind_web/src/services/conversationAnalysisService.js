@@ -412,20 +412,11 @@ export const calculateWeeklyTrend = (callLogs) => {
     : 0;
   
   // 메시지 생성
-  let message = '';
-  if (improvement > 5) {
-    message = '인지 상태가 개선되고 있습니다!';
-  } else if (improvement < -5) {
-    message = '최근 인지 점수가 다소 하락했습니다.';
-  } else {
-    message = '안정적인 상태를 유지하고 있습니다.';
-  }
-  
   return {
     trend,
     averageScore: Math.round(averageScore),
     improvement: Math.round(improvement),
-    message
+    message: ''
   };
 };
 

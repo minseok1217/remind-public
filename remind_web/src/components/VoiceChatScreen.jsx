@@ -57,8 +57,8 @@ function VoiceChatScreen({ onBack }) {
   const waitingDotsRef = useRef(null);
   const userPausedRef = useRef(false);
 
-  const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
   const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
+  const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -439,9 +439,9 @@ function VoiceChatScreen({ onBack }) {
 
   const playHighQualityTTS = async (text) => {
     if (!ELEVENLABS_API_KEY) return fallbackSpeak(text);
-    const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`;
+
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
         method: 'POST',
         headers: {
           'xi-api-key': ELEVENLABS_API_KEY,
@@ -450,8 +450,7 @@ function VoiceChatScreen({ onBack }) {
         body: JSON.stringify({
           text,
           model_id: 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.5, 
-            similarity_boost: 0.75 },
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
         }),
       });
       if (!response.ok) return fallbackSpeak(text);

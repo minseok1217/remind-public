@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -42,6 +42,7 @@ function App() {
   // 환자 통화 플로우: 'orientation' → 'voice'
   const [callPhase, setCallPhase] = useState('orientation');
   const [showCallButton, setShowCallButton] = useState(true);
+  const forceOrientationRef = useRef(false);
 
   const ORIENT_DATE_KEY = 'orient_done_date';
   const isOrientationDoneToday = () =>
@@ -50,6 +51,9 @@ function App() {
   // 통화 탭 진입 시: 오늘 이미 완료했으면 바로 voice, 아니면 orientation 리셋
   useEffect(() => {
     if (activeNav !== 'call') {
+      setCallPhase('orientation');
+    } else if (forceOrientationRef.current) {
+      forceOrientationRef.current = false;
       setCallPhase('orientation');
     } else if (isOrientationDoneToday()) {
       setCallPhase('voice');
@@ -164,15 +168,24 @@ function App() {
   }, []); // Empty dependency array means this runs once on mount and unmount
 
   useEffect(() => {
-    window.openVoiceChatScreenPage = () => {
-      console.log('VoiceChatScreen 이동');
-
+    const openCall = ({ forceOrientation = false } = {}) => {
+      console.log(forceOrientation ? '지남력 훈련 화면 이동' : '통화 화면 이동');
+      forceOrientationRef.current = forceOrientation;
       setActiveNav('call');
-      setCallPhase('voice');
+      setCallPhase(forceOrientation || !isOrientationDoneToday() ? 'orientation' : 'voice');
+    };
+
+    window.openVoiceChatScreenPage = () => {
+      openCall({ forceOrientation: true });
+    };
+
+    window.openOrientationTrainingScreenPage = () => {
+      openCall({ forceOrientation: true });
     };
 
     return () => {
       delete window.openVoiceChatScreenPage;
+      delete window.openOrientationTrainingScreenPage;
     };
   }, []);
 
@@ -310,6 +323,7 @@ function App() {
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
         {activeNav === 'call' && callPhase === 'orientation' && (
           <OrientationTrainingScreen
+            currentUser={currentUser}
             onComplete={() => {
               localStorage.setItem(ORIENT_DATE_KEY, new Date().toDateString());
               setCallPhase('voice');
