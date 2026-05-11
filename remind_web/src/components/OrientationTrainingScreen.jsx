@@ -58,6 +58,11 @@ const tts = async (text) => {
   }
 };
 
+const waitForBrowserPaint = () =>
+  new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+
 
 // 설명 문제 번호 파싱 (일번/이번/삼번 → '1'/'2'/'3')
 const parseOptionNumber = (text) => {
@@ -291,8 +296,12 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
 
   const runIntro = async () => {
     if (!mountedRef.current) return;
+    setCurrentIdx(0);
+    currentIdxRef.current = 0;
     setPhase('intro');
     phaseRef.current = 'intro';
+    await waitForBrowserPaint();
+    if (!mountedRef.current || phaseRef.current !== 'intro') return;
     setIsSpeaking(true);
     isSpeakingRef.current = true;
     setStatusMsg('훈련을 시작할게요!');
@@ -625,8 +634,8 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
     );
   }
 
-  // 로딩/인트로 화면
-  if (phase === 'loading' || phase === 'intro' || !q) {
+  // 로딩 화면
+  if (phase === 'loading' || !q) {
     return (
       <div className="ot-screen">
         <div className="ot-loading-box">
@@ -638,6 +647,43 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
   }
 
   const questionText = q.questionText || q.question || '이것은 무엇인가요?';
+
+  if (phase === 'intro') {
+    return (
+      <div className="ot-screen">
+        <div className="ot-header">
+          <button className="ot-back-btn" onClick={handleBack}>뒤로</button>
+          <span className="ot-header-title">지남력 훈련</span>
+          <span className="ot-header-step">준비</span>
+        </div>
+
+        <div className="ot-card">
+          {(q.type === 'name' || q.type === 'description') && q.imageUrl ? (
+            <div className="ot-image-box">
+              <img src={q.imageUrl} alt="훈련 문제" className="ot-image" />
+            </div>
+          ) : (
+            <div className="ot-icon-box">
+              <span className="ot-icon">?</span>
+            </div>
+          )}
+
+          <p className="ot-question">{questionText}</p>
+
+          <div className="ot-indicator-area">
+            <div className="ot-speaking">
+              <div className="ot-wave">
+                {[1,2,3,4,5].map((i) => (
+                  <div key={i} className={`ot-wave-bar ot-bar${i}`} />
+                ))}
+              </div>
+              <p className="ot-indicator-label">AI가 말하고 있어요</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ot-screen">

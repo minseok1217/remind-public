@@ -612,27 +612,49 @@ const getDifficultyStrategy = (difficulty, photoName, photoType) => {
 // 지남력 훈련 힌트 생성 (Gemini 텍스트 전용)
 // ──────────────────────────────────────────────────────────
 export const evaluateAnswerWithGemini = async (question, correctAnswer, userAnswer) => {
-  const prompt = `당신은 치매 어르신 인지 훈련 채점 AI입니다.
+  const prompt = `당신은 치매 어르신의 지남력/인지 훈련을 채점하는 AI입니다.
 문제: ${question}
 정답: ${correctAnswer}
 사용자 답변: ${userAnswer}
 
-사용자의 답변이 정답과 같은 의미인지 판단하세요.
-- 같은 의미이거나 정답을 포함한 표현이면 "정답"
-- 틀리거나 관련 없으면 "오답"
+채점 원칙:
+- 어르신의 음성 인식 결과라서 조사, 어미, 띄어쓰기, 말 더듬음, 반복어, 존댓말 차이는 무시하세요.
+- 발음이 비슷하거나 음성 인식으로 약간 잘못 적힌 답도 문맥상 정답을 말한 것으로 보이면 정답으로 처리하세요.
+- 정답의 핵심 명사나 의미가 포함되어 있으면 정답입니다. 예: "컵" 정답에 "물컵", "컵이요", "컵 같은데"는 정답입니다.
+- 직업/장소/물건 이름은 더 관대하게 채점하세요. 상위 개념이나 일상적인 동의어도 맞는 의미면 정답입니다.
+- 사용자가 확신 없이 말해도 핵심 답이 들어 있으면 정답입니다. 예: "아마 의사?"는 정답이 의사이면 정답입니다.
+- 완전히 다른 대상이거나 핵심 의미가 전혀 맞지 않을 때만 오답입니다.
 
-반드시 "정답" 또는 "오답" 중 하나만 반환하세요.`;
+반드시 아래 JSON만 반환하세요. 다른 설명은 쓰지 마세요.
+{"result":"정답"} 또는 {"result":"오답"}`;
+
+  const parseEvaluationResult = (value) => {
+    const text = (value || '').trim();
+    if (!text) return false;
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return String(parsed.result || '').includes('정답');
+      }
+    } catch {
+      // JSON이 아니면 아래 텍스트 판정으로 처리
+    }
+    if (/^\s*정답\b/.test(text)) return true;
+    if (/^\s*오답\b/.test(text)) return false;
+    return text.includes('정답') && !text.includes('오답');
+  };
 
   try {
     const resp = await fetch('/api/gemini/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, correctAnswer, userAnswer }),
+      body: JSON.stringify({ question, correctAnswer, userAnswer, prompt }),
     });
     if (resp.ok) {
       const json = await resp.json();
       const text = (json.text || json.result || '').trim();
-      return text.includes('정답');
+      return parseEvaluationResult(text);
     }
   } catch (e) {
     // 프록시 실패 시 직접 호출로 폴백
@@ -651,7 +673,7 @@ export const evaluateAnswerWithGemini = async (question, correctAnswer, userAnsw
     if (!response.ok) return false;
     const data = await response.json();
     const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-    return text.includes('정답');
+    return parseEvaluationResult(text);
   } catch {
     return false;
   }
@@ -666,8 +688,11 @@ export const generateOrientationHint = async (question, answer) => {
 
 규칙:
 - 정답을 직접 알려주지 마세요
-- 정답의 특징(색, 소리, 용도, 모양 등)을 이용한 단서를 주세요
-- 어르신이 쉽게 이해할 수 있는 짧고 친절한 1~2문장으로 작성하세요
+- 힌트가 너무 짧지 않게, 어르신이 떠올릴 수 있도록 구체적인 단서를 2~3개 넣어주세요
+- 정답의 특징(색, 소리, 용도, 모양, 사용 장소, 관련 행동, 주변에서 볼 수 있는 상황 등)을 이용하세요
+- "사진을 천천히 보시면..."처럼 시선을 유도하고, 부드럽고 격려하는 말투로 작성하세요
+- 2~3문장으로 작성하되 전체 길이는 80~140자 정도로 해주세요
+- 선택지 문제라면 정답 번호를 말하지 말고, 정답 선택지의 의미를 떠올릴 수 있는 설명을 주세요
 - 한국어로만 답변하세요
 - 힌트 문장만 반환하세요 (다른 설명 없이)`;
 
@@ -675,7 +700,7 @@ export const generateOrientationHint = async (question, answer) => {
     const resp = await fetch('/api/gemini/hint', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, answer }),
+      body: JSON.stringify({ question, answer, prompt }),
     });
     if (resp.ok) {
       const json = await resp.json();
