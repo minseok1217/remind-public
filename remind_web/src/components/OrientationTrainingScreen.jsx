@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { generateOrientationHint, evaluateAnswerWithGemini } from '../services/geminiService';
 import './OrientationTrainingScreen.css';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -10,6 +9,7 @@ import './OrientationTrainingScreen.css';
 const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
 const SILENCE_MS = 2000; // 침묵 감지 대기 시간
+const HINT_REVIEW_MS = 2500; // 힌트를 듣고 생각할 시간
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // TTS (ElevenLabs + 브라우저 폴백)
@@ -67,10 +67,37 @@ const waitForBrowserPaint = () =>
 // 설명 문제 번호 파싱 (일번/이번/삼번 → '1'/'2'/'3')
 const parseOptionNumber = (text) => {
   const t = (text || '').replace(/\s/g, '').toLowerCase();
-  if (/^[1일하나첫]|1번|일번|하나번|첫번/.test(t)) return '1';
-  if (/^[2이둘두]|2번|이번|둘번|두번/.test(t)) return '2';
-  if (/^[3삼셋세]|3번|삼번|셋번|세번/.test(t)) return '3';
+  if (/^(1|일|한|하나|첫|첫번째|첫째|일번|1번)/.test(t)) return '1';
+  if (/^(2|이|둘|두|두번째|둘째|이번|2번)/.test(t)) return '2';
+  if (/^(3|삼|셋|세|세번째|셋째|삼번|3번)/.test(t)) return '3';
   return null;
+};
+
+const normalizeAnswerText = (text) =>
+  (text || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .replace(/입니다|이에요|예요|이요|이어요|같아요|같습니다|아마|정답|답/g, '');
+
+const isAnswerCorrectLocally = (correctAnswer, userAnswer) => {
+  const correct = normalizeAnswerText(correctAnswer);
+  const user = normalizeAnswerText(userAnswer);
+  if (!correct || !user) return false;
+  return user.includes(correct) || correct.includes(user);
+};
+
+const buildLocalHint = (q) => {
+  if (q?.type === 'name' && q.description) {
+    return `힌트예요. 이것은 ${q.description}`;
+  }
+
+  if (q?.type === 'description' && q.itemName) {
+    return `힌트예요. 사진 속 이름은 "${q.itemName}"이에요. 이 이름과 가장 잘 맞는 설명을 골라 보세요.`;
+  }
+
+  const cleanAnswer = String(q?.answer || '').replace(/^\d번\((.*)\)$/, '$1').trim();
+  if (!cleanAnswer) return '';
+  return `사진을 천천히 보면서 모양, 쓰임새, 장소를 떠올려 보세요. 정답과 관련된 중요한 단서는 "${cleanAnswer.slice(0, 1)}" 소리로 시작해요.`;
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -250,6 +277,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
         imageUrl: getImageUrl(doc),
         questionText: NAME_QUESTION[doc.type] || '이 사진에 있는 것은 무엇인가요?',
         answer: doc.name || '',
+        description: doc.description || '',
         hint: '',
         explanation: `정답은 "${doc.name}"이에요!`,
       }));
@@ -275,6 +303,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
           questionText: DESC_QUESTION[doc.type] || '이 사진에 맞는 설명은 몇 번인가요?',
           options: opts.slice(0, 3),
           answer: String(correctIdx + 1),
+          itemName: doc.name || '',
           hint: '',
           explanation: `정답은 ${correctIdx + 1}번이에요! "${correctDesc}"`,
         };
@@ -485,14 +514,10 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
     const q = questionsRef.current[currentIdxRef.current];
     const correctAns = q.answer || '';
 
-    // 타입별 평가: 설명 문제는 번호 파싱, 나머지는 Gemini
+    // 타입별 평가: 설명 문제는 번호 파싱, 나머지는 로컬 문자열 비교
     const isCorrect = q.type === 'description'
       ? parseOptionNumber(answer) === correctAns
-      : await evaluateAnswerWithGemini(
-          q.questionText || q.question || '',
-          correctAns,
-          answer
-        );
+      : isAnswerCorrectLocally(correctAns, answer);
 
     if (!mountedRef.current) return;
 
@@ -530,7 +555,7 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
       }, 800);
     } else {
       if (attempt === 'first') {
-        // 힌트 모드 - Gemini로 힌트 생성 (첫 TTS 재생 중 병렬 처리)
+        // 힌트 모드 - API 호출 없이 기본 힌트 생성
         playHintSound();
         setPhase('hint');
         phaseRef.current = 'hint';
@@ -538,14 +563,8 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
         setIsSpeaking(true);
         isSpeakingRef.current = true;
 
-        const questionForHint = q.type === 'description' && q.options
-          ? `${q.questionText}\n1번: ${q.options[0]}\n2번: ${q.options[1]}\n3번: ${q.options[2]}`
-          : (q.questionText || q.question || '');
-        const answerForHint = q.type === 'description'
-          ? `${q.answer}번 (${q.options?.[parseInt(q.answer) - 1] ?? ''})`
-          : (q.answer || '');
         const [generatedHint] = await Promise.all([
-          generateOrientationHint(questionForHint, answerForHint).catch(() => q.hint || ''),
+          Promise.resolve(q.hint || buildLocalHint(q)),
           tts('아쉽네요! 제가 힌트를 드릴 테니 다시 한번 볼까요?'),
         ]);
 
@@ -568,11 +587,12 @@ export default function OrientationTrainingScreen({ onComplete, onBack }) {
 
         setIsSpeaking(false);
         if (!mountedRef.current) return;
+        setStatusMsg('힌트를 천천히 떠올려 보세요.');
         setTimeout(() => {
           isSpeakingRef.current = false;
           processingAnswerRef.current = false;
           if (mountedRef.current) startListening('second');
-        }, 350);
+        }, HINT_REVIEW_MS);
       } else {
         // 2차 시도 후 정답 공개
         setPhase('result');
