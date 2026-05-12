@@ -5,7 +5,7 @@ import { chatWithGemini, evaluateConversationReport } from '../services/geminiSe
 import { analyzeConversation } from '../services/conversationAnalysisService';
 import { getConnectedPatientId } from '../services/familyLinkService';
 import './VoiceChatScreen.css';
-
+import { tts, cancelTTS } from '../services/ttsService';
 
 const SILENCE_TIMEOUT_MS = 1700;
 const AUTO_LISTEN_DELAY_MS = 700;
@@ -56,9 +56,6 @@ function VoiceChatScreen({ onBack }) {
   const animFrameRef = useRef(null);
   const waitingDotsRef = useRef(null);
   const userPausedRef = useRef(false);
-
-  const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
-  const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -422,49 +419,9 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const stopSpeaking = () => {
-    window.speechSynthesis.cancel();
+    cancelTTS();
     ttsQueueRef.current = [];
     isSpeakingRef.current = false;
-  };
-
-  const fallbackSpeak = (text) => {
-    return new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ko-KR';
-      utterance.rate = 0.9;
-      utterance.onend = () => resolve();
-      window.speechSynthesis.speak(utterance);
-    });
-  };
-
-  const playHighQualityTTS = async (text) => {
-    if (!ELEVENLABS_API_KEY) return fallbackSpeak(text);
-
-    try {
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      });
-      if (!response.ok) return fallbackSpeak(text);
-      const blob = await response.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      return new Promise((resolve) => {
-        audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve(); };
-        audio.onerror = () => { URL.revokeObjectURL(audioUrl); resolve(); };
-        audio.play().catch(() => { URL.revokeObjectURL(audioUrl); resolve(); });
-      });
-    } catch {
-      return fallbackSpeak(text);
-    }
   };
 
   const processTTSQueue = async () => {
@@ -477,7 +434,7 @@ function VoiceChatScreen({ onBack }) {
     isSpeakingRef.current = true;
     if (!showPhoto) startSpeakingWave();
     const text = ttsQueueRef.current.shift();
-    await playHighQualityTTS(text);
+    await tts(text);
     processTTSQueue();
   };
 
@@ -691,13 +648,17 @@ function VoiceChatScreen({ onBack }) {
       currentPhotoIdRef.current = photoData.id;
       setPhotoKeywords(context);
       setHasPhoto(Boolean(photoUrl));
-      setShowPhoto(false);
+      setShowPhoto(Boolean(photoUrl));
       setUiState('ready');
       setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
-      const greeting = '안녕하세요. 오늘 기분은 어떠세요?';
-      setCaption(`AI: ${greeting}`);
-      chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-      addToTTSQueue(greeting);
+      if (photoUrl) {
+        await startPhotoConversation(photoData, context);
+      } else {
+        const greeting = '안녕하세요. 오늘 기분은 어떠세요?';
+        setCaption(`AI: ${greeting}`);
+        chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
+        addToTTSQueue(greeting);
+      }
     } catch (error) {
       console.error('❌ 사진 로드 오류:', error);
       const greeting = '안녕하세요. 오늘 어떤 하루였는지 들려주세요.';

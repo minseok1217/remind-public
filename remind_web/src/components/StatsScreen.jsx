@@ -239,7 +239,7 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
   return (
     <div className="stats-screen">
       <div className="header-content">
-        <h1 className="header-title">계정 관리 및 설정</h1>
+        <h1 className="header-title">통계</h1>
       </div>
       <div className="header-diver"></div>
 

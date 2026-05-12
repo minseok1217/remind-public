@@ -29,6 +29,11 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   const [photoDocId, setPhotoDocId] = useState(null);
   const docIdPromiseRef = useRef(null); // 백그라운드 업로드 promise
 
+  // ── 묶음 업로드 ──
+  const [batchFiles, setBatchFiles] = useState([]); // [{file, previewURL}]
+  const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+  const [batchDone, setBatchDone] = useState(false);
+
   // ── Step 1 ──
   const [year, setYear] = useState('');
   const [customYear, setCustomYear] = useState('');
@@ -132,9 +137,10 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   };
 
   // [Step 0 → Step 1] 사진을 즉시 업로드하고 Firestore 초안 문서 생성
-  const uploadPhotoEarly = async () => {
+  const uploadPhotoEarly = async (fileArg) => {
+    const file = fileArg || selectedFile;
     const rand = Math.random().toString(36).slice(2, 8);
-    const fileName = `${Date.now()}_${rand}_${selectedFile.name}`;
+    const fileName = `${Date.now()}_${rand}_${file.name}`;
     const patientId = await getConnectedPatientId(currentUser.uid);
     if (!patientId) throw new Error('연결된 환자 ID를 찾을 수 없습니다.');
     const filePath = `users/${patientId}/photos/${fileName}`;
@@ -145,7 +151,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     // 1차: Firebase SDK
     try {
       const storageRef = ref(storage, filePath);
-      const snapshot = await uploadBytes(storageRef, selectedFile);
+      const snapshot = await uploadBytes(storageRef, file);
       downloadURL = await getDownloadURL(snapshot.ref);
     } catch (sdkErr) {
       console.warn('Firebase SDK 업로드 실패, REST API 시도:', sdkErr.message);
@@ -154,17 +160,16 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     // 2차: REST API (SDK 412 우회)
     if (!downloadURL) {
       try {
-        downloadURL = await uploadViaRestAPI(filePath, selectedFile);
+        downloadURL = await uploadViaRestAPI(filePath, file);
       } catch (restErr) {
         console.warn('REST API도 실패, Firestore 직접 저장으로 전환:', restErr.message);
       }
     }
 
     // 3차 폴백: Canvas 압축 후 data URL을 Firestore에 직접 저장
-    // (Firebase Storage 서비스 계정 문제 해결 전 임시 방편)
     if (!downloadURL) {
       console.warn('Firebase Storage 사용 불가 — Firebase Console에서 Storage 버킷을 재연결하세요.');
-      downloadURL = await compressImageToDataURL(selectedFile);
+      downloadURL = await compressImageToDataURL(file);
       storedInFirestore = true;
     }
 
@@ -231,6 +236,42 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     } catch (err) {
       console.warn('정답 키워드 추출 실패 (무시):', err);
     }
+  };
+
+  // 묶음 업로드: 파일 배열을 순서대로 업로드하고 기본 메타 저장
+  const runBatchUpload = async () => {
+    const step1Data = buildStep1Data();
+    const patientId = await getConnectedPatientId(currentUser.uid);
+    if (!patientId) { alert('연결된 환자 ID를 찾을 수 없습니다.'); return; }
+
+    setBatchProgress({ done: 0, total: batchFiles.length });
+    setStep('batch_uploading');
+
+    let done = 0;
+    for (const { file } of batchFiles) {
+      try {
+        const docId = await uploadPhotoEarly(file);
+        const desc = buildSimpleCaption(step1Data);
+        const starters = buildConversationStarters(step1Data, []);
+        const photoDocRef = doc(db, 'users', patientId, 'photos', docId);
+        await updateDoc(photoDocRef, {
+          description: desc,
+          detailedDescription: desc,
+          analyzed: true,
+          year: step1Data?.year || null,
+          people: step1Data?.people?.length ? step1Data.people : null,
+          location: step1Data?.location || null,
+          freeText: step1Data?.freeText || null,
+          finalCaption: desc,
+          conversationStarters: starters,
+        });
+      } catch (err) {
+        console.error('묶음 업로드 중 오류 (파일 건너뜀):', err);
+      }
+      done += 1;
+      setBatchProgress({ done, total: batchFiles.length });
+    }
+    setBatchDone(true);
   };
 
   // ─────────────────────────────────────
@@ -465,6 +506,119 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
           >
             다음
           </button>
+        </div>
+
+        {/* 묶음 업로드 구분선 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '20px 0 12px' }}>
+          <div style={{ flex: 1, height: '1px', background: '#e0e0e0' }} />
+          <span style={{ fontSize: '13px', color: '#aaa', whiteSpace: 'nowrap' }}>또는</span>
+          <div style={{ flex: 1, height: '1px', background: '#e0e0e0' }} />
+        </div>
+
+        <label htmlFor="batch-input" style={{ display: 'block', textAlign: 'center', cursor: 'pointer', padding: '14px', border: '1.5px dashed #b0b0d0', borderRadius: '12px', color: '#6c63ff', fontSize: '14px', fontWeight: 500 }}>
+          <input
+            id="batch-input"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              if (!files.length) return;
+              setBatchFiles(files.map(f => ({ file: f, previewURL: URL.createObjectURL(f) })));
+              setStep('batch_info');
+            }}
+            style={{ display: 'none' }}
+          />
+          여러 장 한번에 올리기
+        </label>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────
+  // STEP: batch_info — 묶음 공통 정보 입력
+  // ─────────────────────────────────────
+  if (step === 'batch_info') {
+    return (
+      <div className="photo-screen">
+        <Header />
+        <p className="step-desc">선택한 {batchFiles.length}장의 사진에 적용할 정보를 입력해주세요. 모두 선택 사항입니다.</p>
+
+        {/* 썸네일 미리보기 */}
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '4px 0 12px', marginBottom: '4px' }}>
+          {batchFiles.map(({ previewURL: url }, i) => (
+            <img key={i} src={url} alt={`사진 ${i + 1}`} style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+          ))}
+        </div>
+
+        <div className="form-section">
+          <label className="form-label">찍은 연도</label>
+          <div className="chip-group">
+            {YEAR_OPTIONS.map(opt => (
+              <button key={opt} className={`chip ${year === opt ? 'chip-selected' : ''}`} onClick={() => setYear(year === opt ? '' : opt)}>{opt}</button>
+            ))}
+          </div>
+          {year === '직접 입력' && (
+            <input className="text-input" placeholder="예: 1975년" value={customYear} onChange={e => setCustomYear(e.target.value)} />
+          )}
+        </div>
+
+        <div className="form-section">
+          <label className="form-label">함께한 사람 <span className="form-hint">(복수 선택 가능)</span></label>
+          <div className="chip-group">
+            {PEOPLE_OPTIONS.map(opt => (
+              <button key={opt} className={`chip ${people.includes(opt) ? 'chip-selected' : ''}`} onClick={() => togglePerson(opt)}>{opt}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="form-section">
+          <label className="form-label">장소</label>
+          <div className="chip-group">
+            {LOCATION_OPTIONS.map(opt => (
+              <button key={opt} className={`chip ${location === opt ? 'chip-selected' : ''}`} onClick={() => setLocation(location === opt ? '' : opt)}>{opt}</button>
+            ))}
+          </div>
+          {location === '기타' && (
+            <input className="text-input" placeholder="장소를 직접 입력해주세요" value={customLocation} onChange={e => setCustomLocation(e.target.value)} />
+          )}
+        </div>
+
+        <div className="action-row">
+          <button className="btn-skip" onClick={() => { setBatchFiles([]); setStep('upload'); }}>취소</button>
+          <button className="btn-primary" onClick={runBatchUpload}>{batchFiles.length}장 업로드</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────
+  // STEP: batch_uploading — 묶음 업로드 진행 중
+  // ─────────────────────────────────────
+  if (step === 'batch_uploading') {
+    const pct = batchProgress.total > 0 ? Math.round((batchProgress.done / batchProgress.total) * 100) : 0;
+    return (
+      <div className="photo-screen">
+        <Header />
+        <div className="center-state" style={{ marginTop: '60px' }}>
+          {!batchDone ? (
+            <>
+              <div className="ai-spinner" />
+              <p className="center-text" style={{ marginTop: '20px' }}>{batchProgress.done} / {batchProgress.total}장 업로드 중...</p>
+              <div style={{ width: '100%', maxWidth: '300px', height: '8px', background: '#eee', borderRadius: '4px', margin: '16px auto 0', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: '#6c63ff', borderRadius: '4px', transition: 'width 0.3s' }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="complete-check-icon" style={{ fontSize: '48px' }}>✓</div>
+              <h2 className="complete-title">{batchProgress.done}장 등록 완료!</h2>
+              <div className="action-row" style={{ marginTop: '24px' }}>
+                <button className="btn-secondary" onClick={onGoToManagement}>사진 관리</button>
+                <button className="btn-primary" onClick={onBack}>홈으로</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
