@@ -401,6 +401,15 @@ function VoiceChatScreen({ onBack }) {
     return Number.isNaN(time) ? 0 : time;
   };
 
+  const getPhotoUrl = (photoData) =>
+    photoData?.photoURL ||
+    photoData?.imageUrl ||
+    photoData?.imageURL ||
+    photoData?.photoUrl ||
+    photoData?.url ||
+    photoData?.image ||
+    '';
+
   const extractPhotoContext = (photoData) => {
     const keywordsObj = photoData?.keywords && typeof photoData.keywords === 'object' && !Array.isArray(photoData.keywords) ? photoData.keywords : {};
     const keywordList = Array.isArray(photoData?.keywords) ? photoData.keywords : keywordsObj.keywords || [];
@@ -417,6 +426,54 @@ function VoiceChatScreen({ onBack }) {
       finalCaption: photoData?.finalCaption || '',
       answerKeywords: photoData?.answerKeywords || []
     };
+  };
+
+  const buildFallbackPhotoFromOrientation = async () => {
+    try {
+      console.log('[VoiceChat] 보호자 사진 없음/URL 없음 → orientation_images fallback 조회 시작');
+      const snap = await getDocs(collection(db, 'orientation_images'));
+      const docs = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((item) => getPhotoUrl(item));
+
+      console.log('[VoiceChat] orientation_images 조회 결과:', {
+        totalDocs: snap.docs.length,
+        usableDocs: docs.length,
+      });
+
+      if (docs.length === 0) return null;
+
+      const selected = docs[Math.floor(Math.random() * docs.length)];
+      const photoUrl = getPhotoUrl(selected);
+      console.log('[VoiceChat] orientation fallback 사진 선택:', {
+        id: selected.id,
+        type: selected.type,
+        hasUrl: Boolean(photoUrl),
+        urlPreview: photoUrl ? photoUrl.slice(0, 80) : '',
+      });
+      const fallbackPhoto = {
+        ...selected,
+        id: `orientation_${selected.id}`,
+        ownerId: 'orientation_images',
+        source: 'orientation_images',
+        url: photoUrl,
+        description:
+          selected.detailedDescription ||
+          selected.finalCaption ||
+          selected.description ||
+          selected.location ||
+          selected.name ||
+          '지남력 훈련에 사용하는 사진입니다.',
+      };
+
+      return {
+        photo: fallbackPhoto,
+        context: extractPhotoContext(fallbackPhoto),
+      };
+    } catch (error) {
+      console.warn('[VoiceChat] orientation_images fallback 로드 실패:', error);
+      return null;
+    }
   };
 
   const resolvePhotoOwnerId = async (userId) => {
@@ -590,33 +647,100 @@ function VoiceChatScreen({ onBack }) {
     setStatus('AI가 질문했어요. 천천히 말씀해 주세요.');
   };
 
+  const startConversationWithoutPhoto = (greeting = '안녕하세요. 오늘 기분은 어떠세요?') => {
+    setHasPhoto(false);
+    setShowPhoto(false);
+    setUiState('ready');
+    setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
+    setCaption(`AI: ${greeting}`);
+    chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
+    addToTTSQueue(greeting);
+  };
+
+  const startWithFallbackPhoto = async () => {
+    const fallback = await buildFallbackPhotoFromOrientation();
+    if (!fallback) {
+      console.warn('[VoiceChat] orientation fallback 사진도 찾지 못했습니다.');
+      return false;
+    }
+
+    const { photo, context } = fallback;
+    console.log('[VoiceChat] fallback 사진으로 대화 시작:', {
+      id: photo.id,
+      url: photo.url,
+      description: context.description || context.detailedDescription,
+    });
+    setCurrentPhoto(photo);
+    currentPhotoRef.current = photo;
+    currentPhotoIdRef.current = null;
+    currentPhotoOwnerIdRef.current = null;
+    setPhotoKeywords(context);
+    setHasPhoto(true);
+    setShowPhoto(true);
+    setUiState('ready');
+    setStatus('훈련용 사진으로 대화를 시작할게요. 천천히 말씀해 주세요.');
+    await startPhotoConversation(photo, context);
+    return true;
+  };
+
   const loadPhotoAndStart = async () => {
     try {
       const user = auth.currentUser;
-      if (!user) { setStatus('로그인이 필요합니다.'); return; }
+      console.log('[VoiceChat] loadPhotoAndStart 시작:', {
+        authUid: user?.uid || null,
+      });
+      if (!user) {
+        console.warn('[VoiceChat] auth.currentUser가 없어 사진을 조회하지 못했습니다.');
+        setStatus('로그인이 필요합니다.');
+        return;
+      }
       const ownerId = await resolvePhotoOwnerId(user.uid);
+      console.log('[VoiceChat] 사진 ownerId 결정:', {
+        loginUid: user.uid,
+        ownerId,
+        isFallbackToSelf: ownerId === user.uid,
+      });
       currentPhotoOwnerIdRef.current = ownerId;
       const photosRef = collection(db, 'users', ownerId, 'photos');
       const snapshot = await getDocs(photosRef);
       const photos = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log('[VoiceChat] users/{ownerId}/photos 조회 결과:', {
+        ownerId,
+        totalPhotos: photos.length,
+        photoIds: photos.map((p) => p.id),
+      });
       const pendingPhotos = photos.filter(isUncalledPhoto);
       const selectablePhotos = pendingPhotos.length > 0 ? pendingPhotos : photos;
+      console.log('[VoiceChat] 선택 가능한 사진:', {
+        pendingPhotos: pendingPhotos.length,
+        selectablePhotos: selectablePhotos.length,
+      });
       if (selectablePhotos.length === 0) {
-        const greeting = '안녕하세요. 오늘 기분은 어떠세요?';
-        setHasPhoto(false);
-        setShowPhoto(false);
-        setUiState('ready');
-        setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
-        setCaption(`AI: ${greeting}`);
-        chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-        addToTTSQueue(greeting);
+        console.warn('[VoiceChat] 보호자/환자 등록 사진이 없어 fallback을 시도합니다.');
+        const usedFallback = await startWithFallbackPhoto();
+        if (!usedFallback) startConversationWithoutPhoto();
         return;
       }
       selectablePhotos.sort((a, b) => getPhotoCreatedTime(b) - getPhotoCreatedTime(a));
       const photoData = selectablePhotos[0];
-      const photoUrl = photoData.photoURL || photoData.imageUrl || photoData.url || '';
+      const photoUrl = getPhotoUrl(photoData);
+      console.log('[VoiceChat] 사용자 사진 선택:', {
+        id: photoData.id,
+        callStatus: photoData.callStatus,
+        tag: photoData.tag,
+        hasUrl: Boolean(photoUrl),
+        urlPreview: photoUrl ? photoUrl.slice(0, 80) : '',
+        availableUrlFields: {
+          photoURL: Boolean(photoData.photoURL),
+          imageUrl: Boolean(photoData.imageUrl),
+          imageURL: Boolean(photoData.imageURL),
+          photoUrl: Boolean(photoData.photoUrl),
+          url: Boolean(photoData.url),
+          image: Boolean(photoData.image),
+        },
+      });
       const context = extractPhotoContext(photoData);
-      const selectedPhoto = { id: photoData.id, ownerId, url: photoUrl, ...photoData };
+      const selectedPhoto = { ...photoData, id: photoData.id, ownerId, url: photoUrl };
       setCurrentPhoto(selectedPhoto);
       currentPhotoRef.current = selectedPhoto;
       currentPhotoIdRef.current = photoData.id;
@@ -628,21 +752,14 @@ function VoiceChatScreen({ onBack }) {
       if (photoUrl) {
         await startPhotoConversation(photoData, context);
       } else {
-        const greeting = '안녕하세요. 오늘 기분은 어떠세요?';
-        setCaption(`AI: ${greeting}`);
-        chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-        addToTTSQueue(greeting);
+        console.warn('[VoiceChat] 선택된 사용자 사진에 URL이 없어 fallback을 시도합니다:', photoData.id);
+        const usedFallback = await startWithFallbackPhoto();
+        if (!usedFallback) startConversationWithoutPhoto();
       }
     } catch (error) {
       console.error('❌ 사진 로드 오류:', error);
-      const greeting = '안녕하세요. 오늘 어떤 하루였는지 들려주세요.';
-      setHasPhoto(false);
-      setShowPhoto(false);
-      setUiState('ready');
-      setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
-      setCaption(`AI: ${greeting}`);
-      chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-      addToTTSQueue(greeting);
+      const usedFallback = await startWithFallbackPhoto();
+      if (!usedFallback) startConversationWithoutPhoto('안녕하세요. 오늘 어떤 하루였는지 들려주세요.');
     }
   };
 
@@ -772,6 +889,12 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
               src={currentPhoto.url}
               alt="추억 사진"
               onError={(e) => {
+                console.error('[VoiceChat] 이미지 렌더링 실패:', {
+                  url: currentPhoto.url,
+                  photoId: currentPhoto.id,
+                  ownerId: currentPhoto.ownerId,
+                  source: currentPhoto.source || 'user_photo',
+                });
                 e.target.style.display = 'none';
                 setShowPhoto(false);
               }}

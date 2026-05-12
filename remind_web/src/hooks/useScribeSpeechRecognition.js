@@ -12,6 +12,7 @@ export const useScribeSpeechRecognition = ({
   noResultMs = DEFAULT_NO_RESULT_MS,
   finalizeDelayMs = DEFAULT_FINALIZE_DELAY_MS,
   webSpeechSilenceMs = DEFAULT_WEB_SPEECH_SILENCE_MS,
+  preferWebSpeech = false,
 } = {}) => {
   const [isListening, setIsListening] = useState(false);
   const scribeSupported = !!(navigator.mediaDevices?.getUserMedia && window.WebSocket);
@@ -204,7 +205,7 @@ export const useScribeSpeechRecognition = ({
     onNoResultRef.current = onNoResult;
     onTranscriptRef.current = options.onTranscript || null;
 
-    if (!scribeSupported || scribeFailedRef.current) {
+    if ((preferWebSpeech && webSpeechSupported) || !scribeSupported || scribeFailedRef.current) {
       startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs, sessionId);
       return;
     }

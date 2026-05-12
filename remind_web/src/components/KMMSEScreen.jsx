@@ -131,18 +131,26 @@ const getQuestionText = (step, answers = {}) => {
 };
 
 const getListenOptions = (step) => {
-  if (isCalculationStep(step) || step?.id === 'recall') {
+  if (step?.id === 'recall') {
     return {
-      noResultMs: 24000,
-      finalizeDelayMs: 4200,
-      webSpeechSilenceMs: 4200,
+      noResultMs: 26000,
+      finalizeDelayMs: 4500,
+      webSpeechSilenceMs: 4500,
+    };
+  }
+
+  if (isCalculationStep(step)) {
+    return {
+      noResultMs: 22000,
+      finalizeDelayMs: 3300,
+      webSpeechSilenceMs: 3300,
     };
   }
 
   return {
     noResultMs: 18000,
-    finalizeDelayMs: 3000,
-    webSpeechSilenceMs: 3000,
+    finalizeDelayMs: 2600,
+    webSpeechSilenceMs: 2600,
   };
 };
 
@@ -307,7 +315,9 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   const submitAnswerRef = useRef(null);
   const autoListenStepRef = useRef(-1);
 
-  const { isListening, supported, startListening, stopListening } = useScribeSpeechRecognition();
+  const { isListening, supported, startListening, stopListening } = useScribeSpeechRecognition({
+    preferWebSpeech: true,
+  });
 
   // 위치 정보 로드 후 STEPS 빌드
   useEffect(() => {
@@ -459,10 +469,10 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
           }
         },
         () => {
-          // 음성 미감지 → 짧게 쉬고 재시도. UI는 계속 "듣는 중"으로 유지한다.
+          // 음성 미감지 → 충분히 쉬고 재시도. UI는 계속 "듣는 중"으로 유지한다.
           if (autoListenStepRef.current !== capturedStepIdx) return;
           setWaitingForSpeech(true);
-          setTimeout(() => doListen(), 1200);
+          setTimeout(() => doListen(), 1800);
         },
         {
           ...getListenOptions(step),
