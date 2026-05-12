@@ -241,7 +241,6 @@ const useScribeSpeechRecognition = () => {
     if (completedRef.current) return;
     completedRef.current = true;
     cleanupTimer();
-    setIsListening(false);
     disconnectRef.current?.();
 
     const trimmed = (text || '').trim();
@@ -275,7 +274,11 @@ const useScribeSpeechRecognition = () => {
     onInsufficientAudioActivityError: () => finish(''),
   });
 
-  disconnectRef.current = scribe.disconnect;
+  const safeDisconnect = () => {
+    try { scribe.disconnect(); } catch { /* WebSocket이 연결되지 않은 상태에서 disconnect 무시 */ }
+  };
+
+  disconnectRef.current = safeDisconnect;
 
   const fetchScribeToken = async () => {
     const response = await fetch(SCRIBE_TOKEN_ENDPOINT);
@@ -299,7 +302,6 @@ const useScribeSpeechRecognition = () => {
     const finish = (text) => {
       if (done) return;
       done = true;
-      setIsListening(false);
       if (text) onResult?.(text);
       else onNoResult?.();
     };
@@ -310,7 +312,7 @@ const useScribeSpeechRecognition = () => {
   };
 
   const startListening = async (onResult, onNoResult) => {
-    scribe.disconnect();
+    safeDisconnect();
     cleanupTimer();
     completedRef.current = false;
     onResultRef.current = onResult;
@@ -339,6 +341,13 @@ const useScribeSpeechRecognition = () => {
           noiseSuppression: true,
         },
       });
+      // AudioWorklet 메시지 큐에 남은 오디오가 disconnect 후에도 send()를 호출할 수 있음
+      // connection.send를 패치해 WebSocket이 닫힌 후 오는 청크는 무시
+      const conn = scribe.getConnection();
+      if (conn) {
+        const origSend = conn.send.bind(conn);
+        conn.send = (data) => { try { origSend(data); } catch { /* disconnected 후 잔여 청크 무시 */ } };
+      }
     } catch {
       // Scribe 토큰 없음 → 브라우저 STT로 폴백
       cleanupTimer();
@@ -350,7 +359,7 @@ const useScribeSpeechRecognition = () => {
   const stopListening = () => {
     completedRef.current = true;
     cleanupTimer();
-    scribe.disconnect();
+    safeDisconnect();
     setIsListening(false);
   };
 
