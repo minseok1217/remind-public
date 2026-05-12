@@ -301,6 +301,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [enableNarration] = useState(true);
   const [autoListenTrigger, setAutoListenTrigger] = useState(0);
+  const [waitingForSpeech, setWaitingForSpeech] = useState(false);
 
   // 항상 최신 submitAnswer를 가리키는 ref (stale closure 방지)
   const submitAnswerRef = useRef(null);
@@ -358,6 +359,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   useEffect(() => {
     stopListening();
     setVoiceTranscript('');
+    setWaitingForSpeech(false);
     autoListenStepRef.current = -1;
   }, [stepIdx]);
 
@@ -428,8 +430,10 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       // 스텝이 바뀌었으면 중단
       if (autoListenStepRef.current !== capturedStepIdx) return;
 
+      setWaitingForSpeech(true);
       startListening(
         (transcript) => {
+          setWaitingForSpeech(false);
           setVoiceTranscript(transcript);
           const normalized = norm(transcript);
 
@@ -455,10 +459,19 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
           }
         },
         () => {
-          // 음성 미감지 → 800ms 후 재시도 (브라우저가 마이크 해제할 시간 확보)
-          setTimeout(() => doListen(), 800);
+          // 음성 미감지 → 짧게 쉬고 재시도. UI는 계속 "듣는 중"으로 유지한다.
+          if (autoListenStepRef.current !== capturedStepIdx) return;
+          setWaitingForSpeech(true);
+          setTimeout(() => doListen(), 1200);
         },
-        getListenOptions(step)
+        {
+          ...getListenOptions(step),
+          onTranscript: (preview) => {
+            if (autoListenStepRef.current === capturedStepIdx && preview) {
+              setVoiceTranscript(preview);
+            }
+          },
+        }
       );
     };
 
@@ -541,6 +554,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
 
     setAnswers(newAnswers);
     setVoiceTranscript('');
+    setWaitingForSpeech(false);
     autoListenStepRef.current = -1;
     const nextIdx = stepIdx + 1;
     if (STEPS[nextIdx]?.type === 'outro' || nextIdx >= STEPS.length) {
@@ -557,6 +571,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     cancelTTS();
     setIsSpeaking(false);
     stopListening();
+    setWaitingForSpeech(false);
     autoListenStepRef.current = -1;
     submitAnswer(choice);
   };
@@ -566,6 +581,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     cancelTTS();
     setIsSpeaking(false);
     stopListening();
+    setWaitingForSpeech(false);
     autoListenStepRef.current = -1;
     submitAnswer('잘 모르겠어요');
   };
@@ -682,12 +698,14 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
           )}
 
           {/* 음성 인식 대기 중 */}
-          {isListening && !voiceTranscript && (
+          {(waitingForSpeech || isListening) && !isSpeaking && (
             <div className="kmmse-listening-indicator">
               <div className="kmmse-listening-waves">
                 <span /><span /><span /><span /><span />
               </div>
-              <p className="kmmse-listening-label">말씀해 주세요...</p>
+              <p className="kmmse-listening-label">
+                {voiceTranscript ? '계속 말씀해 주세요...' : '말씀해 주세요...'}
+              </p>
             </div>
           )}
 

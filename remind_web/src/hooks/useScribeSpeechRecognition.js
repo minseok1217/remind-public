@@ -24,6 +24,7 @@ export const useScribeSpeechRecognition = ({
   const finalizeTimerRef = useRef(null);
   const finalizeDelayRef = useRef(finalizeDelayMs);
   const completedRef = useRef(false);
+  const sessionIdRef = useRef(0);
   const webRecognitionRef = useRef(null);
   const transcriptBufferRef = useRef('');
   const scribeFailedRef = useRef(false);
@@ -103,7 +104,7 @@ export const useScribeSpeechRecognition = ({
     return data.token;
   };
 
-  const startListeningWebSpeech = (onResult, onNoResult, onTranscript, silenceMs = webSpeechSilenceMs) => {
+  const startListeningWebSpeech = (onResult, onNoResult, onTranscript, silenceMs = webSpeechSilenceMs, sessionId) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       onNoResult?.();
@@ -129,6 +130,7 @@ export const useScribeSpeechRecognition = ({
     };
 
     const finishWebSpeech = (text) => {
+      if (sessionIdRef.current !== sessionId) return;
       if (done) return;
       done = true;
       clearSilenceTimer();
@@ -149,6 +151,7 @@ export const useScribeSpeechRecognition = ({
     };
 
     rec.onresult = (event) => {
+      if (sessionIdRef.current !== sessionId) return;
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
@@ -164,11 +167,13 @@ export const useScribeSpeechRecognition = ({
     };
 
     rec.onerror = (event) => {
+      if (sessionIdRef.current !== sessionId) return;
       if (event.error === 'no-speech') finishCurrent();
       else finishWebSpeech('');
     };
 
     rec.onend = () => {
+      if (sessionIdRef.current !== sessionId) return;
       if (!done) finishCurrent();
     };
 
@@ -191,6 +196,8 @@ export const useScribeSpeechRecognition = ({
     }
     cleanupTimer();
     completedRef.current = false;
+    const sessionId = sessionIdRef.current + 1;
+    sessionIdRef.current = sessionId;
     finalizeDelayRef.current = currentFinalizeDelayMs;
     transcriptBufferRef.current = '';
     onResultRef.current = onResult;
@@ -198,7 +205,7 @@ export const useScribeSpeechRecognition = ({
     onTranscriptRef.current = options.onTranscript || null;
 
     if (!scribeSupported || scribeFailedRef.current) {
-      startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs);
+      startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs, sessionId);
       return;
     }
 
@@ -234,11 +241,12 @@ export const useScribeSpeechRecognition = ({
     } catch {
       cleanupTimer();
       setIsListening(false);
-      startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs);
+      startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs, sessionId);
     }
   };
 
   const stopListening = () => {
+    sessionIdRef.current += 1;
     completedRef.current = true;
     cleanupTimer();
     safeDisconnect();
