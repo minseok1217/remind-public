@@ -4,6 +4,7 @@ import { getAuth, signOut, createUserWithEmailAndPassword, updateProfile } from 
 import { auth, db, firebaseConfig } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { updatePatientConnectionStatus, verifyAndLinkGuardian } from '../services/familyLinkService';
+import { getPatientNotificationTokens, sendPushNotificationToTokens } from '../services/notificationService';
 import './ProfileScreen.css';
 import user_icon from '../assets/user_icon.png';
 import call_icon from '../assets/call_icon.png';
@@ -11,6 +12,9 @@ import time_icon from '../assets/time_icon.png';
 import email_icon from '../assets/email_icon.png';
 import plus_icon from '../assets/plus_icon.png';
 import trash_icon from '../assets/trash_icon.png';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import { ko } from 'date-fns/locale';
 
 function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [guardianData, setGuardianData] = useState({
@@ -49,7 +53,6 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [editPatients, setEditPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userType, setUserType] = useState('guardian'); // 'guardian' or 'patient'
-  const [expandedPatientId, setExpandedPatientId] = useState(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -254,10 +257,11 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
         // 환자의 최신 FCM 토큰 가져오기
         const patientSnap = await getDoc(patientDocRef);
         const fcmToken = patientSnap.data()?.fcmToken;
+        const tokens = await getPatientNotificationTokens(selectedPatientId, fcmToken);
 
-        if (fcmToken) {
+        if (tokens.length > 0) {
           // 푸시 전송 함수 호출 (아래에 정의)
-          await sendPushNotification(fcmToken, patientToSave.callTime);
+          await sendPushNotification(tokens, patientToSave.callTime);
         } else {
           console.warn("환자의 FCM 토큰이 없어 푸시를 보내지 못했습니다.");
         }
@@ -276,7 +280,17 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   };
 
   /** 푸시 전송 API 호출 함수 */
-  const sendPushNotification = async (token, formattedTime) => {
+  const sendPushNotification = async (tokens, formattedTime) => {
+    if (Array.isArray(tokens)) {
+      try {
+        const results = await sendPushNotificationToTokens(tokens, formattedTime);
+        console.log("?몄떆 ?쒕쾭 ?묐떟:", results);
+      } catch (error) {
+        console.error("?몄떆 ?뚮┝ ?꾩넚 以??ㅽ듃?뚰겕 ?먮윭:", error);
+      }
+      return;
+    }
+    const token = tokens;
   try {
     const response = await fetch(
       "https://us-central1-remind-aa99f.cloudfunctions.net/pushSend",
@@ -560,189 +574,237 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     }
   };
 
-  const handleLogout = () => {
-    if (onLogout) onLogout();
-  };
-
-  const getAvatarColor = (name) => {
-    const palette = ['#b7e4c7','#ffd6a5','#ffafcc','#bde0fe','#d4bbf5','#caffbf','#ffc8dd','#a0c4ff'];
-    let hash = 0;
-    for (let i = 0; i < (name||'').length; i++) hash = name.charCodeAt(i) + ((hash<<5)-hash);
-    return palette[Math.abs(hash) % palette.length];
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      if (onLogout) {
+        onLogout();
+      }
+    } catch (error) {
+      console.error('로그아웃 실패:', error);
+      alert('로그아웃 실패: ' + error.message);
+    }
   };
 
   const renderPatientCard = (patient) => {
     const isSelected = patient.id === selectedPatientId;
     const currentEditPatient = editPatients.find(p => p.id === patient.id) || patient;
-    const isConnectedPatient = patient.status === '연결됨';
-    const isExpanded = expandedPatientId === patient.id || (isEditingPatientInfo && isSelected);
-
-    const toggleExpand = (e) => {
-      e.stopPropagation();
-      setExpandedPatientId(prev => prev === patient.id ? null : patient.id);
-      handleSelectPatient(patient.id);
-    };
+    const isConnectedPatient = patient.status === '연결됨'; // 연결 상태 확인
 
     return (
-      <div key={patient.id} className="patient-row-card">
-        {/* 카드 헤더 — 항상 표시 */}
-        <div className="patient-row-header" onClick={toggleExpand}>
-          <div className="patient-row-avatar" style={{ backgroundColor: getAvatarColor(patient.name) }}>
-            {(patient.name || '?').slice(0, 2)}
+      <div 
+        key={patient.id} 
+        className={`profile-info-card patient-card ${isConnectedPatient ? 'selected' : ''}`}
+        onClick={() => handleSelectPatient(patient.id)}
+      >
+        {isConnectedPatient && (
+          <div className="connected-patients-header">연결됨</div>
+        )}
+        <div className="patient-card-content-wrapper">
+          <div className="icon-circle">
+            <img src={user_icon} className="icon-circle-small-img" alt="User Icon" />
           </div>
-          <div className="patient-row-info">
-            <span className="patient-row-name">{patient.name || '이름 미입력'}</span>
-            <span className={`patient-row-status ${isConnectedPatient ? 'connected' : 'disconnected'}`}>
-              <span className="patient-row-status-dot" />
-              {isConnectedPatient ? '연결됨' : '미연결'}
-            </span>
+          <div className="profile-info-content">
+            <div className="profile-info-row">
+              <div className="profile-info-label">이름</div>
+              {isEditingPatientInfo && isSelected ? (
+                <input
+                  type="text"
+                  value={currentEditPatient.name}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'name', e.target.value)}
+                  className="profile-info-input"
+                  onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+                />
+              ) : (
+                <div className="profile-info-value">{patient.name || '미입력'}</div>
+              )}
+            </div>
+            <div className="profile-info-row">
+              <div className="profile-info-label">생년월일</div>
+              {isEditingPatientInfo && isSelected ? (
+                <DatePicker
+                  selected={currentEditPatient.birthdate ? new Date(currentEditPatient.birthdate) : null}
+                  onChange={(date) => {
+                    const formatted = date ? date.toISOString().split('T')[0] : '';
+                    handlePatientInputChange(patient.id, 'birthdate', formatted);
+                  }}
+                  dateFormat="yyyy-MM-dd"
+                  showYearDropdown
+                  scrollableYearDropdown
+                  yearDropdownItemNumber={100}
+                  locale={ko}
+                  className="profile-info-input"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <div className="profile-info-value">{patient.birthdate || '미입력'}</div>
+              )}
+            </div>
+            <div className="profile-info-row">
+              <div className="profile-info-label">전화번호</div>
+              {isEditingPatientInfo && isSelected ? (
+                <input
+                  type="tel"
+                  value={currentEditPatient.phoneNumber}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'phoneNumber', e.target.value)}
+                  className="profile-info-input"
+                  placeholder="010-0000-0000"
+                  onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+                />
+              ) : (
+                <div className="profile-info-value">{patient.phoneNumber || '미입력'}</div>
+              )}
+            </div>
+            <div className="profile-info-row">
+              <div className="profile-info-label">통화 시간</div>
+              {isEditingPatientInfo && isSelected ? (
+                <input
+                  type="time"
+                  value={currentEditPatient.callTime ? currentEditPatient.callTime.substring(0, 2) + ':' + currentEditPatient.callTime.substring(2, 4) : '12:00'}
+                  onChange={(e) => handlePatientInputChange(patient.id, 'callTime', e.target.value.replace(':', ''))} // HHmm 형식으로 저장
+                  className="profile-info-input"
+                  onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+                />
+              ) : (
+                <div className="profile-info-value">
+                  {(currentEditPatient.callTime ? currentEditPatient.callTime.substring(0, 2) + ':' + currentEditPatient.callTime.substring(2, 4) : '미입력')}
+                </div>
+              )}
+            </div>
+            <div className="profile-info-row">
+              <div className="profile-info-label">성별</div>
+              {isEditingPatientInfo && isSelected ? (
+                <div className="popup-gender-buttons" onClick={(e) => e.stopPropagation()}> {/* 클릭 이벤트 전파 방지 */}
+                  <button
+                    type="button"
+                    className={`popup-gender-btn ${currentEditPatient.gender === '남성' ? 'active' : ''}`}
+                    onClick={() => handlePatientInputChange(patient.id, 'gender', '남성')}
+                  >
+                    남성
+                  </button>
+                  <button
+                    type="button"
+                    className={`popup-gender-btn ${currentEditPatient.gender === '여성' ? 'active' : ''}`}
+                    onClick={() => handlePatientInputChange(patient.id, 'gender', '여성')}
+                  >
+                    여성
+                  </button>
+                </div>
+              ) : (
+                <div className="profile-info-value">{patient.gender || '미입력'}</div>
+              )}
+            </div>
+
+            {/* 위치 정보 표시 */}
+            {isEditingPatientInfo && isSelected && (
+              <>
+                <div style={{ margin: '10px 0', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>위치 정보</div>
+                </div>
+                <div className="profile-info-row">
+                  <div className="profile-info-label">도시/지역</div>
+                  <input
+                    type="text"
+                    value={currentEditPatient.city}
+                    onChange={(e) => handlePatientInputChange(patient.id, 'city', e.target.value)}
+                    className="profile-info-input"
+                    placeholder="예: 서울"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="profile-info-row">
+                  <div className="profile-info-label">장소 유형</div>
+                  <select
+                    value={currentEditPatient.placeType}
+                    onChange={(e) => handlePatientInputChange(patient.id, 'placeType', e.target.value)}
+                    className="profile-info-input"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                  >
+                    <option value="집">집</option>
+                    <option value="요양원">요양원</option>
+                    <option value="병원">병원</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </div>
+                <div className="profile-info-row">
+                  <div className="profile-info-label">장소 이름</div>
+                  <input
+                    type="text"
+                    value={currentEditPatient.placeName}
+                    onChange={(e) => handlePatientInputChange(patient.id, 'placeName', e.target.value)}
+                    className="profile-info-input"
+                    placeholder="예: 우리집, 행복 요양원"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="profile-info-row">
+                  <div className="profile-info-label">층수</div>
+                  <input
+                    type="text"
+                    value={currentEditPatient.floor}
+                    onChange={(e) => handlePatientInputChange(patient.id, 'floor', e.target.value)}
+                    className="profile-info-input"
+                    placeholder="예: 1층"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </>
+            )}
+            {!isEditingPatientInfo && (currentEditPatient.city || currentEditPatient.placeName) && (
+              <>
+                <div style={{ margin: '10px 0', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>위치 정보</div>
+                </div>
+                {currentEditPatient.city && (
+                  <div className="profile-info-row">
+                    <div className="profile-info-label">도시/지역</div>
+                    <div className="profile-info-value">{currentEditPatient.city}</div>
+                  </div>
+                )}
+                {currentEditPatient.placeName && (
+                  <div className="profile-info-row">
+                    <div className="profile-info-label">장소</div>
+                    <div className="profile-info-value">{currentEditPatient.placeName} ({currentEditPatient.placeType})</div>
+                  </div>
+                )}
+                {currentEditPatient.floor && (
+                  <div className="profile-info-row">
+                    <div className="profile-info-label">층수</div>
+                    <div className="profile-info-value">{currentEditPatient.floor}</div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          <div className="patient-row-actions" onClick={e => e.stopPropagation()}>
+          <div className="patient-card-actions">
             {!isEditingPatientInfo && userType === 'guardian' && (
               <>
-                {!isConnectedPatient && (
-                  <button
-                    className="patient-connect-btn"
-                    onClick={() => handleConnectPatient(patient.id)}
-                    title="연결하기"
-                  >
-                    연결하기
-                  </button>
-                )}
-                <button
-                  className="patient-icon-btn edit"
-                  onClick={() => { handleEditPatientInfoClick(patient.id); setExpandedPatientId(patient.id); }}
-                  title="수정"
+                <button 
+                  className="patient-action-button edit-patient-btn"
+                  onClick={(e) => { e.stopPropagation(); handleEditPatientInfoClick(patient.id); }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
+                  수정
                 </button>
-                <button
-                  className="patient-icon-btn delete"
-                  onClick={() => handleDeletePatient(patient.id)}
+                <button 
+                  className="patient-action-button delete-patient-btn"
+                  onClick={(e) => { e.stopPropagation(); handleDeletePatient(patient.id); }}
                   disabled={isSaving}
-                  title="삭제"
                 >
-                  <img src={trash_icon} className="trash-icon" alt="삭제" />
+                  <img src={trash_icon} className="trash-icon" alt="Delete Icon" />
                 </button>
+                {!isConnectedPatient &&
+                  <button 
+                    className="patient-action-button connect-patient-btn"
+                    onClick={(e) => { e.stopPropagation(); handleConnectPatient(patient.id); }}
+                  >
+                    연결
+                  </button>
+                }
               </>
             )}
           </div>
         </div>
-
-        {/* 아코디언 본문 — 수정 모드 또는 펼쳤을 때 표시 */}
-        {isExpanded && (
-          <div className="patient-card-content-wrapper">
-            <div className="profile-info-content">
-              <div className="profile-info-row">
-                <div className="profile-info-label">이름</div>
-                {isEditingPatientInfo && isSelected ? (
-                  <input type="text" value={currentEditPatient.name} onChange={(e) => handlePatientInputChange(patient.id, 'name', e.target.value)} className="profile-info-input" onClick={(e) => e.stopPropagation()} />
-                ) : (
-                  <div className="profile-info-value">{patient.name || '미입력'}</div>
-                )}
-              </div>
-              <div className="profile-info-row">
-                <div className="profile-info-label">생년월일</div>
-                {isEditingPatientInfo && isSelected ? (
-                  <input type="date" value={currentEditPatient.birthdate} onChange={(e) => handlePatientInputChange(patient.id, 'birthdate', e.target.value)} className="profile-info-input" onClick={(e) => e.stopPropagation()} />
-                ) : (
-                  <div className="profile-info-value">{patient.birthdate || '미입력'}</div>
-                )}
-              </div>
-              <div className="profile-info-row">
-                <div className="profile-info-label">전화번호</div>
-                {isEditingPatientInfo && isSelected ? (
-                  <input type="tel" value={currentEditPatient.phoneNumber} onChange={(e) => handlePatientInputChange(patient.id, 'phoneNumber', e.target.value)} className="profile-info-input" placeholder="010-0000-0000" onClick={(e) => e.stopPropagation()} />
-                ) : (
-                  <div className="profile-info-value">{patient.phoneNumber || '미입력'}</div>
-                )}
-              </div>
-              <div className="profile-info-row">
-                <div className="profile-info-label">통화 시간</div>
-                {isEditingPatientInfo && isSelected ? (
-                  <input type="time" value={currentEditPatient.callTime ? currentEditPatient.callTime.substring(0, 2) + ':' + currentEditPatient.callTime.substring(2, 4) : '12:00'} onChange={(e) => handlePatientInputChange(patient.id, 'callTime', e.target.value.replace(':', ''))} className="profile-info-input" onClick={(e) => e.stopPropagation()} />
-                ) : (
-                  <div className="profile-info-value">{currentEditPatient.callTime ? currentEditPatient.callTime.substring(0, 2) + ':' + currentEditPatient.callTime.substring(2, 4) : '미입력'}</div>
-                )}
-              </div>
-              <div className="profile-info-row">
-                <div className="profile-info-label">성별</div>
-                {isEditingPatientInfo && isSelected ? (
-                  <div className="popup-gender-buttons" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className={`popup-gender-btn ${currentEditPatient.gender === '남성' ? 'active' : ''}`} onClick={() => handlePatientInputChange(patient.id, 'gender', '남성')}>남성</button>
-                    <button type="button" className={`popup-gender-btn ${currentEditPatient.gender === '여성' ? 'active' : ''}`} onClick={() => handlePatientInputChange(patient.id, 'gender', '여성')}>여성</button>
-                  </div>
-                ) : (
-                  <div className="profile-info-value">{patient.gender || '미입력'}</div>
-                )}
-              </div>
-
-              {/* 위치 정보 */}
-              {isEditingPatientInfo && isSelected && (
-                <>
-                  <div style={{ margin: '10px 0', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>위치 정보</div>
-                  </div>
-                  <div className="profile-info-row">
-                    <div className="profile-info-label">도시/지역</div>
-                    <input type="text" value={currentEditPatient.city} onChange={(e) => handlePatientInputChange(patient.id, 'city', e.target.value)} className="profile-info-input" placeholder="예: 서울" onClick={(e) => e.stopPropagation()} />
-                  </div>
-                  <div className="profile-info-row">
-                    <div className="profile-info-label">장소 유형</div>
-                    <select value={currentEditPatient.placeType} onChange={(e) => handlePatientInputChange(patient.id, 'placeType', e.target.value)} className="profile-info-input" onClick={(e) => e.stopPropagation()} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                      <option value="집">집</option>
-                      <option value="요양원">요양원</option>
-                      <option value="병원">병원</option>
-                      <option value="기타">기타</option>
-                    </select>
-                  </div>
-                  <div className="profile-info-row">
-                    <div className="profile-info-label">장소 이름</div>
-                    <input type="text" value={currentEditPatient.placeName} onChange={(e) => handlePatientInputChange(patient.id, 'placeName', e.target.value)} className="profile-info-input" placeholder="예: 우리집, 행복 요양원" onClick={(e) => e.stopPropagation()} />
-                  </div>
-                  <div className="profile-info-row">
-                    <div className="profile-info-label">층수</div>
-                    <input type="text" value={currentEditPatient.floor} onChange={(e) => handlePatientInputChange(patient.id, 'floor', e.target.value)} className="profile-info-input" placeholder="예: 1층" onClick={(e) => e.stopPropagation()} />
-                  </div>
-                </>
-              )}
-              {!isEditingPatientInfo && (currentEditPatient.city || currentEditPatient.placeName) && (
-                <>
-                  <div style={{ margin: '10px 0', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>위치 정보</div>
-                  </div>
-                  {currentEditPatient.city && <div className="profile-info-row"><div className="profile-info-label">도시/지역</div><div className="profile-info-value">{currentEditPatient.city}</div></div>}
-                  {currentEditPatient.placeName && <div className="profile-info-row"><div className="profile-info-label">장소</div><div className="profile-info-value">{currentEditPatient.placeName} ({currentEditPatient.placeType})</div></div>}
-                  {currentEditPatient.floor && <div className="profile-info-row"><div className="profile-info-label">층수</div><div className="profile-info-value">{currentEditPatient.floor}</div></div>}
-                </>
-              )}
-
-            </div>
-
-            {/* 수정 모드 저장/취소 버튼 */}
-            {isEditingPatientInfo && isSelected && (
-              <div className="patient-edit-actions">
-                <button
-                  className="patient-edit-save-btn"
-                  onClick={handleSavePatientInfo}
-                  disabled={isSaving}
-                >
-                  {isSaving ? '저장 중...' : '수정 완료'}
-                </button>
-                <button
-                  className="patient-edit-cancel-btn"
-                  onClick={handleCancelPatientInfoEdit}
-                  disabled={isSaving}
-                >
-                  취소
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     );
   };
@@ -980,13 +1042,19 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               </div>
               <div className="popup-form-field">
                 <label htmlFor="addPatientBirthdate">생년월일</label>
-                <input
-                  type="date"
-                  id="addPatientBirthdate"
-                  value={newPatientBirthdate}
-                  onChange={(e) => setNewPatientBirthdate(e.target.value)}
-                  placeholder="YYYY-MM-DD"
-                  required
+                <DatePicker
+                  selected={newPatientBirthdate ? new Date(newPatientBirthdate) : null}
+                  onChange={(date) => {
+                    const formatted = date ? date.toISOString().split('T')[0] : '';
+                    setNewPatientBirthdate(formatted);
+                  }}
+                  dateFormat="yyyy-MM-dd"
+                  showYearDropdown
+                  scrollableYearDropdown
+                  yearDropdownItemNumber={100}
+                  locale={ko}
+                  placeholderText="YYYY-MM-DD"
+                  className="profile-info-input"
                 />
               </div>
               <div className="popup-form-field">

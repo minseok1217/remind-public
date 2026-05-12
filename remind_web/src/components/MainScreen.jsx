@@ -64,6 +64,11 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
       return acc;
     }, {});
     const photoContext = callLog?.photoContext || {};
+    const shouldShowGuardianCaption = !(
+      photoContext.source === 'orientation_images' ||
+      photoContext.ownerId === 'orientation_images' ||
+      String(photoContext.id || '').startsWith('orientation_')
+    );
     const hasPhotoEvaluationContext = Boolean(
       photoContext.url ||
       photoContext.photoURL ||
@@ -104,7 +109,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         score: analysis?.report?.captionMatchRate ?? null,
         passed: null
       })
-    ];
+    ].filter((item) => shouldShowGuardianCaption || item.id !== 'guardianCaption');
   };
 
   const getReportMessage = (analysis) => {

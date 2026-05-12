@@ -3,6 +3,7 @@ import { signOut } from 'firebase/auth'; // getAuth, signOut 추가
 import { auth, db } from '../firebase';
 import { doc, getDoc, collection, query, where, setDoc, onSnapshot } from 'firebase/firestore';
 import { generateAndStoreTempCode } from '../services/familyLinkService';
+import { listenForForegroundPushMessages, registerWebPushToken, saveNotificationToken } from '../services/notificationService';
 import './MainScreen_p.css'; // MainScreen.css 대신 MainScreen_p.css 임포트
 import bell_icon from '../assets/bell_icon.png'; // 종 아이콘 추가
 import clock_icon from '../assets/clock_icon.png'; // 시계 아이콘 추가
@@ -18,6 +19,7 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
   const [countdown, setCountdown] = useState(0); // 초 단위
   const [isCodeGenerating, setIsCodeGenerating] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState(null);
+  const [webPushStatus, setWebPushStatus] = useState('');
   const isInitialMount = useRef(true);
   const prevConnectedGuardianIdsRef = useRef([]); // 이전 연결된 보호자 ID 목록을 추적하기 위한 ref 추가
   const [debugToken, setDebugToken] = useState("토큰 대기 중...");
@@ -27,6 +29,28 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
       loadUserInfo();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    let mounted = true;
+
+    listenForForegroundPushMessages()
+      .then((cleanup) => {
+        if (mounted) {
+          unsubscribe = cleanup;
+        } else {
+          cleanup();
+        }
+      })
+      .catch((error) => {
+        console.warn('[MainScreen_p] foreground 웹 알림 연결 실패:', error);
+      });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     window.onReceiveFcmToken = async (token) => {      
@@ -113,6 +137,7 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
         fcmToken: token,
         token_last_updated: new Date().toISOString()
       }, { merge: true });
+      await saveNotificationToken(uid, token, 'android');
 
       console.log("Firestore 저장 최종 성공!");
     } catch (error) {
@@ -204,6 +229,18 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
       const patientDocRef = doc(db, 'patients', currentUser.uid);
       const newNotificationStatus = !patientInfo.is_notified;
       await setDoc(patientDocRef, { is_notified: newNotificationStatus }, { merge: true });
+      if (newNotificationStatus) {
+        try {
+          setWebPushStatus('웹 알림 등록 중...');
+          await registerWebPushToken(currentUser.uid);
+          setWebPushStatus('이 브라우저에서도 알림을 받을 수 있어요.');
+        } catch (webPushError) {
+          console.warn('[MainScreen_p] 웹 알림 등록 실패:', webPushError);
+          setWebPushStatus(webPushError.message || '웹 알림 등록에 실패했습니다.');
+        }
+      } else {
+        setWebPushStatus('');
+      }
       setPatientInfo(prev => ({ ...prev, is_notified: newNotificationStatus }));
       console.log('알림 설정 업데이트 성공:', newNotificationStatus);
     } catch (error) {
@@ -296,6 +333,10 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
               </label>
             </div>
           </div>
+          <div className="divider-p"></div>
+          {webPushStatus && (
+            <div className="web-push-status-p">{webPushStatus}</div>
+          )}
           <div className="divider-p"></div>
           <div className="card-item-p">
             <div className="item-left-p">

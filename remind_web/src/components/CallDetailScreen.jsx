@@ -102,6 +102,11 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       return acc;
     }, {});
     const captionCategories = analysis.report?.captionMatches || [];
+    const shouldShowGuardianCaption = !(
+      photoContext.source === 'orientation_images' ||
+      photoContext.ownerId === 'orientation_images' ||
+      String(photoContext.id || '').startsWith('orientation_')
+    );
     const hasPhotoEvaluationContext = Boolean(photoUrl || photoContext.description || photoContext.detailedDescription || photoContext.finalCaption);
 
     return [
@@ -143,7 +148,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
           : '사진 또는 보호자 입력 캡션 없이 진행된 통화입니다.',
         categories: captionCategories
       })
-    ];
+    ].filter((item) => shouldShowGuardianCaption || item.id !== 'guardianCaption');
   };
 
   const evaluationItems = getEvaluationItems();

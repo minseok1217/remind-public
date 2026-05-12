@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { chatWithGemini, evaluateConversationReport } from '../services/geminiService';
 import { analyzeConversation } from '../services/conversationAnalysisService';
 import { getConnectedPatientId } from '../services/familyLinkService';
@@ -10,6 +10,152 @@ import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition'
 
 const SILENCE_TIMEOUT_MS = 1700;
 const AUTO_LISTEN_DELAY_MS = 700;
+const PRE_CALL_CHECK_QUESTIONS = [
+  '안녕하세요. 저는 Remind 서비스 상담사입니다. 대화를 시작하기 전에 몸 상태를 잠깐 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
+  '오늘 식사는 잘 챙겨 드셨어요?',
+  '오늘 드셔야 하는 약은 챙겨 드셨나요?',
+  '어젯밤에는 잠을 편하게 주무셨나요?',
+];
+
+const getPreCallReaction = (questionIndex, answerText) => {
+  const answer = (answerText || '').replace(/\s+/g, ' ').trim();
+  const hasNegativeSignal = /아파|아프|불편|힘들|피곤|못|안\s*좋|나빠|어지|속상|걱정|별로|굶|거르|안\s*먹|못\s*먹|안\s*잤|못\s*잤|잠.*안|깼/.test(answer);
+  const hasPositiveSignal = /좋|괜찮|편하|먹었|챙|잤|잘|응|네|예/.test(answer);
+
+  if (questionIndex === 0) {
+    if (hasNegativeSignal) return '말씀해 주셔서 고마워요. 불편한 곳이 있으셨군요.';
+    if (hasPositiveSignal) return '괜찮으시다니 다행이에요.';
+    return '그렇군요, 오늘 몸 상태를 알려주셔서 고마워요.';
+  }
+
+  if (questionIndex === 1) {
+    if (hasNegativeSignal) return '식사를 챙기기 어려우셨군요. 무리하지 않으셔도 괜찮아요.';
+    if (hasPositiveSignal) return '식사 챙기셨다니 다행이에요.';
+    return '알려주셔서 고마워요.';
+  }
+
+  if (questionIndex === 2) {
+    if (hasNegativeSignal) return '약은 가끔 헷갈릴 수 있어요. 보호자분께도 확인해 보면 좋겠어요.';
+    if (hasPositiveSignal) return '약도 챙기셨군요, 잘하셨어요.';
+    return '네, 약에 대해서도 말씀해 주셔서 고마워요.';
+  }
+
+  if (hasNegativeSignal) return '잠을 편히 못 주무셨군요. 오늘은 조금 더 편안하게 쉬셨으면 좋겠어요.';
+  if (hasPositiveSignal) return '잘 주무셨다니 참 다행이에요.';
+  return '수면 상태도 알려주셔서 고마워요.';
+};
+
+const joinReactionAndQuestion = (reaction, question) => {
+  if (!question) return reaction;
+  return `${reaction} ${question}`;
+};
+
+const sanitizeForFirestore = (value) => {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  if (Array.isArray(value)) return value.map(sanitizeForFirestore);
+  if (value && typeof value === 'object' && typeof value.isEqual === 'function') return value;
+  if (value && typeof value === 'object' && typeof value.toDate !== 'function') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, sanitizeForFirestore(nestedValue)])
+    );
+  }
+  return value;
+};
+
+const getDateMillis = (value) => {
+  const date = value?.toDate?.() || value;
+  const time = date ? new Date(date).getTime() : 0;
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const describeNumericChange = (label, currentValue, previousValue, unit = '점') => {
+  if (typeof currentValue !== 'number' || typeof previousValue !== 'number') return null;
+  const diff = Math.round((currentValue - previousValue) * 10) / 10;
+  if (Math.abs(diff) < 0.5) {
+    return `${label}은 이전 통화와 거의 비슷했습니다.`;
+  }
+  const direction = diff > 0 ? '올랐습니다' : '낮아졌습니다';
+  return `${label}은 이전보다 ${Math.abs(diff)}${unit} ${direction}.`;
+};
+
+const buildChangeSummary = (currentCallLog, previousCallLog) => {
+  if (!previousCallLog) {
+    return {
+      hasPreviousCallLog: false,
+      summaryText: '비교할 이전 통화 기록이 아직 없습니다.',
+      highlights: ['첫 통화 기록으로 저장되었습니다.'],
+      metricChanges: {},
+    };
+  }
+
+  const metricChanges = {
+    cognitiveScore: {
+      previous: previousCallLog.cognitiveScore ?? previousCallLog.analysis?.scores?.cognitive ?? null,
+      current: currentCallLog.cognitiveScore ?? currentCallLog.analysis?.scores?.cognitive ?? null,
+    },
+    totalUtterances: {
+      previous: previousCallLog.totalUtterances ?? null,
+      current: currentCallLog.totalUtterances ?? null,
+    },
+    totalWords: {
+      previous: previousCallLog.totalWords ?? null,
+      current: currentCallLog.totalWords ?? null,
+    },
+    topicDeviationRate: {
+      previous: previousCallLog.analysis?.metrics?.topicDeviationRate ?? previousCallLog.metrics?.topicDeviationRate ?? null,
+      current: currentCallLog.analysis?.metrics?.topicDeviationRate ?? currentCallLog.metrics?.topicDeviationRate ?? null,
+    },
+    wordsPerMinute: {
+      previous: previousCallLog.analysis?.metrics?.wordsPerMinute ?? previousCallLog.metrics?.wordsPerMinute ?? null,
+      current: currentCallLog.analysis?.metrics?.wordsPerMinute ?? currentCallLog.metrics?.wordsPerMinute ?? null,
+    },
+    emotionPositiveRatio: {
+      previous: previousCallLog.analysis?.metrics?.emotionPositiveRatio ?? previousCallLog.metrics?.emotionPositiveRatio ?? null,
+      current: currentCallLog.analysis?.metrics?.emotionPositiveRatio ?? currentCallLog.metrics?.emotionPositiveRatio ?? null,
+    },
+  };
+
+  Object.keys(metricChanges).forEach((key) => {
+    const item = metricChanges[key];
+    item.diff = typeof item.current === 'number' && typeof item.previous === 'number'
+      ? Math.round((item.current - item.previous) * 10) / 10
+      : null;
+  });
+
+  const highlights = [
+    describeNumericChange('인지 점수', metricChanges.cognitiveScore.current, metricChanges.cognitiveScore.previous),
+    describeNumericChange('발화 횟수', metricChanges.totalUtterances.current, metricChanges.totalUtterances.previous, '회'),
+    describeNumericChange('발화 단어 수', metricChanges.totalWords.current, metricChanges.totalWords.previous, '개'),
+    describeNumericChange('분당 단어 수', metricChanges.wordsPerMinute.current, metricChanges.wordsPerMinute.previous, '개'),
+    describeNumericChange('주제 이탈률', metricChanges.topicDeviationRate.current, metricChanges.topicDeviationRate.previous, '%'),
+    describeNumericChange('긍정 감정 비율', metricChanges.emotionPositiveRatio.current, metricChanges.emotionPositiveRatio.previous, '%'),
+  ].filter(Boolean);
+
+  const scoreDiff = metricChanges.cognitiveScore.diff || 0;
+  const topicDiff = metricChanges.topicDeviationRate.diff || 0;
+  const wordDiff = metricChanges.totalWords.diff || 0;
+
+  let summaryText = '이전 통화와 전반적으로 비슷한 흐름을 보였습니다.';
+  if (scoreDiff >= 5 && topicDiff <= 5) {
+    summaryText = '이전 통화보다 인지 점수와 대화 흐름이 좋아진 편입니다.';
+  } else if (scoreDiff <= -5 || topicDiff >= 10) {
+    summaryText = '이전 통화보다 집중도나 대화 흐름을 조금 더 살펴볼 필요가 있습니다.';
+  } else if (wordDiff >= 10) {
+    summaryText = '이전 통화보다 표현량이 늘어 대화 참여가 좋아진 편입니다.';
+  } else if (wordDiff <= -10) {
+    summaryText = '이전 통화보다 말수가 줄어 컨디션이나 피로도를 함께 확인해 보면 좋겠습니다.';
+  }
+
+  return {
+    hasPreviousCallLog: true,
+    previousCallLogId: previousCallLog.id || null,
+    previousCallDate: previousCallLog.callDate || previousCallLog.createdAt || null,
+    summaryText,
+    highlights,
+    metricChanges,
+  };
+};
 
 function VoiceChatScreen({ onBack }) {
   const [, setStatus] = useState('사진을 불러오는 중...');
@@ -48,6 +194,16 @@ function VoiceChatScreen({ onBack }) {
   const uiStateRef = useRef('loading');
   const autoListenEnabledRef = useRef(true);
   const timerIntervalRef = useRef(null);
+  const conversationDifficultyRef = useRef('중');
+  const callLogSavedRef = useRef(false);
+  const preCallCheckRef = useRef({
+    active: false,
+    index: 0,
+    answers: [],
+    photoData: null,
+    context: null,
+    fallbackGreeting: '',
+  });
 
   const canvasRef = useRef(null);
   const analyserRef = useRef(null);
@@ -410,6 +566,22 @@ function VoiceChatScreen({ onBack }) {
     photoData?.image ||
     '';
 
+  const getPhotoName = (photoData) =>
+    photoData?.imageName ||
+    photoData?.name ||
+    photoData?.location ||
+    photoData?.situation ||
+    photoData?.finalCaption ||
+    photoData?.description ||
+    photoData?.fileName ||
+    '사진';
+
+  const getPhotoTypeLabel = (photoData) => {
+    const type = photoData?.photoType || photoData?.type || '';
+    const typeMap = { place: '장소', job: '직업', object: '사물' };
+    return typeMap[type] || type || '개인적';
+  };
+
   const extractPhotoContext = (photoData) => {
     const keywordsObj = photoData?.keywords && typeof photoData.keywords === 'object' && !Array.isArray(photoData.keywords) ? photoData.keywords : {};
     const keywordList = Array.isArray(photoData?.keywords) ? photoData.keywords : keywordsObj.keywords || [];
@@ -424,7 +596,11 @@ function VoiceChatScreen({ onBack }) {
       conversationStarters: photoData?.conversationStarters || keywordsObj.conversationStarters || [],
       year: photoData?.year || '',
       finalCaption: photoData?.finalCaption || '',
-      answerKeywords: photoData?.answerKeywords || []
+      answerKeywords: photoData?.answerKeywords || [],
+      imageName: getPhotoName(photoData),
+      photoType: getPhotoTypeLabel(photoData),
+      type: photoData?.type || '',
+      name: photoData?.name || '',
     };
   };
 
@@ -482,6 +658,21 @@ function VoiceChatScreen({ onBack }) {
     return userId;
   };
 
+  const loadConversationDifficulty = async (ownerId) => {
+    try {
+      const snap = await getDoc(doc(db, 'patients', ownerId));
+      const difficulty = snap.exists() ? snap.data()?.difficulty : null;
+      conversationDifficultyRef.current = difficulty || '중';
+      console.log('[VoiceChat] 대화 난이도 설정:', {
+        ownerId,
+        difficulty: conversationDifficultyRef.current,
+      });
+    } catch (error) {
+      console.warn('[VoiceChat] 난이도 로드 실패, 기본값 중 사용:', error);
+      conversationDifficultyRef.current = '중';
+    }
+  };
+
   const stopSpeaking = () => {
     cancelTTS();
     ttsQueueRef.current = [];
@@ -507,6 +698,71 @@ function VoiceChatScreen({ onBack }) {
     if (!isSpeakingRef.current) processTTSQueue();
   };
 
+  const speakAssistantText = (text, statusText = '천천히 말씀해 주세요.') => {
+    const displayText = cleanStageDirections(text).trim();
+    if (!displayText) return;
+    chatHistoryRef.current.push({ role: 'model', parts: [{ text: displayText }] });
+    setCaption(`AI: ${displayText}`);
+    addToTTSQueue(displayText);
+    setUiState('ready');
+    setStatus(statusText);
+  };
+
+  const askPreCallQuestion = () => {
+    const index = preCallCheckRef.current.index;
+    const question = PRE_CALL_CHECK_QUESTIONS[index];
+    if (!question) return false;
+    speakAssistantText(question, '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.');
+    return true;
+  };
+
+  const startPreCallCheck = ({ photoData = null, context = null, fallbackGreeting = '' } = {}) => {
+    preCallCheckRef.current = {
+      active: true,
+      index: 0,
+      answers: [],
+      photoData,
+      context,
+      fallbackGreeting,
+    };
+    askPreCallQuestion();
+  };
+
+  const finishPreCallCheck = async () => {
+    const { photoData, context, fallbackGreeting } = preCallCheckRef.current;
+    preCallCheckRef.current.active = false;
+
+    if (photoData && context) {
+      await startPhotoConversation(photoData, context);
+      return;
+    }
+
+    startConversationWithoutPhoto(fallbackGreeting || '안녕하세요. 오늘 기분은 어떠세요?', true);
+  };
+
+  const handlePreCallAnswer = async (text) => {
+    const currentIndex = preCallCheckRef.current.index;
+    preCallCheckRef.current.answers[currentIndex] = text;
+    chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
+
+    const reaction = getPreCallReaction(currentIndex, text);
+    preCallCheckRef.current.index += 1;
+    if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
+      const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
+      speakAssistantText(
+        joinReactionAndQuestion(reaction, nextQuestion),
+        '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.'
+      );
+      return;
+    }
+
+    speakAssistantText(
+      `${reaction} 이제 사진을 보면서 이야기를 나눠볼게요.`,
+      '사진 대화를 시작할게요.'
+    );
+    await finishPreCallCheck();
+  };
+
   const markPhotoAsCompleted = async () => {
     const photoId = currentPhotoIdRef.current;
     const ownerId = currentPhotoOwnerIdRef.current;
@@ -520,8 +776,26 @@ function VoiceChatScreen({ onBack }) {
     }
   };
 
+  const loadLatestPreviousCallLog = async (userId) => {
+    try {
+      const callLogQuery = query(collection(db, 'call_logs'), where('userId', '==', userId));
+      const snapshot = await getDocs(callLogQuery);
+      const callLogs = snapshot.docs
+        .map((callLogDoc) => ({ id: callLogDoc.id, ...callLogDoc.data() }))
+        .sort((a, b) => getDateMillis(b.callDate || b.createdAt) - getDateMillis(a.callDate || a.createdAt));
+
+      return callLogs[0] || null;
+    } catch (error) {
+      console.warn('[VoiceChat] 이전 call_logs 조회 실패:', error);
+      return null;
+    }
+  };
+
   const saveCallLog = async () => {
     try {
+      if (callLogSavedRef.current) return;
+      callLogSavedRef.current = true;
+
       const user = auth.currentUser;
       if (!user) return;
       const callDuration = Math.round((Date.now() - callStartTimeRef.current) / 1000);
@@ -539,18 +813,40 @@ function VoiceChatScreen({ onBack }) {
         const role = msg.role === 'user' ? '환자' : 'AI';
         return `${role}: ${msg.parts[0]?.text || ''}`;
       }).join('\n');
-      const callLogData = {
+      const previousCallLog = await loadLatestPreviousCallLog(user.uid);
+      const callLogData = sanitizeForFirestore({
         userId: user.uid,
         photoOwnerId: currentPhotoOwnerIdRef.current || user.uid,
         callDate: serverTimestamp(), callDuration, photoId: currentPhotoIdRef.current || null,
         hasPhoto, conversation: conversationText, totalUtterances: analysis.totalUtterances,
         totalWords: analysis.totalWords,
         photoContext: usedPhotoContext,
-        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: analysis.insights, report: analysis.report },
+        preCallCheck: {
+          questions: PRE_CALL_CHECK_QUESTIONS,
+          answers: preCallCheckRef.current.answers || [],
+        },
+        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: analysis.insights, report: analysis.report || llmReport || null },
+        changesFromPrevious: buildChangeSummary({
+          totalUtterances: analysis.totalUtterances,
+          totalWords: analysis.totalWords,
+          cognitiveScore: analysis.scores.cognitive,
+          analysis: {
+            metrics: analysis.metrics,
+            scores: analysis.scores,
+          },
+        }, previousCallLog),
+        summary: {
+          status: analysis.status,
+          cognitiveScore: analysis.scores.cognitive,
+          totalUtterances: analysis.totalUtterances,
+          totalWords: analysis.totalWords,
+          insights: analysis.insights,
+        },
         status: analysis.status.label, cognitiveScore: analysis.scores.cognitive, createdAt: serverTimestamp()
-      };
+      });
       await addDoc(collection(db, 'call_logs'), callLogData);
     } catch (error) {
+      callLogSavedRef.current = false;
       console.error('❌ 통화 기록 저장 오류:', error);
     }
   };
@@ -575,8 +871,12 @@ function VoiceChatScreen({ onBack }) {
     }
     setCaption(`당신: ${text}`);
     setUiState('processing');
-    setStatus('대답을 생각하는 중...');
-    await sendTextToGemini(text);
+      setStatus(preCallCheckRef.current.active ? '확인하고 있어요...' : '대답을 생각하는 중...');
+      if (preCallCheckRef.current.active) {
+        await handlePreCallAnswer(text);
+      } else {
+        await sendTextToGemini(text);
+      }
   };
 
   const startRecording = () => {
@@ -627,29 +927,48 @@ function VoiceChatScreen({ onBack }) {
   const startPhotoConversation = async (photoData, context) => {
     if (firstQuestionAskedRef.current) return;
     firstQuestionAskedRef.current = true;
-    const description = context.detailedDescription || context.description || photoData.description || '';
-    const people = context.people || [];
-    const location = context.location || '';
-    const emotion = context.emotion || '';
-    const conversationStarters = context.conversationStarters || [];
+
+    const enrichedContext = {
+      ...context,
+      imageName: context.imageName || getPhotoName(photoData),
+      photoType: context.photoType || getPhotoTypeLabel(photoData),
+    };
+
     let firstQuestion = '';
-    if (conversationStarters.length > 0) firstQuestion = conversationStarters[0];
-    else if (description) firstQuestion = `이 사진 보니까 ${description} 같네요. 이때 기억나세요?`;
-    else if (people.length > 0) firstQuestion = `사진에 ${people.join(', ')}님이 보이네요. 함께한 추억 이야기해 주세요.`;
-    else if (location) firstQuestion = `이곳이 ${location}인 것 같아요. 여기 언제 가셨어요?`;
-    else if (emotion) firstQuestion = `사진 분위기가 ${emotion}하네요. 어떤 날이었나요?`;
-    else if (photoData.description) firstQuestion = `이 사진은 "${photoData.description}"라고 하네요. 이때 기억나시나요?`;
-    else firstQuestion = '사진이 참 좋아 보여요. 어떤 추억이 담겨 있나요?';
-    chatHistoryRef.current.push({ role: 'model', parts: [{ text: firstQuestion }] });
-    setCaption(`AI: ${firstQuestion}`);
-    addToTTSQueue(firstQuestion);
+    try {
+      firstQuestion = await chatWithGemini(
+        '사전 건강 확인과 자기소개는 이미 했습니다. 자기소개를 반복하지 말고 사진을 보며 이어질 첫 질문을 해주세요.',
+        [],
+        enrichedContext,
+        conversationDifficultyRef.current,
+        0
+      );
+    } catch (error) {
+      console.warn('[VoiceChat] 첫 질문 생성 실패, 기본 질문 사용:', error);
+    }
+
+    if (!firstQuestion) {
+      const description = enrichedContext.detailedDescription || enrichedContext.description || photoData.description || '';
+      firstQuestion = description
+        ? `이제 ${description} 사진을 같이 볼게요. 이 사진을 보니 어떤 느낌이 드세요?`
+        : '이제 이 사진을 같이 볼게요. 이 사진을 보니 어떤 느낌이 드세요?';
+    }
+
+    const displayText = cleanStageDirections(firstQuestion.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
+    chatHistoryRef.current.push({ role: 'model', parts: [{ text: displayText }] });
+    setCaption(`AI: ${displayText}`);
+    addToTTSQueue(displayText);
     setUiState('ready');
     setStatus('AI가 질문했어요. 천천히 말씀해 주세요.');
   };
 
-  const startConversationWithoutPhoto = (greeting = '안녕하세요. 오늘 기분은 어떠세요?') => {
+  const startConversationWithoutPhoto = (greeting = '안녕하세요. 오늘 기분은 어떠세요?', skipPreCallCheck = false) => {
     setHasPhoto(false);
     setShowPhoto(false);
+    if (!skipPreCallCheck) {
+      startPreCallCheck({ fallbackGreeting: greeting });
+      return;
+    }
     setUiState('ready');
     setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
     setCaption(`AI: ${greeting}`);
@@ -679,7 +998,7 @@ function VoiceChatScreen({ onBack }) {
     setShowPhoto(true);
     setUiState('ready');
     setStatus('훈련용 사진으로 대화를 시작할게요. 천천히 말씀해 주세요.');
-    await startPhotoConversation(photo, context);
+    startPreCallCheck({ photoData: photo, context });
     return true;
   };
 
@@ -695,6 +1014,7 @@ function VoiceChatScreen({ onBack }) {
         return;
       }
       const ownerId = await resolvePhotoOwnerId(user.uid);
+      await loadConversationDifficulty(ownerId);
       console.log('[VoiceChat] 사진 ownerId 결정:', {
         loginUid: user.uid,
         ownerId,
@@ -750,7 +1070,7 @@ function VoiceChatScreen({ onBack }) {
       setUiState('ready');
       setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
       if (photoUrl) {
-        await startPhotoConversation(photoData, context);
+        startPreCallCheck({ photoData, context });
       } else {
         console.warn('[VoiceChat] 선택된 사용자 사진에 URL이 없어 fallback을 시도합니다:', photoData.id);
         const usedFallback = await startWithFallbackPhoto();
@@ -766,14 +1086,24 @@ function VoiceChatScreen({ onBack }) {
   const sendTextToGemini = async (text) => {
     processingRef.current = true;
     try {
-      const fullText = await chatWithGemini(text, chatHistoryRef.current, hasPhoto ? photoKeywords : null);
+      const elapsedMinutes = Math.floor(callSeconds / 60);
+      const fullText = await chatWithGemini(
+        text,
+        chatHistoryRef.current,
+        hasPhoto ? photoKeywords : null,
+        conversationDifficultyRef.current,
+        elapsedMinutes
+      );
       chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
       chatHistoryRef.current.push({ role: 'model', parts: [{ text: fullText }] });
-      const hasEndTag = fullText.includes('[END_CALL]');
-      const displayText = cleanStageDirections(fullText.replace('[END_CALL]', '')).trim();
+      const hasEndTag = fullText.includes('[END_CALL]') || fullText.includes('[통화끝]');
+      const displayText = cleanStageDirections(fullText.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
       if (displayText) { setCaption(`AI: ${displayText}`); addToTTSQueue(displayText); }
       if (hasEndTag) {
-        if (containsEndIntent(text) || endSignalCountRef.current >= 1) {
+        const userWantsToEnd = containsEndIntent(text);
+        const canEndByTime = elapsedMinutes >= 15;
+
+        if (userWantsToEnd || canEndByTime) {
           isEndingCallRef.current = true;
           setAutoListenEnabled(false);
           setStatus('대화를 마무리할게요.');
@@ -781,9 +1111,10 @@ function VoiceChatScreen({ onBack }) {
           if (hasPhoto) await markPhotoAsCompleted();
           setTimeout(() => { alert('대화를 종료합니다. 건강하세요!'); onBack(); }, 2500);
         } else {
-          endSignalCountRef.current += 1;
+          endSignalCountRef.current = 0;
           setUiState('ready');
-          setStatus('계속 이야기해도 좋아요. 천천히 말씀해 주세요.');
+          setStatus('아직 통화를 이어갈게요. 천천히 말씀해 주세요.');
+          scheduleAutoListen(700);
         }
       } else {
         endSignalCountRef.current = 0;

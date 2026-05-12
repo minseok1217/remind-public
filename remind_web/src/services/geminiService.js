@@ -4,6 +4,17 @@ const BACKEND_PROXY = import.meta.env.VITE_GEMINI_PROXY || '/api/gemini/analyze'
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
+const readProxyJson = async (resp) => {
+  const contentType = resp.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('Gemini proxy returned non-JSON response');
+  }
+  return resp.json();
+};
+
+const i = 5;
+const t = 4;
+
 const buildPromptText = (userDescription) => `당신은 치매 어르신과의 회상 치료 대화를 돕는 AI 분석가입니다. 사진과 보호자 설명을 분석하여 어르신과 자연스러운 대화를 나눌 수 있는 정보를 추출해주세요.
 
 보호자 설명: ${userDescription || '(설명 없음)'}
@@ -160,7 +171,7 @@ const callGeminiWithCustomPrompt = async (imageBase64, customPrompt) => {
       const json = await resp.json();
       return json.text || json.result || '';
     }
-  } catch (e) {
+  } catch {
     // 무시하고 클라이언트 직접 호출로 폴백
   }
 
@@ -244,7 +255,7 @@ const callGeminiTextOnly = async (prompt) => {
       const json = await resp.json();
       return json.text || json.result || '';
     }
-  } catch (e) {
+  } catch {
     // 프록시 실패 시 직접 호출로 폴백
   }
 
@@ -316,6 +327,13 @@ ${parts.length ? parts.join('\n') : '(입력 없음)'}
 };
 
 export const evaluateConversationReport = async (chatHistory, photoContext = null) => {
+  const shouldEvaluateGuardianCaption = Boolean(
+    photoContext &&
+    photoContext.source !== 'orientation_images' &&
+    photoContext.ownerId !== 'orientation_images' &&
+    !String(photoContext.id || '').startsWith('orientation_')
+  );
+
   const conversation = (chatHistory || [])
     .map((msg) => `${msg.role === 'user' ? '환자' : 'AI'}: ${msg.parts?.[0]?.text || ''}`)
     .join('\n');
@@ -342,6 +360,10 @@ export const evaluateConversationReport = async (chatHistory, photoContext = nul
 - 보호자 입력 캡션은 연도/시기, 인물, 장소, 활동, 사물 5개 범주 각각이 환자 답변에서 맞게 언급되었는지 판단하세요.
 - 모르면 낮게 추정하지 말고 "판단 근거 부족"이라고 적으세요.
 - score는 0~100 정수입니다. topicDeviationRate는 낮을수록 좋은 이탈률(0~100)입니다.
+
+[보호자 캡션 평가 조건]
+- 보호자가 직접 등록하고 캡션을 입력한 사진이 아닐 경우 guardianCaption 평가는 진행하지 말고 guardianCaption은 null로 반환하세요.
+- 현재 guardianCaption 평가 여부: ${shouldEvaluateGuardianCaption ? '진행' : '진행하지 않음'}
 
 ${photoInfo}
 
@@ -371,7 +393,16 @@ ${conversation || '(대화 없음)'}
     const response = await callGeminiTextOnly(prompt);
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
-    return JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!shouldEvaluateGuardianCaption) {
+      parsed.guardianCaption = null;
+      parsed.captionMatchRate = null;
+      parsed.captionMatches = [];
+      if (Array.isArray(parsed.items)) {
+        parsed.items = parsed.items.filter((item) => item?.id !== 'guardianCaption');
+      }
+    }
+    return parsed;
   } catch (error) {
     console.error('대화 리포트 LLM 평가 실패:', error);
     return null;
@@ -455,9 +486,13 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
 - 올바른 대응: 다른 각도로 개방형 재질문을 한다.
 
 [대화 전략]
-- 0~10분: ${imageName}과 연결된 구체적 기억(인물·사건·감정)을 깊이 회상하도록 유도한다.
-- 10~15분: "오늘 대화에서 가장 기억에 남는 게 뭐예요?"로 스스로 정리하게 한다.
-- 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+- 0~${t}분: ${imageName}과 연결된 구체적 기억(인물·사건·감정)을 깊이 회상하도록 유도한다.
+- ${t}~${i}분: "오늘 대화에서 가장 기억에 남는 게 뭐예요?"로 스스로 정리하게 한다.
+- ${i}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+
+// - 0~10분: ${imageName}과 연결된 구체적 기억(인물·사건·감정)을 깊이 회상하도록 유도한다.
+// - 10~15분: "오늘 대화에서 가장 기억에 남는 게 뭐예요?"로 스스로 정리하게 한다.
+// - 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
   }
 
   if (level === '중') {
@@ -492,9 +527,12 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
 - 올바른 대응: 선택지로 전환하여 힌트를 제공한다.
 
 [대화 전략]
-- 0~10분: 1~5단계를 순서대로 진행한다.
-- 10~15분: 현재 감정을 확인하며 마무리한다.
-- 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+- 0~${t}분: 1~5단계를 순서대로 진행한다.
+- ${t}~${i}분: 현재 감정을 확인하며 마무리한다.
+- ${i}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+// - 0~10분: 1~5단계를 순서대로 진행한다.
+// - 10~15분: 현재 감정을 확인하며 마무리한다.
+// - 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
   }
 
   // 하
@@ -537,9 +575,12 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
 - 올바른 대응: "괜찮아요, 그냥 같이 보는 것만으로도 충분해요." 후 감각 공유로 전환.
 
 [대화 전략]
-- 0~10분: 에코잉과 동반자 화법으로 어르신과 함께 감각·기억을 공유한다.
-- 10~15분: 감정 확인 후 존재를 긍정하며 마무리한다.
-- 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+- 0~${t}분: 에코잉과 동반자 화법으로 어르신과 함께 감각·기억을 공유한다.
+- ${t}~${i}분: 감정 확인 후 존재를 긍정하며 마무리한다.
+- ${i}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+// - 0~10분: 에코잉과 동반자 화법으로 어르신과 함께 감각·기억을 공유한다.
+// - 10~15분: 감정 확인 후 존재를 긍정하며 마무리한다.
+// - 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
 };
 
 export const chatWithPhoto = async (message, history = [], imageName = '', photoType = '', difficulty = '중') => {
@@ -561,11 +602,11 @@ export const chatWithPhoto = async (message, history = [], imageName = '', photo
       body: JSON.stringify({ message, history, imageName, photoType, difficulty }),
     });
     if (resp.ok) {
-      const json = await resp.json();
+      const json = await readProxyJson(resp);
       return json.text || '';
     }
-  } catch (e) {
-    console.warn('Proxy failed, falling back to client-side:', e);
+  } catch (error) {
+    console.warn('Proxy failed, falling back to client-side:', error);
   }
 
   if (!GEMINI_API_KEY) throw new Error('Gemini API key가 설정되지 않았습니다.');
@@ -585,31 +626,10 @@ export const chatWithPhoto = async (message, history = [], imageName = '', photo
   return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 };
 
-// 난이도별 회상 치료 전략 생성 (파이썬 프로세스 기반)
-const getDifficultyStrategy = (difficulty, photoName, photoType) => {
-  const type = photoType || '개인적';
-  if (!photoName) {
-    const baseRule = '규칙: 1. 모든 응답은 2문장 이내로 짧고 명확하게 한다. 2. 어르신이 답변하기 쉽게 한 번에 하나만 질문한다.';
-    return `역할: 전문 요양보호사. ${baseRule} 전략: 어르신과 일상 안부를 나눈다. 0-15분: 어르신의 기분, 건강, 오늘 하루를 여쭤보며 따뜻하게 대화한다. 15분: [END_CALL] 출력.`;
-  }
-  const name = photoName;
-
-  // 공통 규칙 (파이썬 base_rule과 동일)
-  const baseRule = '규칙: 1. 모든 응답은 2문장 이내로 짧고 명확하게 한다. 2. 어르신이 답변하기 쉽게 한 번에 하나만 질문한다.';
-
-  let strategy;
-  if (difficulty === '상') {
-    // 파이썬 high 전략과 동일
-    strategy = `0-10분: ${name}의 맥락/인물/대화를 심층 회상한다. 사진 속 배경, 함께한 사람, 당시 감정과 이후 이야기까지 개방형 질문으로 끌어낸다. 10-15분: 오늘 통화 소감 나누기. 15분: [END_CALL] 출력.`;
-  } else if (difficulty === '중') {
-    // 파이썬 medium 전략 기반
-    strategy = `0-10분: ${name} 관련 개인 경험/감정을 공유한다. 심층 회상보다는 "이 사진에서 기억나는 게 있으신가요?" 처럼 답하기 쉬운 질문을 하고, 어르신의 대답에 공감하며 자연스럽게 이어간다. 10-15분: 오늘 통화 소감 나누기. 15분: [END_CALL] 출력.`;
-  } else {
-    // 파이썬 low 전략 기반
-    strategy = `0-10분: ${name}의 이름/색깔/장소 등 단순 인식에 집중한다. "이 사진에 사람이 있나요?", "이 사진은 어디서 찍은 것 같으세요?" 처럼 예/아니오 또는 단답형으로 답할 수 있는 질문을 한다. 어르신이 틀려도 부드럽게 맞장구치며 긍정적 분위기를 유지한다. 10-15분: 오늘 통화 소감 나누기(아주 짧게). 15분: [END_CALL] 출력.`;
-  }
-
-  return `역할: 전문 요양보호사. 대상 사진: ${name}(${type}). ${baseRule} 전략: ${strategy}`;
+const normalizeDifficultyLevel = (difficulty) => {
+  if (difficulty === '상' || difficulty === 'high') return '상';
+  if (difficulty === '하' || difficulty === 'low') return '하';
+  return '중';
 };
 
 // ──────────────────────────────────────────────────────────
@@ -627,6 +647,11 @@ export const evaluateAnswerWithGemini = async (question, correctAnswer, userAnsw
 - 정답의 핵심 명사나 의미가 포함되어 있으면 정답입니다. 예: "컵" 정답에 "물컵", "컵이요", "컵 같은데"는 정답입니다.
 - 직업/장소/물건 이름은 더 관대하게 채점하세요. 상위 개념이나 일상적인 동의어도 맞는 의미면 정답입니다.
 - 사용자가 확신 없이 말해도 핵심 답이 들어 있으면 정답입니다. 예: "아마 의사?"는 정답이 의사이면 정답입니다.
+- 정확한 명칭을 말하지 못해도 용도, 기능, 특징, 관련 상황을 맞게 설명하면 정답으로 처리하세요.
+- 정답보다 넓은 범주의 말도 문맥상 같은 대상을 가리키면 정답입니다. 예: "시계" 정답에 "시간 보는 거", "약사" 정답에 "약 주는 사람"은 정답입니다.
+- 어르신이 사투리, 짧은 단답, 불완전한 문장으로 말해도 의미가 통하면 정답입니다.
+- 답변 안에 헷갈리는 말이 함께 있어도 정답의 핵심 의미가 포함되어 있으면 정답입니다.
+- 판단이 애매하면 훈련 상황이므로 정답 쪽으로 처리하세요.
 - 완전히 다른 대상이거나 핵심 의미가 전혀 맞지 않을 때만 오답입니다.
 
 반드시 아래 JSON만 반환하세요. 다른 설명은 쓰지 마세요.
@@ -639,14 +664,17 @@ export const evaluateAnswerWithGemini = async (question, correctAnswer, userAnsw
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        return String(parsed.result || '').includes('정답');
+        const result = String(parsed.result || '').replace(/\s+/g, '');
+        if (result.includes('오답')) return false;
+        return result.includes('정답') || result.includes('맞음') || result.includes('맞습니다');
       }
     } catch {
       // JSON이 아니면 아래 텍스트 판정으로 처리
     }
-    if (/^\s*정답\b/.test(text)) return true;
-    if (/^\s*오답\b/.test(text)) return false;
-    return text.includes('정답') && !text.includes('오답');
+    const normalized = text.replace(/\s+/g, '');
+    if (normalized.includes('오답')) return false;
+    if (normalized.includes('정답') || normalized.includes('맞음') || normalized.includes('맞습니다')) return true;
+    return false;
   };
 
   try {
@@ -660,7 +688,7 @@ export const evaluateAnswerWithGemini = async (question, correctAnswer, userAnsw
       const text = (json.text || json.result || '').trim();
       return parseEvaluationResult(text);
     }
-  } catch (e) {
+  } catch {
     // 프록시 실패 시 직접 호출로 폴백
   }
 
@@ -710,7 +738,7 @@ export const generateOrientationHint = async (question, answer) => {
       const json = await resp.json();
       return (json.text || json.result || '').trim();
     }
-  } catch (e) {
+  } catch {
     // 프록시 실패 시 직접 호출로 폴백
   }
 
@@ -752,21 +780,36 @@ export const chatWithGemini = async (message, history = [], photoContext = null,
 이 정보를 바탕으로 어르신과 사진에 대해 따뜻하게 대화하세요.`;
   }
 
+
   const photoName = photoContext
-    ? (photoContext.location || photoContext.situation || photoContext.keywords?.[0] || '제공된 사진')
+    ? (photoContext.imageName || photoContext.name || photoContext.location || photoContext.situation || photoContext.keywords?.[0] || '제공된 사진')
     : null;
-  const photoType = photoContext ? '개인적' : '보편적';
-  const strategy = getDifficultyStrategy(difficulty || '중', photoName, photoType);
+  const photoType = photoContext ? (photoContext.photoType || photoContext.type || '개인적') : '보편적';
+  const systemInstruction = photoName
+    ? getSystemInstruction(normalizeDifficultyLevel(difficulty), photoName, photoType)
+    : '당신은 치매 어르신을 돕는 전문 요양보호사입니다. 응답은 1~2문장으로 짧고 따뜻하게 하며, 한 번에 하나의 질문만 합니다. ${i}분이 지나면 반드시 [통화끝]을 출력하고 마무리합니다.';
 
   const photoRule = photoContext
     ? '- 사진을 이미 보여주고 있으므로 "사진을 준비하지 못했다"는 말 금지.'
     : '- 사진 없이 일상 대화를 나눈다. 사진에 대한 언급 금지.';
+// 정수 변수 i 생성
 
-  const systemPrompt = `${strategy}
+  const strictTimingRules = `
+[통화 시간 규칙 - 반드시 준수]
+- 통화는 기본 ${i}분을 채우는 것을 목표로 한다.
+- 현재 경과 시간이 ${i}분 미만이면 AI가 먼저 통화를 마무리하거나 [통화끝]/[END_CALL]을 출력하면 안 된다.
+- ${i}분 미만에는 "마무리할게요", "오늘은 여기까지" 같은 종료 분위기 문장도 피하고, 자연스럽게 다음 질문을 이어간다.
+- 예외: 어르신이 직접 그만하고 싶다, 끊고 싶다, 너무 피곤하다, 힘들다고 명확히 말한 경우에만 ${i}분 전에도 따뜻하게 마무리하고 [통화끝]을 출력할 수 있다.
+- 현재 경과 시간이 ${t}~${i}분이면 오늘 대화에서 기억에 남는 점이나 현재 기분을 물으며 천천히 정리한다.
+- 현재 경과 시간이 ${i}분 이상이면 따뜻하게 마무리하고 반드시 [통화끝]을 출력한다.
+- 현재 경과 시간은 ${elapsedMinutes}분이다. 이 시간을 기준으로 종료 가능 여부를 판단한다.`;
+
+  const systemPrompt = `${systemInstruction}
 ${photoInfo}[추가 규칙]
 - 괄호 안 지문/행동 표현 금지 (예: (웃으며), (조용히)).
 ${photoRule}
-- 어르신이 피곤해하거나 종료를 원하면 따뜻하게 마무리하고 [END_CALL] 출력.
+${strictTimingRules}
+- 어르신이 피곤해하거나 종료를 원하면 따뜻하게 마무리하고 [통화끝] 출력.
 - [현재 경과 시간: ${elapsedMinutes}분] 전략 타이밍에 맞게 대화 진행.`;
 
   const contents = [
@@ -781,10 +824,10 @@ ${photoRule}
     const resp = await fetch('/api/gemini/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history, photoContext, difficulty, elapsedMinutes }),
+      body: JSON.stringify({ message, history, photoContext, difficulty, elapsedMinutes, systemPrompt }),
     });
     if (resp.ok) {
-      const json = await resp.json();
+      const json = await readProxyJson(resp);
       return json.text || '';
     }
   } catch (e) {

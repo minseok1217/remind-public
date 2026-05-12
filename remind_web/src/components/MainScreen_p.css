@@ -205,6 +205,16 @@ input:checked + .slider-p:before {
   margin: 10px 0;
 }
 
+.web-push-status-p {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #00A35C;
+  background-color: #F0FFF8;
+  border: 1px solid #BDEED8;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
 .card-item-title-p {
   display: flex;
   align-items: center;
