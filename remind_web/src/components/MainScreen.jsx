@@ -95,8 +95,8 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
       savedById.topicDeviation || buildFallbackReportItem({
         id: 'topicDeviation',
         label: '주제 이탈률',
-        score: 100 - (metrics.topicDeviationRate || 0),
-        passed: (metrics.topicDeviationRate || 0) <= 40
+        score: (metrics.totalUtterances > 0) ? 100 - (metrics.topicDeviationRate || 0) : null,
+        passed: (metrics.totalUtterances > 0) ? (metrics.topicDeviationRate || 0) <= 40 : null
       }),
       savedById.guardianCaption || buildFallbackReportItem({
         id: 'guardianCaption',

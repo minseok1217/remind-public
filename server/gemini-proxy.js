@@ -1,5 +1,6 @@
 // Simple Express proxy to call Gemini on the server-side.
-// Usage: set environment variable GEMINI_API_KEY and run `node server/gemini-proxy.js`
+// Usage: node server/gemini-proxy.js  (.env in project root is loaded automatically)
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
@@ -9,6 +10,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 
 const PORT = process.env.PORT || 3001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
 
 if (!GEMINI_API_KEY) {
@@ -127,5 +129,34 @@ ${photoInfo}
     return res.status(500).json({ error: err.message });
   }
 });
+// ElevenLabs Scribe 토큰 엔드포인트
+app.get('/api/elevenlabs/scribe-token', async (req, res) => {
+  if (!ELEVENLABS_API_KEY) {
+    return res.status(500).json({ error: 'ELEVENLABS_API_KEY not set' });
+  }
+  try {
+    const response = await fetch(
+      'https://api.elevenlabs.io/v1/speech-to-text/streaming/create-signed-url',
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiry_time_seconds: 60 }),
+      }
+    );
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: errText });
+    }
+    const data = await response.json();
+    return res.json({ token: data.signed_url || data.token });
+  } catch (err) {
+    console.error('Scribe token error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // 서버 시작 (모든 라우트 정의 후 마지막에!)
 app.listen(PORT, () => console.log(`Gemini proxy listening on http://localhost:${PORT}`));

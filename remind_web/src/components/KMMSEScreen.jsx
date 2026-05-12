@@ -3,56 +3,11 @@ import { useScribe } from '@elevenlabs/react';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import './KMMSEScreen.css';
+import { tts, cancelTTS } from '../services/ttsService';
 
 const SCRIBE_TOKEN_ENDPOINT =
   import.meta.env.VITE_ELEVENLABS_SCRIBE_TOKEN_ENDPOINT || '/api/elevenlabs/scribe-token';
 const SCRIBE_NO_RESULT_MS = 9000;
-const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
-const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
-
-const webSpeak = (text) =>
-  new Promise((resolve) => {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ko-KR';
-    utterance.rate = 0.86;
-    utterance.pitch = 1.0;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
-  });
-
-const tts = async (text) => {
-  if (!ELEVENLABS_API_KEY) return webSpeak(text);
-
-  try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    });
-
-    if (!response.ok) return webSpeak(text);
-
-    const blob = await response.blob();
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    return new Promise((resolve) => {
-      audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve(); };
-      audio.onerror = () => { URL.revokeObjectURL(audioUrl); resolve(); };
-      audio.play().catch(() => { URL.revokeObjectURL(audioUrl); resolve(); });
-    });
-  } catch {
-    return webSpeak(text);
-  }
-};
 
 const WORD_BANK = [
   '사과','오렌지','포도','귤','수박','딸기','바나나','참외','복숭아','토마토',
@@ -146,7 +101,9 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
     {
       type: 'narration',
       title: '시작 전 안내',
-      text: `안녕하세요, 어르신. '리마인드' 서비스를 시작하기에 앞서, 어르신의 현재 기억력을 확인해보는 시간을 가지려고 합니다.\n\n지금부터 몇 가지 질문을 드릴 거예요. 시험이라고 생각하지 마시고, 편안하게 대답해 주시면 됩니다.\n\n잘 모르겠다면 '잘 모르겠어요'라고 말씀하셔도 괜찮습니다.\n\n준비가 되셨다면 '시작하기' 버튼을 눌러주세요.`,
+      text: `안녕하세요, 어르신. '리마인드' 서비스를 시작하기에 앞서, 어르신의 현재 기억력을 확인해보는 시간을 가지려고 합니다.
+      \n\n지금부터 몇 가지 질문을 드릴 거예요. 시험이라고 생각하지 마시고, 편안하게 대답해 주시면 됩니다.\n\n잘 모르겠다면 '잘 모르겠어요'라고 말씀하셔도 괜찮습니다.
+      \n\n준비가 되셨다면 시작하겠습니다.`,
       btnLabel: '시작하기',
     },
     {
@@ -272,6 +229,8 @@ const useScribeSpeechRecognition = () => {
   const timeoutRef = useRef(null);
   const completedRef = useRef(false);
   const disconnectRef = useRef(null);
+  const scribeFailedRef = useRef(false);
+  const scribeConsecutiveFailsRef = useRef(0);
 
   const cleanupTimer = () => {
     clearTimeout(timeoutRef.current);
@@ -287,8 +246,13 @@ const useScribeSpeechRecognition = () => {
 
     const trimmed = (text || '').trim();
     if (trimmed) {
+      scribeConsecutiveFailsRef.current = 0;
       onResultRef.current?.(trimmed);
     } else {
+      scribeConsecutiveFailsRef.current++;
+      if (scribeConsecutiveFailsRef.current >= 2) {
+        scribeFailedRef.current = true; // 브라우저 STT로 영구 전환
+      }
       onNoResultRef.current?.();
     }
   };
@@ -317,24 +281,47 @@ const useScribeSpeechRecognition = () => {
     const response = await fetch(SCRIBE_TOKEN_ENDPOINT);
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.token) {
+      scribeFailedRef.current = true;
       throw new Error(data.error || 'Scribe token request failed');
     }
     return data.token;
   };
 
-  const startListening = async (onResult, onNoResult) => {
-    if (!supported) {
-      onNoResult?.();
-      return;
-    }
+  const startListeningWebSpeech = (onResult, onNoResult) => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { onNoResult?.(); return; }
+    const rec = new SR();
+    rec.lang = 'ko-KR';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    setIsListening(true);
+    let done = false;
+    const finish = (text) => {
+      if (done) return;
+      done = true;
+      setIsListening(false);
+      if (text) onResult?.(text);
+      else onNoResult?.();
+    };
+    rec.onresult = (e) => finish(e.results[0]?.[0]?.transcript || '');
+    rec.onerror = () => finish('');
+    rec.onend = () => finish('');
+    try { rec.start(); } catch { finish(''); }
+  };
 
+  const startListening = async (onResult, onNoResult) => {
     scribe.disconnect();
     cleanupTimer();
     completedRef.current = false;
     onResultRef.current = onResult;
     onNoResultRef.current = onNoResult;
-    setIsListening(true);
 
+    if (!supported || scribeFailedRef.current) {
+      startListeningWebSpeech(onResult, onNoResult);
+      return;
+    }
+
+    setIsListening(true);
     timeoutRef.current = setTimeout(() => finish(''), SCRIBE_NO_RESULT_MS);
     try {
       const token = await fetchScribeToken();
@@ -353,7 +340,10 @@ const useScribeSpeechRecognition = () => {
         },
       });
     } catch {
-      finish('');
+      // Scribe 토큰 없음 → 브라우저 STT로 폴백
+      cleanupTimer();
+      setIsListening(false);
+      startListeningWebSpeech(onResult, onNoResult);
     }
   };
 
@@ -458,7 +448,9 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     const run = async () => {
       // TTS로 읽을 텍스트 결정
       let textToRead = '';
-      if (step.type === 'narration' || step.type === 'section_narration') {
+      if (step.type === 'narration') {
+        return; // 버튼 클릭(사용자 제스처) 시 TTS 트리거 — 자동 재생 불가
+      } else if (step.type === 'section_narration') {
         textToRead = step.text;
       } else if (step.type === 'question') {
         textToRead = getQuestionText(step);
@@ -468,7 +460,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
 
       // TTS 재생 (활성화된 경우)
       if (textToRead && enableNarration) {
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        cancelTTS();
         if (!cancelled) setIsSpeaking(true);
         await tts(textToRead);
         if (!cancelled) setIsSpeaking(false);
@@ -494,7 +486,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      cancelTTS();
     };
   }, [loadingLocation, stepIdx, STEPS.length, enableNarration]);
 
@@ -623,7 +615,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
 
   // 터치로 선택지 선택 시 (TTS/인식 즉시 중단 후 제출)
   const handleChoiceTap = (choice) => {
-    window.speechSynthesis?.cancel();
+    cancelTTS();
     setIsSpeaking(false);
     stopListening();
     autoListenStepRef.current = -1;
@@ -632,7 +624,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
 
   // "잘 모르겠어요" 탭 시
   const handleGiveUp = () => {
-    window.speechSynthesis?.cancel();
+    cancelTTS();
     setIsSpeaking(false);
     stopListening();
     autoListenStepRef.current = -1;
@@ -679,10 +671,23 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
           <div className="kmmse-logo">∞</div>
           <h2 className="kmmse-title">{currentStep.title}</h2>
           <p className="kmmse-narration-text">{currentStep.text}</p>
-          {isSpeaking && <p className="kmmse-speaking-hint">🔊 읽는 중...</p>}
-          <button className="kmmse-btn-primary" onClick={goNext}>
-            {currentStep.btnLabel || '다음'}
-          </button>
+          {isSpeaking ? (
+            <p className="kmmse-speaking-hint">🔊 읽는 중...</p>
+          ) : (
+            <button
+              className="kmmse-btn-primary"
+              onClick={async () => {
+                if (enableNarration && currentStep.text) {
+                  setIsSpeaking(true);
+                  await tts(currentStep.text);
+                  setIsSpeaking(false);
+                }
+                goNext();
+              }}
+            >
+              {currentStep.btnLabel || '다음'}
+            </button>
+          )}
         </div>
       )}
 

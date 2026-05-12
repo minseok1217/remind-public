@@ -2,59 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import './OrientationTrainingScreen.css';
+import { tts, cancelTTS } from '../services/ttsService';
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// TTS 설정
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const ELEVENLABS_VOICE_ID = '8jHHF8rMqMlg8if2mOUe'; // Han - Conversational
-const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
-const SILENCE_MS = 2000; // 침묵 감지 대기 시간
-const HINT_REVIEW_MS = 2500; // 힌트를 듣고 생각할 시간
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// TTS (ElevenLabs + 브라우저 폴백)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const webSpeak = (text) =>
-  new Promise((resolve) => {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ko-KR';
-    u.rate = 0.82;
-    u.pitch = 1.0;
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
-    window.speechSynthesis.speak(u);
-  });
-
-const tts = async (text) => {
-  if (!ELEVENLABS_API_KEY) return webSpeak(text);
-
-  try {
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    });
-    if (!r.ok) return webSpeak(text);
-    const blob = await r.blob();
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    return new Promise((res) => {
-      audio.onended = () => { URL.revokeObjectURL(audioUrl); res(); };
-      audio.onerror = () => { URL.revokeObjectURL(audioUrl); res(); };
-      audio.play().catch(() => { URL.revokeObjectURL(audioUrl); res(); });
-    });
-  } catch {
-    return webSpeak(text);
-  }
-};
+const SILENCE_MS = 2000;
+const HINT_REVIEW_MS = 2500;
 
 const waitForBrowserPaint = () =>
   new Promise((resolve) => {
@@ -227,7 +178,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
       mountedRef.current = false;
       clearTimeout(silenceRef.current);
       if (recRef.current) try { recRef.current.stop(); } catch {}
-      window.speechSynthesis.cancel();
+      cancelTTS();
     };
   }, []);
 
@@ -658,7 +609,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
 
   const handleBack = () => {
     stopListening();
-    window.speechSynthesis.cancel();
+    cancelTTS();
     onBack?.();
   };
 

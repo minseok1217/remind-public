@@ -587,8 +587,12 @@ export const chatWithPhoto = async (message, history = [], imageName = '', photo
 
 // 난이도별 회상 치료 전략 생성 (파이썬 프로세스 기반)
 const getDifficultyStrategy = (difficulty, photoName, photoType) => {
-  const name = photoName || '제공된 사진';
   const type = photoType || '개인적';
+  if (!photoName) {
+    const baseRule = '규칙: 1. 모든 응답은 2문장 이내로 짧고 명확하게 한다. 2. 어르신이 답변하기 쉽게 한 번에 하나만 질문한다.';
+    return `역할: 전문 요양보호사. ${baseRule} 전략: 어르신과 일상 안부를 나눈다. 0-15분: 어르신의 기분, 건강, 오늘 하루를 여쭤보며 따뜻하게 대화한다. 15분: [END_CALL] 출력.`;
+  }
+  const name = photoName;
 
   // 공통 규칙 (파이썬 base_rule과 동일)
   const baseRule = '규칙: 1. 모든 응답은 2문장 이내로 짧고 명확하게 한다. 2. 어르신이 답변하기 쉽게 한 번에 하나만 질문한다.';
@@ -748,16 +752,20 @@ export const chatWithGemini = async (message, history = [], photoContext = null,
 이 정보를 바탕으로 어르신과 사진에 대해 따뜻하게 대화하세요.`;
   }
 
-  const photoName = photoContext?.location || photoContext?.situation || (photoContext?.keywords?.[0]) || '제공된 사진';
+  const photoName = photoContext
+    ? (photoContext.location || photoContext.situation || photoContext.keywords?.[0] || '제공된 사진')
+    : null;
   const photoType = photoContext ? '개인적' : '보편적';
   const strategy = getDifficultyStrategy(difficulty || '중', photoName, photoType);
 
-  // 파이썬 프롬프트 구조를 따름
+  const photoRule = photoContext
+    ? '- 사진을 이미 보여주고 있으므로 "사진을 준비하지 못했다"는 말 금지.'
+    : '- 사진 없이 일상 대화를 나눈다. 사진에 대한 언급 금지.';
+
   const systemPrompt = `${strategy}
-${photoInfo}
-[추가 규칙]
+${photoInfo}[추가 규칙]
 - 괄호 안 지문/행동 표현 금지 (예: (웃으며), (조용히)).
-- 사진을 이미 보여주고 있으므로 "사진을 준비하지 못했다"는 말 금지.
+${photoRule}
 - 어르신이 피곤해하거나 종료를 원하면 따뜻하게 마무리하고 [END_CALL] 출력.
 - [현재 경과 시간: ${elapsedMinutes}분] 전략 타이밍에 맞게 대화 진행.`;
 
