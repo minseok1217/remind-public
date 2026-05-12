@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.appcompat.app.AlertDialog
 import com.example.remind_webapp.alarm.AlarmReceiver
 import java.util.*
+import androidx.core.content.edit
 
 object AlarmHelper {
 
@@ -16,6 +17,10 @@ object AlarmHelper {
      * day: 오늘 기준 며칠 뒤인지 (기본 0)
      */
     fun scheduleAlarm(context: Context, alarmManager: AlarmManager, hour: Int, minute: Int, day: Int = 0) {
+
+        val prefs = context.getSharedPreferences("alarm_prefs", Context.MODE_PRIVATE)
+        prefs.edit { putString("alarm_time", "$hour:$minute") }
+
         val calendar = Calendar.getInstance().apply {
             timeInMillis = System.currentTimeMillis()
             set(Calendar.HOUR_OF_DAY, hour)

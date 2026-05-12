@@ -20,10 +20,6 @@ class TimeSettingActivity : AppCompatActivity() {
                 val hour = parts[0].toIntOrNull() ?: 0
                 val minute = parts[1].toIntOrNull() ?: 0
 
-                // SharedPreferences에 시간 저장
-                val prefs = getSharedPreferences("alarm_prefs", Context.MODE_PRIVATE)
-                prefs.edit { putString("alarm_time", "$hour:$minute") }
-
                 // 알람 예약 (권한 체크 포함)
                 val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
                 AlarmHelper.checkExactAlarmPermission(this, alarmManager) {
