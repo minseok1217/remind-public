@@ -18,13 +18,14 @@ import com.example.remind_webapp.util.AlarmHelper
 import com.example.remind_webapp.web.WebViewManager
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
+import android.widget.Toast
+import android.content.Intent
 
 class MainActivity : AppCompatActivity() {
 
+    private var backPressedTime: Long = 0
     private lateinit var webViewManager: WebViewManager
-    private var userType: Int = -1
     private var startPage: String? = null
-
     private val PREFS_NAME = "alarm_prefs"
     private val KEY_ALARM_PERMISSION_GRANTED = "alarm_permission_granted"
 
@@ -46,15 +47,40 @@ class MainActivity : AppCompatActivity() {
         webViewManager.init()
 
         webView.addJavascriptInterface(WebAppBridge(), "AndroidBridge")
+        webView.settings.mediaPlaybackRequiresUserGesture = false
+        webView.settings.javaScriptCanOpenWindowsAutomatically = true
+        webView.settings.setSupportMultipleWindows(true)
 
-        startPage = startPage ?: "main.html"
+        startPage = startPage ?: ""
 
         webViewManager.loadStartPage(page = "https://remind-aa99f.web.app")
 
         onBackPressedDispatcher.addCallback(this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    webViewManager.handleBack { finish() }
+
+                    val webView = webViewManager.getWebView()
+
+                    // 웹뷰 뒤로갈 페이지 있으면 웹 뒤로가기
+                    if (webView.canGoBack()) {
+                        webView.goBack()
+                        return
+                    }
+
+                    // 앱 종료 처리
+                    val currentTime = System.currentTimeMillis()
+
+                    if (currentTime - backPressedTime < 2000) {
+                        finish()
+                    } else {
+                        backPressedTime = currentTime
+
+                        Toast.makeText(
+                            this@MainActivity,
+                            "한 번 더 누르면 종료됩니다.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
         )
@@ -86,7 +112,22 @@ class MainActivity : AppCompatActivity() {
             webViewManager.getWebView().post {
                 webViewManager.getWebView().evaluateJavascript(jsCode, null)
             }
+            Log.d("TESTLOG", "실행했음 ㅇㅇ")
         }
+    }
+
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        webViewManager.handleFileChooserResult(
+            requestCode,
+            resultCode,
+            data
+        )
     }
 
     private fun sendFcmTokenToWeb(token: String) {
@@ -117,12 +158,6 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     val alreadySet = prefs.getBoolean(KEY_ALARM_PERMISSION_GRANTED, false)
-
-                    // 이미 한 번 설정했으면 아무것도 하지 않음
-                    if (alreadySet) {
-                        Log.d("TESTLOG_MainActivity", "알람 이미 한 번 설정됨 → 스킵")
-                        return@launch
-                    }
 
                     Log.d("TESTLOG_MainActivity", "알람 시간 설정: $time")
 
