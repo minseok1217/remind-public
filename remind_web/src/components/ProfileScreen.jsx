@@ -564,6 +564,13 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     if (onLogout) onLogout();
   };
 
+  const getAvatarColor = (name) => {
+    const palette = ['#b7e4c7','#ffd6a5','#ffafcc','#bde0fe','#d4bbf5','#caffbf','#ffc8dd','#a0c4ff'];
+    let hash = 0;
+    for (let i = 0; i < (name||'').length; i++) hash = name.charCodeAt(i) + ((hash<<5)-hash);
+    return palette[Math.abs(hash) % palette.length];
+  };
+
   const renderPatientCard = (patient) => {
     const isSelected = patient.id === selectedPatientId;
     const currentEditPatient = editPatients.find(p => p.id === patient.id) || patient;
@@ -577,57 +584,57 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     };
 
     return (
-      <div
-        key={patient.id}
-        className={`profile-info-card patient-card ${isConnectedPatient ? 'selected' : ''}`}
-      >
-        {/* 아코디언 헤더 — 항상 표시 */}
-        <div className="patient-card-header" onClick={toggleExpand} style={{ cursor: 'pointer' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-            <div className="icon-circle">
-              <img src={user_icon} className="icon-circle-small-img" alt="User Icon" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{patient.name || '이름 미입력'}</div>
-              {isConnectedPatient && (
-                <div style={{ fontSize: '11px', color: '#6c63ff', marginTop: '2px' }}>연결됨</div>
-              )}
-            </div>
+      <div key={patient.id} className="patient-row-card">
+        {/* 카드 헤더 — 항상 표시 */}
+        <div className="patient-row-header" onClick={toggleExpand}>
+          <div className="patient-row-avatar" style={{ backgroundColor: getAvatarColor(patient.name) }}>
+            {(patient.name || '?').slice(0, 2)}
           </div>
-          {/* 액션 버튼 + 펼치기 화살표 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="patient-row-info">
+            <span className="patient-row-name">{patient.name || '이름 미입력'}</span>
+            <span className={`patient-row-status ${isConnectedPatient ? 'connected' : 'disconnected'}`}>
+              <span className="patient-row-status-dot" />
+              {isConnectedPatient ? '연결됨' : '미연결'}
+            </span>
+          </div>
+          <div className="patient-row-actions" onClick={e => e.stopPropagation()}>
             {!isEditingPatientInfo && userType === 'guardian' && (
               <>
-                <button
-                  className="patient-action-button edit-patient-btn"
-                  onClick={(e) => { e.stopPropagation(); handleEditPatientInfoClick(patient.id); setExpandedPatientId(patient.id); }}
-                >
-                  수정
-                </button>
-                <button
-                  className="patient-action-button delete-patient-btn"
-                  onClick={(e) => { e.stopPropagation(); handleDeletePatient(patient.id); }}
-                  disabled={isSaving}
-                >
-                  <img src={trash_icon} className="trash-icon" alt="Delete Icon" />
-                </button>
                 {!isConnectedPatient && (
                   <button
-                    className="patient-action-button connect-patient-btn"
-                    onClick={(e) => { e.stopPropagation(); handleConnectPatient(patient.id); }}
+                    className="patient-connect-btn"
+                    onClick={() => handleConnectPatient(patient.id)}
+                    title="연결하기"
                   >
-                    연결
+                    연결하기
                   </button>
                 )}
+                <button
+                  className="patient-icon-btn edit"
+                  onClick={() => { handleEditPatientInfoClick(patient.id); setExpandedPatientId(patient.id); }}
+                  title="수정"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button
+                  className="patient-icon-btn delete"
+                  onClick={() => handleDeletePatient(patient.id)}
+                  disabled={isSaving}
+                  title="삭제"
+                >
+                  <img src={trash_icon} className="trash-icon" alt="삭제" />
+                </button>
               </>
             )}
-            <span style={{ fontSize: '12px', color: '#999', marginLeft: '4px', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
           </div>
         </div>
 
-        {/* 아코디언 본문 — 펼쳤을 때만 표시 */}
+        {/* 아코디언 본문 — 수정 모드 또는 펼쳤을 때 표시 */}
         {isExpanded && (
-          <div className="patient-card-content-wrapper" style={{ borderTop: '1px solid #f0f0f0', paddingTop: '12px', marginTop: '8px' }}>
+          <div className="patient-card-content-wrapper">
             <div className="profile-info-content">
               <div className="profile-info-row">
                 <div className="profile-info-label">이름</div>
@@ -714,6 +721,26 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               )}
 
             </div>
+
+            {/* 수정 모드 저장/취소 버튼 */}
+            {isEditingPatientInfo && isSelected && (
+              <div className="patient-edit-actions">
+                <button
+                  className="patient-edit-save-btn"
+                  onClick={handleSavePatientInfo}
+                  disabled={isSaving}
+                >
+                  {isSaving ? '저장 중...' : '수정 완료'}
+                </button>
+                <button
+                  className="patient-edit-cancel-btn"
+                  onClick={handleCancelPatientInfoEdit}
+                  disabled={isSaving}
+                >
+                  취소
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

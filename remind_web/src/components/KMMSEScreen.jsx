@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { useScribe } from '@elevenlabs/react';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import './KMMSEScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
-
-const SCRIBE_TOKEN_ENDPOINT =
-  import.meta.env.VITE_ELEVENLABS_SCRIBE_TOKEN_ENDPOINT || '/api/elevenlabs/scribe-token';
-const SCRIBE_NO_RESULT_MS = 9000;
+import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
 const WORD_BANK = [
   '사과','오렌지','포도','귤','수박','딸기','바나나','참외','복숭아','토마토',
@@ -71,16 +67,83 @@ const CALC_PROMPT_NUMBERS = {
 
 const isCalculationStep = (step) => CALC_STEP_IDS.includes(step?.id);
 
+const KOREAN_NUMBER_WORDS = {
+  영: 0, 공: 0, 일: 1, 하나: 1, 한: 1, 이: 2, 둘: 2, 두: 2, 삼: 3, 셋: 3, 세: 3,
+  사: 4, 넷: 4, 네: 4, 오: 5, 다섯: 5, 육: 6, 륙: 6, 여섯: 6, 칠: 7, 일곱: 7,
+  팔: 8, 여덟: 8, 구: 9, 아홉: 9,
+};
+
+const KOREAN_TENS_WORDS = {
+  십: 10, 열: 10, 이십: 20, 스물: 20, 스무: 20, 삼십: 30, 서른: 30,
+  사십: 40, 마흔: 40, 오십: 50, 쉰: 50, 육십: 60, 륙십: 60, 예순: 60,
+  칠십: 70, 일흔: 70, 팔십: 80, 여든: 80, 구십: 90, 아흔: 90, 백: 100,
+};
+
+const extractSpokenNumber = (value) => {
+  const raw = String(value || '');
+  const digitMatch = raw.match(/\d+/);
+  if (digitMatch) return Number(digitMatch[0]);
+
+  const normalized = raw.replace(/\s/g, '').replace(/입니다|이에요|예요|이요|이어요|정답|답/g, '');
+  if (!normalized) return null;
+
+  if (normalized.includes('백')) return 100;
+
+  const tensEntry = Object.entries(KOREAN_TENS_WORDS)
+    .sort((a, b) => b[0].length - a[0].length)
+    .find(([word]) => normalized.includes(word));
+
+  if (tensEntry) {
+    const [tensWord, tensValue] = tensEntry;
+    const rest = normalized.slice(normalized.indexOf(tensWord) + tensWord.length);
+    const onesEntry = Object.entries(KOREAN_NUMBER_WORDS)
+      .sort((a, b) => b[0].length - a[0].length)
+      .find(([word]) => rest.includes(word));
+    return tensValue + (onesEntry ? onesEntry[1] : 0);
+  }
+
+  const onesEntry = Object.entries(KOREAN_NUMBER_WORDS)
+    .sort((a, b) => b[0].length - a[0].length)
+    .find(([word]) => normalized.includes(word));
+  return onesEntry ? onesEntry[1] : null;
+};
+
+const getCalculationPromptNumber = (step, answers = {}) => {
+  if (!isCalculationStep(step)) return null;
+  const currentCalcIdx = CALC_STEP_IDS.indexOf(step.id);
+  if (currentCalcIdx <= 0) return CALC_PROMPT_NUMBERS.c1;
+
+  const prevStepId = CALC_STEP_IDS[currentCalcIdx - 1];
+  const prevAnswerNumber = answers[prevStepId]?.parsedNumber ?? extractSpokenNumber(answers[prevStepId]?.value);
+  return Number.isFinite(prevAnswerNumber) ? prevAnswerNumber : CALC_PROMPT_NUMBERS[step.id];
+};
+
 const isGiveUpAnswer = (value) => {
   const normalized = String(value || '').replace(/\s/g, '');
   return /모르겠|잘모르/.test(normalized);
 };
 
-const getQuestionText = (step) => {
+const getQuestionText = (step, answers = {}) => {
   if (isCalculationStep(step)) {
-    return `${CALC_PROMPT_NUMBERS[step.id]}에서 7을 빼면 얼마인가요?`;
+    return `${getCalculationPromptNumber(step, answers)}에서 7을 빼면 얼마인가요?`;
   }
   return step?.question || '';
+};
+
+const getListenOptions = (step) => {
+  if (isCalculationStep(step) || step?.id === 'recall') {
+    return {
+      noResultMs: 24000,
+      finalizeDelayMs: 4200,
+      webSpeechSilenceMs: 4200,
+    };
+  }
+
+  return {
+    noResultMs: 18000,
+    finalizeDelayMs: 3000,
+    webSpeechSilenceMs: 3000,
+  };
 };
 
 const getDifficulty = (score, maxScore) => {
@@ -219,154 +282,6 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
 };
 
 // ─────────────────────────────────────────────
-// ElevenLabs Scribe v2 Realtime 음성 인식 훅
-// ─────────────────────────────────────────────
-const useScribeSpeechRecognition = () => {
-  const [isListening, setIsListening] = useState(false);
-  const supported = !!(navigator.mediaDevices?.getUserMedia && window.WebSocket);
-  const onResultRef = useRef(null);
-  const onNoResultRef = useRef(null);
-  const timeoutRef = useRef(null);
-  const completedRef = useRef(false);
-  const disconnectRef = useRef(null);
-  const scribeFailedRef = useRef(false);
-  const scribeConsecutiveFailsRef = useRef(0);
-
-  const cleanupTimer = () => {
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
-  };
-
-  const finish = (text) => {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    cleanupTimer();
-    disconnectRef.current?.();
-
-    const trimmed = (text || '').trim();
-    if (trimmed) {
-      scribeConsecutiveFailsRef.current = 0;
-      onResultRef.current?.(trimmed);
-    } else {
-      scribeConsecutiveFailsRef.current++;
-      if (scribeConsecutiveFailsRef.current >= 2) {
-        scribeFailedRef.current = true; // 브라우저 STT로 영구 전환
-      }
-      onNoResultRef.current?.();
-    }
-  };
-
-  const scribe = useScribe({
-    modelId: 'scribe_v2_realtime',
-    languageCode: 'ko',
-    commitStrategy: 'vad',
-    vadSilenceThresholdSecs: 1.2,
-    minSpeechDurationMs: 120,
-    minSilenceDurationMs: 250,
-    noVerbatim: true,
-    onCommittedTranscript: (data) => finish(data.text),
-    onCommittedTranscriptWithTimestamps: (data) => finish(data.text),
-    onError: () => finish(''),
-    onAuthError: () => finish(''),
-    onQuotaExceededError: () => finish(''),
-    onRateLimitedError: () => finish(''),
-    onInputError: () => finish(''),
-    onInsufficientAudioActivityError: () => finish(''),
-  });
-
-  const safeDisconnect = () => {
-    try { scribe.disconnect(); } catch { /* WebSocket이 연결되지 않은 상태에서 disconnect 무시 */ }
-  };
-
-  disconnectRef.current = safeDisconnect;
-
-  const fetchScribeToken = async () => {
-    const response = await fetch(SCRIBE_TOKEN_ENDPOINT);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.token) {
-      scribeFailedRef.current = true;
-      throw new Error(data.error || 'Scribe token request failed');
-    }
-    return data.token;
-  };
-
-  const startListeningWebSpeech = (onResult, onNoResult) => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { onNoResult?.(); return; }
-    const rec = new SR();
-    rec.lang = 'ko-KR';
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    setIsListening(true);
-    let done = false;
-    const finish = (text) => {
-      if (done) return;
-      done = true;
-      if (text) onResult?.(text);
-      else onNoResult?.();
-    };
-    rec.onresult = (e) => finish(e.results[0]?.[0]?.transcript || '');
-    rec.onerror = () => finish('');
-    rec.onend = () => finish('');
-    try { rec.start(); } catch { finish(''); }
-  };
-
-  const startListening = async (onResult, onNoResult) => {
-    safeDisconnect();
-    cleanupTimer();
-    completedRef.current = false;
-    onResultRef.current = onResult;
-    onNoResultRef.current = onNoResult;
-
-    if (!supported || scribeFailedRef.current) {
-      startListeningWebSpeech(onResult, onNoResult);
-      return;
-    }
-
-    setIsListening(true);
-    timeoutRef.current = setTimeout(() => finish(''), SCRIBE_NO_RESULT_MS);
-    try {
-      const token = await fetchScribeToken();
-      await scribe.connect({
-        token,
-        modelId: 'scribe_v2_realtime',
-        languageCode: 'ko',
-        commitStrategy: 'vad',
-        vadSilenceThresholdSecs: 1.2,
-        minSpeechDurationMs: 120,
-        minSilenceDurationMs: 250,
-        noVerbatim: true,
-        microphone: {
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-      // AudioWorklet 메시지 큐에 남은 오디오가 disconnect 후에도 send()를 호출할 수 있음
-      // connection.send를 패치해 WebSocket이 닫힌 후 오는 청크는 무시
-      const conn = scribe.getConnection();
-      if (conn) {
-        const origSend = conn.send.bind(conn);
-        conn.send = (data) => { try { origSend(data); } catch { /* disconnected 후 잔여 청크 무시 */ } };
-      }
-    } catch {
-      // Scribe 토큰 없음 → 브라우저 STT로 폴백
-      cleanupTimer();
-      setIsListening(false);
-      startListeningWebSpeech(onResult, onNoResult);
-    }
-  };
-
-  const stopListening = () => {
-    completedRef.current = true;
-    cleanupTimer();
-    safeDisconnect();
-    setIsListening(false);
-  };
-
-  return { isListening, supported, startListening, stopListening };
-};
-
-// ─────────────────────────────────────────────
 // 메인 컴포넌트
 // ─────────────────────────────────────────────
 export default function KMMSEScreen({ currentUser, existingDifficulty, onComplete }) {
@@ -381,10 +296,10 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   const [answers, setAnswers] = useState({});
   const [memoryTimer, setMemoryTimer] = useState(10);
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState(null);
+  const [, setResult] = useState(null);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [enableNarration, setEnableNarration] = useState(true);
+  const [enableNarration] = useState(true);
   const [autoListenTrigger, setAutoListenTrigger] = useState(0);
 
   // 항상 최신 submitAnswer를 가리키는 ref (stale closure 방지)
@@ -462,7 +377,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       } else if (step.type === 'section_narration') {
         textToRead = step.text;
       } else if (step.type === 'question') {
-        textToRead = getQuestionText(step);
+        textToRead = getQuestionText(step, answers);
       } else if (step.type === 'memory_show') {
         textToRead = `아래 세 가지 단어를 기억해 주세요. ${step.words.join(', ')}`;
       }
@@ -497,7 +412,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       clearTimeout(timer);
       cancelTTS();
     };
-  }, [loadingLocation, stepIdx, STEPS.length, enableNarration]);
+  }, [loadingLocation, stepIdx, STEPS.length, enableNarration, answers]);
 
   // 자동 음성 인식 (질문 TTS 완료 후 호출됨)
   useEffect(() => {
@@ -507,7 +422,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     const step = STEPS[capturedStepIdx];
     if (!step || step.type !== 'question') return;
 
-    const norm = (s) => s.replace(/[.,!?\s🌸☀️🍂❄️]/g, '').toLowerCase();
+    const norm = (s) => s.replace(/[.,!?\s]/g, '').replace(/🌸|☀️|🍂|❄️/gu, '').toLowerCase();
 
     const doListen = () => {
       // 스텝이 바뀌었으면 중단
@@ -542,7 +457,8 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
         () => {
           // 음성 미감지 → 800ms 후 재시도 (브라우저가 마이크 해제할 시간 확보)
           setTimeout(() => doListen(), 800);
-        }
+        },
+        getListenOptions(step)
       );
     };
 
@@ -590,8 +506,22 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
   const submitAnswer = (value) => {
     const step = STEPS[stepIdx];
     if (!step) return;
-    const scored = step.evaluate ? step.evaluate(value) : 0;
-    const newAnswers = { ...answers, [step.id]: { value, score: scored } };
+    let scored = step.evaluate ? step.evaluate(value) : 0;
+    const spokenNumber = extractSpokenNumber(value);
+
+    if (isCalculationStep(step) && !isGiveUpAnswer(value)) {
+      const baseNumber = getCalculationPromptNumber(step, answers);
+      scored = spokenNumber === baseNumber - 7 ? 1 : 0;
+    }
+
+    const newAnswers = {
+      ...answers,
+      [step.id]: {
+        value,
+        score: scored,
+        ...(Number.isFinite(spokenNumber) ? { parsedNumber: spokenNumber } : {}),
+      },
+    };
 
     if (isCalculationStep(step) && isGiveUpAnswer(value)) {
       const currentCalcIdx = CALC_STEP_IDS.indexOf(step.id);
@@ -735,7 +665,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       {currentStep?.type === 'question' && (
         <div className="kmmse-card kmmse-question-card">
           <div className="kmmse-section-label">{currentStep.section}</div>
-          <p className="kmmse-question">{getQuestionText(currentStep)}</p>
+          <p className="kmmse-question">{getQuestionText(currentStep, answers)}</p>
 
           {currentStep.inputType === 'object_name' && (
             <div className="kmmse-object-display">

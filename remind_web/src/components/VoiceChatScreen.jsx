@@ -6,13 +6,14 @@ import { analyzeConversation } from '../services/conversationAnalysisService';
 import { getConnectedPatientId } from '../services/familyLinkService';
 import './VoiceChatScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
+import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
 const SILENCE_TIMEOUT_MS = 1700;
 const AUTO_LISTEN_DELAY_MS = 700;
 
 function VoiceChatScreen({ onBack }) {
-  const [status, setStatus] = useState('사진을 불러오는 중...');
-  const [caption, setCaption] = useState('');
+  const [, setStatus] = useState('사진을 불러오는 중...');
+  const [, setCaption] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [uiState, setUiState] = useState('loading');
   const [autoListenEnabled, setAutoListenEnabled] = useState(true);
@@ -27,7 +28,6 @@ function VoiceChatScreen({ onBack }) {
   const [userPaused, setUserPaused] = useState(false);
 
   const chatHistoryRef = useRef([]);
-  const recognitionRef = useRef(null);
   const ttsQueueRef = useRef([]);
   const isSpeakingRef = useRef(false);
   const currentPhotoIdRef = useRef(null);
@@ -56,6 +56,13 @@ function VoiceChatScreen({ onBack }) {
   const animFrameRef = useRef(null);
   const waitingDotsRef = useRef(null);
   const userPausedRef = useRef(false);
+  const {
+    startListening: startSpeechRecognition,
+    stopListening: stopSpeechRecognition,
+  } = useScribeSpeechRecognition({
+    finalizeDelayMs: SILENCE_TIMEOUT_MS,
+    webSpeechSilenceMs: SILENCE_TIMEOUT_MS,
+  });
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -491,9 +498,9 @@ function VoiceChatScreen({ onBack }) {
     }
   };
 
-  const finalizeRecognizedSpeech = async () => {
+  const finalizeRecognizedSpeech = async (recognizedText = '') => {
     clearSilenceTimer();
-    const text = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`.replace(/\s+/g, ' ').trim();
+    const text = (recognizedText || `${finalTranscriptRef.current} ${interimTranscriptRef.current}`).replace(/\s+/g, ' ').trim();
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     if (!text) {
@@ -515,72 +522,39 @@ function VoiceChatScreen({ onBack }) {
     await sendTextToGemini(text);
   };
 
-  const initSpeechRecognition = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('이 브라우저는 음성인식을 지원하지 않습니다.');
-      return;
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.lang = 'ko-KR';
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
-
-    recognitionRef.current.onresult = (event) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        const transcript = result[0]?.transcript || '';
-        if (result.isFinal) {
-          finalTranscriptRef.current = `${finalTranscriptRef.current} ${transcript}`.trim();
-        } else {
-          interim += transcript;
-        }
-      }
-      interimTranscriptRef.current = interim.trim();
-      const preview = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`.replace(/\s+/g, ' ').trim();
-      if (preview) setCaption(`당신: ${preview}`);
-      clearSilenceTimer();
-      silenceTimerRef.current = setTimeout(() => {
-        if (isRecordingRef.current && !processingRef.current) {
-          stopRecording();
-          finalizeRecognizedSpeech();
-        }
-      }, SILENCE_TIMEOUT_MS);
-    };
-
-    recognitionRef.current.onerror = (event) => {
-      console.error('❌ 음성인식 오류:', event.error);
-      setIsRecording(false);
-      isRecordingRef.current = false;
-      if (event.error !== 'aborted') {
-        setUiState('ready');
-        setStatus('잘 못 들었어요. 다시 말씀해 주세요.');
-        scheduleAutoListen(500);
-      }
-    };
-
-    recognitionRef.current.onend = () => {
-      setIsRecording(false);
-      isRecordingRef.current = false;
-      if (uiStateRef.current === 'recording' && !processingRef.current) {
-        finalizeRecognizedSpeech();
-      }
-    };
-  };
-
   const startRecording = () => {
-    if (!recognitionRef.current) return;
     if (isSpeakingRef.current || processingRef.current || isEndingCallRef.current || isRecordingRef.current) return;
     try {
       clearSilenceTimer();
       stopSpeaking();
       setUserPaused(false);
-      recognitionRef.current.start();
       setIsRecording(true);
       isRecordingRef.current = true;
       setUiState('recording');
       setStatus('듣고 있어요...');
+      finalTranscriptRef.current = '';
+      interimTranscriptRef.current = '';
+      startSpeechRecognition(
+        (text) => {
+          setIsRecording(false);
+          isRecordingRef.current = false;
+          finalizeRecognizedSpeech(text);
+        },
+        () => {
+          setIsRecording(false);
+          isRecordingRef.current = false;
+          setUiState('ready');
+          setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
+          scheduleAutoListen(400);
+        },
+        {
+          onTranscript: (preview) => {
+            finalTranscriptRef.current = preview;
+            interimTranscriptRef.current = '';
+            setCaption(`당신: ${preview}`);
+          },
+        }
+      );
     } catch (err) {
       console.error('❌ 음성인식 시작 오류:', err);
     }
@@ -588,7 +562,7 @@ function VoiceChatScreen({ onBack }) {
 
   const stopRecording = () => {
     clearSilenceTimer();
-    if (recognitionRef.current) recognitionRef.current.stop();
+    stopSpeechRecognition();
     setIsRecording(false);
     isRecordingRef.current = false;
   };
@@ -713,7 +687,6 @@ function VoiceChatScreen({ onBack }) {
     isMountedRef.current = true;
     callStartTimeRef.current = Date.now();
     loadPhotoAndStart();
-    initSpeechRecognition();
     return () => {
       isMountedRef.current = false;
       clearSilenceTimer();
@@ -723,7 +696,7 @@ function VoiceChatScreen({ onBack }) {
       stopWaveAnimation();
       stopMicStream();
       clearInterval(timerIntervalRef.current);
-      if (recognitionRef.current) recognitionRef.current.stop();
+      stopSpeechRecognition();
     };
   }, []);
 

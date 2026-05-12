@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import './OrientationTrainingScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
+import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
 const SILENCE_MS = 2000;
 const HINT_REVIEW_MS = 2500;
@@ -69,7 +70,9 @@ const playCorrectSound = () => {
       osc.start(ctx.currentTime + delay);
       osc.stop(ctx.currentTime + delay + 0.4);
     });
-  } catch {}
+  } catch {
+    // Audio feedback is optional.
+  }
 };
 
 const playHintSound = () => {
@@ -85,7 +88,9 @@ const playHintSound = () => {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.6);
-  } catch {}
+  } catch {
+    // Audio feedback is optional.
+  }
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -149,7 +154,6 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
   const [sparkle, setSparkle] = useState(false);
   const [statusMsg, setStatusMsg] = useState('문제를 불러오는 중...');
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isListening, setIsListening] = useState(false);
 
   const mountedRef = useRef(true);
   const initRef = useRef(false);
@@ -157,13 +161,19 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
   const currentIdxRef = useRef(0);
   const correctCountRef = useRef(0);
   const phaseRef = useRef('loading');
-  const recRef = useRef(null);
-  const silenceRef = useRef(null);
   const finalTxRef = useRef('');
   const interimTxRef = useRef('');
-  const isRecordingRef = useRef(false);
   const processingAnswerRef = useRef(false); // 답변 중복 처리 방지
   const isSpeakingRef = useRef(false);       // TTS 중 마이크 잡힘 방지
+  const {
+    isListening,
+    supported: speechSupported,
+    startListening: startSpeechRecognition,
+    stopListening: stopSpeechRecognition,
+  } = useScribeSpeechRecognition({
+    finalizeDelayMs: SILENCE_MS,
+    webSpeechSilenceMs: SILENCE_MS,
+  });
 
   useEffect(() => { questionsRef.current = questions; }, [questions]);
   useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
@@ -176,8 +186,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
     loadAndStart();
     return () => {
       mountedRef.current = false;
-      clearTimeout(silenceRef.current);
-      if (recRef.current) try { recRef.current.stop(); } catch {}
+      stopSpeechRecognition();
       cancelTTS();
     };
   }, []);
@@ -391,100 +400,61 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
     await new Promise((r) => setTimeout(r, 350));
     isSpeakingRef.current = false;
     if (!mountedRef.current) return;
-    startListening('first');
+    beginListening('first');
   };
 
   // ── 음성 인식 ──
-  const startListening = (attempt) => {
+  const beginListening = (attempt) => {
     if (!mountedRef.current || processingAnswerRef.current) return;
 
     const p = attempt === 'first' ? 'listening' : 'hint_listening';
     setPhase(p);
     phaseRef.current = p;
-    setIsListening(true);
     setTranscript('');
     setStatusMsg('말씀해 주세요...');
     finalTxRef.current = '';
     interimTxRef.current = '';
 
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    if (!speechSupported && !('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setStatusMsg('이 브라우저는 음성 인식을 지원하지 않아요.');
-      setIsListening(false);
       return;
     }
 
-    if (recRef.current) try { recRef.current.stop(); } catch {}
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR();
-    rec.lang = 'ko-KR';
-    rec.continuous = true;
-    rec.interimResults = true;
-    recRef.current = rec;
-    isRecordingRef.current = true;
-
-    // ── 클로저 기반 1회 발화 트리거 (중복 호출 원천 차단) ──
     let answered = false;
-    const triggerAnswer = () => {
+    const triggerAnswer = (answer) => {
       if (answered || processingAnswerRef.current) return;
       answered = true;
-      clearTimeout(silenceRef.current);
+      finalTxRef.current = answer;
+      interimTxRef.current = '';
       stopListening();
       handleAnswer(attempt);
     };
 
-    rec.onresult = (e) => {
-      // TTS 재생 중 마이크 잡힘 무시
-      if (isSpeakingRef.current) return;
-
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) {
-          finalTxRef.current = `${finalTxRef.current} ${r[0].transcript}`.trim();
-        } else {
-          interim += r[0].transcript;
+    startSpeechRecognition(
+      (answer) => {
+        if (isSpeakingRef.current) return;
+        const trimmed = (answer || '').trim();
+        if (trimmed) setTranscript(trimmed);
+        triggerAnswer(trimmed);
+      },
+      () => {
+        if (!processingAnswerRef.current && !answered) {
+          setStatusMsg('잘 못 들었어요. 다시 말씀해 주세요.');
+          setTimeout(() => {
+            if (mountedRef.current && !processingAnswerRef.current) beginListening(attempt);
+          }, 1200);
         }
+      },
+      {
+        onTranscript: (preview) => {
+          if (!isSpeakingRef.current && preview) setTranscript(preview);
+        },
       }
-      interimTxRef.current = interim;
-      const preview = `${finalTxRef.current} ${interim}`.trim();
-      if (preview) setTranscript(preview);
-
-      // 침묵 감지 타이머 리셋
-      clearTimeout(silenceRef.current);
-      silenceRef.current = setTimeout(triggerAnswer, SILENCE_MS);
-    };
-
-    rec.onerror = (e) => {
-      if (e.error === 'aborted') return;
-      isRecordingRef.current = false;
-      setIsListening(false);
-      if (!processingAnswerRef.current && !answered) {
-        setStatusMsg('잘 못 들었어요. 다시 말씀해 주세요.');
-        setTimeout(() => {
-          if (mountedRef.current && !processingAnswerRef.current) startListening(attempt);
-        }, 1200);
-      }
-    };
-
-    rec.onend = () => {
-      isRecordingRef.current = false;
-      setIsListening(false);
-      // rec.onend가 silence timer보다 먼저 발생할 때도 처리
-      const answer = `${finalTxRef.current} ${interimTxRef.current}`.trim();
-      if (answer && !answered && !processingAnswerRef.current) {
-        triggerAnswer();
-      }
-    };
-
-    try { rec.start(); } catch (err) { console.error('음성 인식 시작 오류:', err); }
+    );
   };
 
   const stopListening = () => {
-    clearTimeout(silenceRef.current);
-    if (recRef.current) try { recRef.current.stop(); } catch {}
-    isRecordingRef.current = false;
-    setIsListening(false);
+    stopSpeechRecognition();
   };
 
   // ── 답변 처리 (로컬 평가, Gemini API 미사용) ──
@@ -496,7 +466,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
     if (!answer) {
       processingAnswerRef.current = false;
       setStatusMsg('잘 못 들었어요. 다시 말씀해 주세요.');
-      setTimeout(() => { if (mountedRef.current) startListening(attempt); }, 1000);
+      setTimeout(() => { if (mountedRef.current) beginListening(attempt); }, 1000);
       return;
     }
 
@@ -585,7 +555,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
         setTimeout(() => {
           isSpeakingRef.current = false;
           processingAnswerRef.current = false;
-          if (mountedRef.current) startListening('second');
+          if (mountedRef.current) beginListening('second');
         }, HINT_REVIEW_MS);
       } else {
         // 2차 시도 후 정답 공개
@@ -619,7 +589,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
   const q = questions[currentIdx];
   const total = questions.length;
   const progress = total > 0 ? (currentIdx / total) * 100 : 0;
-  const isActiveListening = ['listening', 'hint_listening'].includes(phase);
+  const isActiveListening = isListening || ['listening', 'hint_listening'].includes(phase);
   const isHintPhase = ['hint', 'hint_listening', 'hint_eval'].includes(phase);
   const isEvaluating = ['evaluating', 'hint_eval'].includes(phase);
 

@@ -346,6 +346,185 @@
   }
 }
 
+/* ── 환자 목록 카드 (새 디자인) ── */
+.patient-row-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  overflow: hidden;
+}
+
+.patient-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.patient-row-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.patient-row-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patient-row-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.patient-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.patient-row-status.connected {
+  color: #16a34a;
+}
+
+.patient-row-status.disconnected {
+  color: #ea580c;
+}
+
+.patient-row-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.patient-row-status.connected .patient-row-status-dot {
+  background-color: #16a34a;
+}
+
+.patient-row-status.disconnected .patient-row-status-dot {
+  background-color: #ea580c;
+}
+
+.patient-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.patient-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.patient-icon-btn.edit {
+  color: #555;
+}
+
+.patient-icon-btn.edit:hover {
+  background: #f0fdf4;
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.patient-icon-btn.delete {
+  color: #888;
+}
+
+.patient-icon-btn.delete:hover {
+  background: #fff1f0;
+  border-color: #ef4444;
+}
+
+.patient-connect-btn {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.patient-connect-btn:hover {
+  background: #fef3c7;
+}
+
+.patient-card-content-wrapper {
+  border-top: 1px solid #f0f0f0;
+  padding: 12px 16px 16px;
+}
+
+.patient-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.patient-edit-save-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: #00C16E;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.patient-edit-save-btn:hover {
+  background: #00a85d;
+}
+
+.patient-edit-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.patient-edit-cancel-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: #e5e7eb;
+  color: #555;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.patient-edit-cancel-btn:hover {
+  background: #d1d5db;
+}
+
 /* Multi-patient UI specific styles */
 /* .profile-info-card.patient-card는 위에서 이미 정의됨 */
 
