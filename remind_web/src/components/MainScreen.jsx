@@ -51,9 +51,30 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
     detail
   });
 
+  const normalizeInsights = (insights) => {
+    if (Array.isArray(insights)) {
+      return insights.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+    if (typeof insights === 'string') {
+      return insights.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+    }
+    if (insights && typeof insights === 'object') {
+      return Object.values(insights).map((item) => String(item || '').trim()).filter(Boolean);
+    }
+    return [];
+  };
+
   const getEvaluationItems = (analysis, callLog = {}) => {
     const scores = analysis?.scores || {};
     const metrics = analysis?.metrics || {};
+    const topicDeviationRate = Number(metrics.topicDeviationRate);
+    const utteranceCountValue = callLog?.totalUtterances ?? analysis?.totalUtterances ?? metrics.totalUtterances;
+    const totalUtterances = Number(utteranceCountValue);
+    const hasTopicDeviationRate = metrics.topicDeviationRate !== null &&
+      metrics.topicDeviationRate !== undefined &&
+      Number.isFinite(topicDeviationRate);
+    const canShowTopicDeviation = hasTopicDeviationRate &&
+      (utteranceCountValue === null || utteranceCountValue === undefined || totalUtterances > 0);
     const savedItems = analysis?.report?.items || [];
     const savedById = savedItems.reduce((acc, item) => {
       if (!item.id) return acc;
@@ -77,6 +98,23 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
       photoContext.detailedDescription ||
       photoContext.finalCaption
     );
+    const savedTopicDeviation = savedById.topicDeviation;
+    const savedTopicDeviationRate = Number(savedTopicDeviation?.topicDeviationRate);
+    const canRestoreSavedTopicDeviation = savedTopicDeviation &&
+      savedTopicDeviation.score === null &&
+      savedTopicDeviation.topicDeviationRate !== null &&
+      savedTopicDeviation.topicDeviationRate !== undefined &&
+      Number.isFinite(savedTopicDeviationRate);
+    const topicDeviationItem = savedTopicDeviation?.score !== null &&
+      savedTopicDeviation?.score !== undefined
+      ? savedTopicDeviation
+      : canRestoreSavedTopicDeviation
+        ? {
+          ...savedTopicDeviation,
+          score: Math.round(clampScore(100 - savedTopicDeviationRate)),
+          passed: savedTopicDeviation.passed ?? savedTopicDeviationRate <= 40
+        }
+        : null;
 
     return [
       savedById.vocabularyDiversity || buildFallbackReportItem({
@@ -97,11 +135,11 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         score: scores.emotion ?? metrics.emotionPositiveRatio ?? 0,
         passed: (scores.emotion ?? metrics.emotionPositiveRatio ?? 0) >= 50
       }),
-      savedById.topicDeviation || buildFallbackReportItem({
+      topicDeviationItem || buildFallbackReportItem({
         id: 'topicDeviation',
         label: '주제 이탈률',
-        score: (metrics.totalUtterances > 0) ? 100 - (metrics.topicDeviationRate || 0) : null,
-        passed: (metrics.totalUtterances > 0) ? (metrics.topicDeviationRate || 0) <= 40 : null
+        score: canShowTopicDeviation ? 100 - topicDeviationRate : null,
+        passed: canShowTopicDeviation ? topicDeviationRate <= 40 : null
       }),
       savedById.guardianCaption || buildFallbackReportItem({
         id: 'guardianCaption',
@@ -116,7 +154,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
     const reportItems = analysis?.report?.items || [];
     const needsCheck = reportItems.find((item) => item.passed === false);
     if (needsCheck) return `${needsCheck.label}: ${needsCheck.detail}`;
-    return reportItems[0]?.detail || analysis?.insights?.[0] || '통화가 완료되었습니다.';
+    return reportItems[0]?.detail || normalizeInsights(analysis?.insights)[0] || '통화가 완료되었습니다.';
   };
 
   const loadUserInfo = async () => {
@@ -369,6 +407,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
         const timeString = `${hours >= 12 ? '오후' : '오전'} ${hours % 12 || 12}:${String(minutes).padStart(2, '0')}`;
         const durationMinutes = Math.floor((latestCall.callDuration || 0) / 60);
         const durationSeconds = (latestCall.callDuration || 0) % 60;
+        const latestInsightLines = normalizeInsights(latestCall.analysis?.insights);
         
         setTodayStatus({
           hasCall: isToday,
@@ -376,7 +415,8 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
           lastCallDuration: `${durationMinutes}분 ${durationSeconds}초`,
           status: latestCall.status || '통화 완료',
           statusColor: latestCall.analysis?.status?.color || '#41d17f',
-          message: getReportMessage(latestCall.analysis)
+          message: getReportMessage(latestCall.analysis),
+          insightLines: latestInsightLines
         });
         
         // 인지 상태 요약 (최근 7일 트렌드)
@@ -476,8 +516,21 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
             <div className="today-card">
               <div className="today-card-content">
                 <div className="today-card-text">{todayStatus?.hasCall ? '오늘 통화 완료' : '아직 오늘 통화가 없어요'}</div>
-                <div className="today-card-desc">{todayStatus?.hasCall ? '오늘 통화를 완료했어요!' : '아직 오늘 통화가 없어요'}</div>
-                <div className="today-card-desc">{todayStatus?.message || ''}</div>
+                {todayStatus?.hasCall ? (
+                  <>
+                    <div className="today-card-desc today-card-desc-strong">오늘 통화를 완료했어요!</div>
+                    <div className="today-card-desc">{todayStatus?.message || ''}</div>
+                  </>
+                ) : (todayStatus?.insightLines?.length > 0 ? (
+                  <>
+                    <div className="today-card-desc">최근 통화 요약</div>
+                    {todayStatus.insightLines.slice(0, 2).map((insight, index) => (
+                      <div key={index} className="today-card-desc">{insight}</div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="today-card-desc">아직 오늘 통화가 없어요</div>
+                ))}
               </div>
               <div className="today-card-footer">
                 <div>

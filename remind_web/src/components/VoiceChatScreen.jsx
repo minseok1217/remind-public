@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { collection, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
-import { chatWithGemini, evaluateConversationReport } from '../services/geminiService';
+import { chatWithGemini, evaluateConversationReport, generateCallInsightLines, generatePreCallReaction } from '../services/geminiService';
 import { analyzeConversation } from '../services/conversationAnalysisService';
 import { getConnectedPatientId } from '../services/familyLinkService';
 import './VoiceChatScreen.css';
@@ -745,7 +745,12 @@ function VoiceChatScreen({ onBack }) {
     preCallCheckRef.current.answers[currentIndex] = text;
     chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
 
-    const reaction = getPreCallReaction(currentIndex, text);
+    const currentQuestion = PRE_CALL_CHECK_QUESTIONS[currentIndex];
+    const reaction = await generatePreCallReaction({
+      question: currentQuestion,
+      answer: text,
+      questionIndex: currentIndex,
+    }) || getPreCallReaction(currentIndex, text);
     preCallCheckRef.current.index += 1;
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
       const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
@@ -814,6 +819,46 @@ function VoiceChatScreen({ onBack }) {
         return `${role}: ${msg.parts[0]?.text || ''}`;
       }).join('\n');
       const previousCallLog = await loadLatestPreviousCallLog(user.uid);
+      const changesFromPrevious = buildChangeSummary({
+        totalUtterances: analysis.totalUtterances,
+        totalWords: analysis.totalWords,
+        cognitiveScore: analysis.scores.cognitive,
+        analysis: {
+          metrics: analysis.metrics,
+          scores: analysis.scores,
+        },
+      }, previousCallLog);
+      const currentCallForInsight = {
+        userId: user.uid,
+        photoOwnerId: currentPhotoOwnerIdRef.current || user.uid,
+        callDate: new Date().toISOString(),
+        callDuration,
+        photoId: currentPhotoIdRef.current || null,
+        hasPhoto,
+        conversation: conversationText,
+        totalUtterances: analysis.totalUtterances,
+        totalWords: analysis.totalWords,
+        photoContext: usedPhotoContext,
+        preCallCheck: {
+          questions: PRE_CALL_CHECK_QUESTIONS,
+          answers: preCallCheckRef.current.answers || [],
+        },
+        analysis: {
+          metrics: analysis.metrics,
+          scores: analysis.scores,
+          status: analysis.status,
+          insights: analysis.insights,
+          report: analysis.report || llmReport || null,
+        },
+        status: analysis.status.label,
+        cognitiveScore: analysis.scores.cognitive,
+        changesFromPrevious,
+      };
+      const insightLines = await generateCallInsightLines({
+        currentCallLog: currentCallForInsight,
+        previousCallLog
+      });
+      currentCallForInsight.analysis.insights = insightLines;
       const callLogData = sanitizeForFirestore({
         userId: user.uid,
         photoOwnerId: currentPhotoOwnerIdRef.current || user.uid,
@@ -825,22 +870,14 @@ function VoiceChatScreen({ onBack }) {
           questions: PRE_CALL_CHECK_QUESTIONS,
           answers: preCallCheckRef.current.answers || [],
         },
-        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: analysis.insights, report: analysis.report || llmReport || null },
-        changesFromPrevious: buildChangeSummary({
-          totalUtterances: analysis.totalUtterances,
-          totalWords: analysis.totalWords,
-          cognitiveScore: analysis.scores.cognitive,
-          analysis: {
-            metrics: analysis.metrics,
-            scores: analysis.scores,
-          },
-        }, previousCallLog),
+        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: insightLines, report: analysis.report || llmReport || null },
+        changesFromPrevious,
         summary: {
           status: analysis.status,
           cognitiveScore: analysis.scores.cognitive,
           totalUtterances: analysis.totalUtterances,
           totalWords: analysis.totalWords,
-          insights: analysis.insights,
+          insights: insightLines,
         },
         status: analysis.status.label, cognitiveScore: analysis.scores.cognitive, createdAt: serverTimestamp()
       });

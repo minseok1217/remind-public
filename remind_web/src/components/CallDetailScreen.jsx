@@ -8,6 +8,18 @@ import aiicon from '../assets/ai_icon.png';
 import usericon from '../assets/user_icon.png';
 import infoicon from '../assets/info_icon.png';
 
+const normalizeInsights = (insights) => {
+  if (Array.isArray(insights)) {
+    return insights.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  if (typeof insights === 'string') {
+    return insights.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+  }
+  if (insights && typeof insights === 'object') {
+    return Object.values(insights).map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  return [];
+};
 
 function CallDetailScreen({ callLog, currentUser, onBack }) {
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -18,7 +30,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const scores = analysis.scores || {};
   const metrics = analysis.metrics || {};
   const status = analysis.status || {};
-  const insights = analysis.insights || [];
+  const insights = normalizeInsights(analysis.insights);
   const photoContext = callLog?.photoContext || {};
   const conversation = callLog?.conversation || '';
   const cognitiveScore = scores.cognitive || callLog?.cognitiveScore || 0;

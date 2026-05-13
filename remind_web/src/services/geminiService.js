@@ -279,6 +279,128 @@ const callGeminiTextOnly = async (prompt) => {
 };
 
 // 사진 + 캡션을 함께 분석해서 통화 평가용 정답 키워드 추출 (멀티모달)
+const normalizeCallLogForPrompt = (log) => {
+  if (!log) return null;
+  return {
+    id: log.id || null,
+    callDate: log.callDate?.toDate?.()?.toISOString?.() || log.callDate || null,
+    createdAt: log.createdAt?.toDate?.()?.toISOString?.() || log.createdAt || null,
+    callDuration: log.callDuration ?? null,
+    status: log.status || log.analysis?.status?.label || null,
+    cognitiveScore: log.cognitiveScore ?? log.analysis?.scores?.cognitive ?? null,
+    totalUtterances: log.totalUtterances ?? null,
+    totalWords: log.totalWords ?? null,
+    hasPhoto: log.hasPhoto ?? null,
+    photoContext: log.photoContext || null,
+    preCallCheck: log.preCallCheck || null,
+    conversation: log.conversation || '',
+    analysis: log.analysis || null,
+    summary: log.summary || null,
+    changesFromPrevious: log.changesFromPrevious || null
+  };
+};
+
+const buildFallbackInsightLines = (currentCallLog, previousCallLog) => {
+  const currentScore = currentCallLog?.cognitiveScore ?? currentCallLog?.analysis?.scores?.cognitive ?? 0;
+  const currentWords = currentCallLog?.totalWords ?? 0;
+  const currentTopicRate = currentCallLog?.analysis?.metrics?.topicDeviationRate ?? 0;
+
+  if (!previousCallLog) {
+    return [
+      `오늘 통화는 인지 점수 ${Math.round(currentScore)}점으로 기록되었습니다.`,
+      `총 ${currentCallLog?.totalUtterances ?? 0}회 발화했고 ${currentWords}개의 단어를 사용했습니다.`,
+      `주제 이탈률은 ${Math.round(currentTopicRate)}%로 나타났습니다.`
+    ];
+  }
+
+  const previousScore = previousCallLog.cognitiveScore ?? previousCallLog.analysis?.scores?.cognitive ?? 0;
+  const previousWords = previousCallLog.totalWords ?? 0;
+  const previousTopicRate = previousCallLog.analysis?.metrics?.topicDeviationRate ?? 0;
+
+  return [
+    `인지 점수는 이전 통화보다 ${Math.round((currentScore - previousScore) * 10) / 10}점 변화했습니다.`,
+    `발화 단어 수는 이전 ${previousWords}개에서 이번 ${currentWords}개로 기록되었습니다.`,
+    `주제 이탈률은 이전 ${Math.round(previousTopicRate)}%에서 이번 ${Math.round(currentTopicRate)}%로 변화했습니다.`
+  ];
+};
+
+export const generateCallInsightLines = async ({ currentCallLog, previousCallLog = null }) => {
+  const promptPayload = {
+    previousCallLog: normalizeCallLogForPrompt(previousCallLog),
+    currentCallLog: normalizeCallLogForPrompt(currentCallLog)
+  };
+  const prompt = `
+당신은 치매 어르신과 AI 통화 기록을 보호자에게 설명하는 임상 보조 분석가입니다.
+아래 통화 log 정보를 보고 Firebase analysis.insights에 저장할 문장 3개를 작성하세요.
+
+작성 규칙:
+- 반드시 한국어 문장 3개만 작성합니다.
+- 이전 통화가 있으면 "이전 통화에 비해 어떻게 변했는지"를 중심으로 작성합니다.
+- 이전 통화가 없으면 "그날 통화가 어땠는지"를 중심으로 작성합니다.
+- 평가 요소 이름을 나열하는 방식이 아니라, 보호자가 이해하기 쉬운 변화/상태 요약으로 작성합니다.
+- 과장하거나 진단하지 말고, 통화 기록과 지표에서 확인되는 내용만 말합니다.
+- 각 문장은 35자 이상 90자 이하로 작성합니다.
+
+[통화 log 정보]
+${JSON.stringify(promptPayload, null, 2)}
+
+다음 JSON 형식으로만 반환하세요.
+{"insights":["문장1","문장2","문장3"]}`;
+
+  try {
+    const response = await callGeminiTextOnly(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return buildFallbackInsightLines(currentCallLog, previousCallLog);
+    const parsed = JSON.parse(jsonMatch[0]);
+    const insights = Array.isArray(parsed.insights)
+      ? parsed.insights.map((line) => String(line || '').replace(/^\s*[-*\d.]+\s*/, '').trim()).filter(Boolean)
+      : [];
+    if (insights.length >= 3) return insights.slice(0, 3);
+    return buildFallbackInsightLines(currentCallLog, previousCallLog);
+  } catch (error) {
+    console.error('통화 insight 3줄 생성 실패:', error);
+    return buildFallbackInsightLines(currentCallLog, previousCallLog);
+  }
+};
+
+export const generatePreCallReaction = async ({ question, answer, questionIndex }) => {
+  const prompt = `
+당신은 치매 어르신과 통화하는 Remind 서비스 상담사입니다.
+통화 시작 전 컨디션 체크 질문에 대한 어르신 답변을 보고, 다음 질문으로 넘어가기 전에 말할 짧은 반응 문장 1개를 작성하세요.
+
+작성 규칙:
+- 한국어 한 문장만 작성합니다.
+- 15자 이상 55자 이하로 짧고 따뜻하게 말합니다.
+- 진단, 처방, 단정은 하지 않습니다.
+- 답변의 뉘앙스를 반영하되 과장하지 않습니다.
+- 다음 질문은 작성하지 않습니다. 반응 문장만 작성합니다.
+- 어르신이 약을 못 챙겼다고 답한 경우에는 보호자에게 확인해보면 좋겠다는 정도로만 부드럽게 말합니다.
+
+[현재 질문 번호]
+${questionIndex + 1}
+
+[질문]
+${question}
+
+[어르신 답변]
+${answer || '(답변 없음)'}
+
+다음 JSON 형식으로만 반환하세요.
+{"reaction":"반응 문장"}`;
+
+  try {
+    const response = await callGeminiTextOnly(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    const reaction = String(parsed.reaction || '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
+    return reaction || null;
+  } catch (error) {
+    console.warn('사전 컨디션 체크 반응 생성 실패:', error);
+    return null;
+  }
+};
+
 export const extractAnswerKeywords = async (imageBase64, captionText, step1Data) => {
   const parts = [];
   if (step1Data?.year) parts.push(`연도/시기: ${step1Data.year}`);

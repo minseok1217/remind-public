@@ -24,7 +24,8 @@ const EMOTION_KEYWORDS = {
  * @param {number} callDuration - 통화 시간 (초)
  * @returns {Object} 분석 결과
  */
-export const analyzeConversation = (chatHistory, callDuration) => {
+export const analyzeConversation = (chatHistory, callDuration, options = {}) => {
+  const { photoContext = null, llmReport = null } = options || {};
   // 사용자 발화만 추출
   const userMessages = chatHistory
     .filter(msg => msg.role === 'user')
@@ -83,6 +84,30 @@ export const analyzeConversation = (chatHistory, callDuration) => {
   const memoryScore = calculateMemoryScore(topicDeviationRate, responseLengthVariance);
   const emotionScore = emotionAnalysis.score;
 
+  const roundedMetrics = {
+    pronounRatio: Math.round(pronounRatio * 10) / 10,
+    wordsPerMinute: Math.round(wordsPerMinute * 10) / 10,
+    fluencyScore: Math.round(fluencyScore),
+    topicDeviationRate: Math.round(topicDeviationRate),
+    emotionPositiveRatio: emotionAnalysis.positiveRatio,
+    emotionNegativeRatio: emotionAnalysis.negativeRatio,
+    responseLengthVariance: Math.round(responseLengthVariance)
+  };
+  const roundedScores = {
+    cognitive: Math.round(cognitiveScore),
+    language: Math.round(languageScore),
+    memory: Math.round(memoryScore),
+    emotion: Math.round(emotionScore)
+  };
+  const status = determineStatus(cognitiveScore);
+  const insights = generateInsights({
+    pronounRatio,
+    wordsPerMinute,
+    fluencyScore,
+    topicDeviationRate,
+    emotionAnalysis
+  });
+
   return {
     // 원시 데이터
     totalWords,
@@ -90,35 +115,101 @@ export const analyzeConversation = (chatHistory, callDuration) => {
     callDurationSeconds: callDuration,
     
     // 분석 지표
-    metrics: {
-      pronounRatio: Math.round(pronounRatio * 10) / 10,
-      wordsPerMinute: Math.round(wordsPerMinute * 10) / 10,
-      fluencyScore: Math.round(fluencyScore),
-      topicDeviationRate: Math.round(topicDeviationRate),
-      emotionPositiveRatio: emotionAnalysis.positiveRatio,
-      emotionNegativeRatio: emotionAnalysis.negativeRatio,
-      responseLengthVariance: Math.round(responseLengthVariance)
-    },
+    metrics: roundedMetrics,
     
     // 종합 점수
-    scores: {
-      cognitive: Math.round(cognitiveScore),
-      language: Math.round(languageScore),
-      memory: Math.round(memoryScore),
-      emotion: Math.round(emotionScore)
-    },
+    scores: roundedScores,
     
     // 상태 판정
-    status: determineStatus(cognitiveScore),
+    status,
     
     // 상세 메시지
-    insights: generateInsights({
-      pronounRatio,
-      wordsPerMinute,
-      fluencyScore,
-      topicDeviationRate,
-      emotionAnalysis
+    insights,
+    report: buildEvaluationReport({
+      metrics: roundedMetrics,
+      scores: roundedScores,
+      llmReport,
+      photoContext
     })
+  };
+};
+
+const clampScore = (value) => Math.max(0, Math.min(Number(value) || 0, 100));
+
+const normalizeReportItem = ({ id, label, score, passed, detail, categories = null, topicDeviationRate = null }) => ({
+  id,
+  label,
+  score: score === null || score === undefined ? null : Math.round(clampScore(score)),
+  passed,
+  detail,
+  ...(categories ? { categories } : {}),
+  ...(topicDeviationRate === null || topicDeviationRate === undefined
+    ? {}
+    : { topicDeviationRate: Math.round(clampScore(topicDeviationRate)) })
+});
+
+const shouldEvaluateGuardianCaption = (photoContext) => Boolean(
+  photoContext &&
+  photoContext.source !== 'orientation_images' &&
+  photoContext.ownerId !== 'orientation_images' &&
+  !String(photoContext.id || '').startsWith('orientation_')
+);
+
+const buildEvaluationReport = ({ metrics, scores, llmReport, photoContext }) => {
+  const includeGuardianCaption = shouldEvaluateGuardianCaption(photoContext);
+  const sentence = llmReport?.sentenceCompleteness;
+  const emotion = llmReport?.emotionalState;
+  const topic = llmReport?.topicDeviation;
+  const guardian = includeGuardianCaption ? llmReport?.guardianCaption : null;
+  const topicDeviationRate = topic?.topicDeviationRate ?? metrics.topicDeviationRate ?? 0;
+
+  const items = [
+    normalizeReportItem({
+      id: 'vocabularyDiversity',
+      label: '어휘의 다양성',
+      score: metrics.vocabularyDiversityScore ?? scores.language ?? 0,
+      passed: (metrics.vocabularyDiversityScore ?? scores.language ?? 0) >= 60,
+      detail: '대화에서 서로 다른 표현을 얼마나 다양하게 사용했는지 평가했습니다.'
+    }),
+    normalizeReportItem({
+      id: 'sentenceCompleteness',
+      label: '문장의 완성도',
+      score: sentence?.score ?? metrics.sentenceCompletenessScore ?? metrics.fluencyScore ?? 0,
+      passed: sentence?.passed ?? ((metrics.sentenceCompletenessScore ?? metrics.fluencyScore ?? 0) >= 60),
+      detail: sentence?.detail || '답변이 완성된 문장으로 자연스럽게 이어졌는지 평가했습니다.'
+    }),
+    normalizeReportItem({
+      id: 'emotionalState',
+      label: '정서 상태',
+      score: emotion?.score ?? scores.emotion ?? metrics.emotionPositiveRatio ?? 0,
+      passed: emotion?.passed ?? ((scores.emotion ?? metrics.emotionPositiveRatio ?? 0) >= 50),
+      detail: emotion?.detail || '긍정/부정 정서 표현의 비율을 바탕으로 정서 흐름을 평가했습니다.'
+    }),
+    normalizeReportItem({
+      id: 'topicDeviation',
+      label: '주제 이탈률',
+      score: topic?.score ?? (100 - topicDeviationRate),
+      passed: topic?.passed ?? (topicDeviationRate <= 40),
+      detail: topic?.detail || `대화 주제에서 벗어난 비율은 ${Math.round(topicDeviationRate)}%입니다.`,
+      topicDeviationRate
+    })
+  ];
+
+  if (includeGuardianCaption) {
+    items.push(normalizeReportItem({
+      id: 'guardianCaption',
+      label: '보호자 입력 캡션',
+      score: guardian?.score ?? null,
+      passed: guardian?.passed ?? null,
+      detail: guardian?.detail || '보호자가 입력한 사진 정보와 환자 답변의 일치 여부를 평가했습니다.',
+      categories: guardian?.categories || null
+    }));
+  }
+
+  return {
+    items,
+    captionMatchRate: includeGuardianCaption ? (guardian?.score ?? null) : null,
+    captionMatches: includeGuardianCaption ? (guardian?.categories || []) : []
   };
 };
 

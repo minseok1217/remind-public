@@ -6,6 +6,19 @@ import './StatsScreen.css';
 import call_icon from '../assets/call_icon.png';
 import search_icon from '../assets/search_icon.png';
 
+const normalizeInsights = (insights) => {
+  if (Array.isArray(insights)) {
+    return insights.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  if (typeof insights === 'string') {
+    return insights.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+  }
+  if (insights && typeof insights === 'object') {
+    return Object.values(insights).map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  return [];
+};
+
 function StatsScreen({ currentUser, onBack, onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [periodTab, setPeriodTab] = useState('7days'); // '7days' | '30days'
@@ -133,7 +146,8 @@ function StatsScreen({ currentUser, onBack, onNavigate }) {
 
     let statusLabel = latestAnalysis?.status?.label || '분석 중';
     let statusColor = latestAnalysis?.status?.color || '#41d17f';
-    let detail = latestAnalysis?.insights?.join(' ') || '통화 데이터를 분석 중입니다.';
+    const insightLines = normalizeInsights(latestAnalysis?.insights);
+    let detail = insightLines.join(' ') || '통화 데이터를 분석 중입니다.';
 
     if (weeklyTrend.improvement > 5) {
       detail += ` 지난 주 대비 ${weeklyTrend.improvement}점 상승했습니다!`;
