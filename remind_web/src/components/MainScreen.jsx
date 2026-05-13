@@ -523,7 +523,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
                   </>
                 ) : (todayStatus?.insightLines?.length > 0 ? (
                   <>
-                    <div className="today-card-desc">최근 통화 요약</div>
+                    <div className="today-card-desc today-card-desc-strong">최근 통화 요약</div>
                     {todayStatus.insightLines.slice(0, 2).map((insight, index) => (
                       <div key={index} className="today-card-desc">{insight}</div>
                     ))}
