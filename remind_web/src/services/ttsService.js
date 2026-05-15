@@ -3,10 +3,28 @@ const VOICE_ID = '8jHHF8rMqMlg8if2mOUe';
 
 let currentAudio = null;
 
+// export const cancelTTS = () => {
+//   window.speechSynthesis.cancel();
+//   if (currentAudio) {
+//     try { currentAudio.pause(); } catch {}
+//     currentAudio = null;
+//   }
+// };
+
 export const cancelTTS = () => {
-  window.speechSynthesis.cancel();
+  try {
+    if (window?.speechSynthesis?.cancel) {
+      window.speechSynthesis.cancel();
+    }
+  } catch (e) {
+    console.warn('cancelTTS error:', e);
+  }
+
   if (currentAudio) {
-    try { currentAudio.pause(); } catch {}
+    try {
+      currentAudio.pause();
+    } catch {}
+
     currentAudio = null;
   }
 };

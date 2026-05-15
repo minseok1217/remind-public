@@ -322,22 +322,26 @@ function App() {
         {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
         {activeNav === 'call' && callPhase === 'orientation' && (
-          <OrientationTrainingScreen
-            currentUser={currentUser}
-            onComplete={() => {
-              localStorage.setItem(ORIENT_DATE_KEY, new Date().toDateString());
-              setCallPhase('voice');
-            }}
-            onBack={() => setActiveNav('home')}
-          />
+          <div className="full-screen-call">
+            <OrientationTrainingScreen
+              currentUser={currentUser}
+              onComplete={() => {
+                localStorage.setItem(ORIENT_DATE_KEY, new Date().toDateString());
+                setCallPhase('voice');
+              }}
+              onBack={() => setActiveNav('home')}
+            />
+          </div>
         )}
         {activeNav === 'call' && callPhase === 'voice' && (
-          <VoiceChatScreen
-            onBack={() => {
-              setCallPhase('orientation');
-              setActiveNav('home');
-            }}
-          />
+          <div className="full-screen-call">
+            <VoiceChatScreen
+              onBack={() => {
+                setCallPhase('orientation');
+                setActiveNav('home');
+              }}
+            />
+          </div>
         )}
         {activeNav === 'stats' && !subScreen && (
           <StatsScreen
