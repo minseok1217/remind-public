@@ -18,6 +18,26 @@ const LOCATION_OPTIONS = ['집', '산', '바다', '공원', '해외', '기타'];
 const STEP_LABELS = ['사진 선택', '정보 입력', 'AI 질문', '완료'];
 const STEP_IDX = { upload: 0, step1: 1, confirm_ai: 2, step2: 2, complete: 3 };
 
+const createCaptionCategory = () => ({
+  id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  category: '',
+  value: '',
+});
+
+const normalizeCaptionCategories = (items = []) =>
+  items
+    .map((item) => ({
+      category: String(item.category || '').trim(),
+      value: String(item.value || '').trim(),
+    }))
+    .filter((item) => item.category && item.value);
+
+const buildAnswerKeywordsFromCategories = (items = []) =>
+  normalizeCaptionCategories(items).map((item) => ({
+    category: item.category,
+    value: item.value,
+  }));
+
 function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // ── 단계 ──
   const [step, setStep] = useState('upload');
@@ -41,6 +61,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   const [location, setLocation] = useState('');
   const [customLocation, setCustomLocation] = useState('');
   const [freeText, setFreeText] = useState('');
+  const [captionCategories, setCaptionCategories] = useState([createCaptionCategory()]);
 
   // ── Step 2 ──
   const [savedStep1, setSavedStep1] = useState(null);
@@ -53,6 +74,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // 업로드와 동시에 백그라운드에서 생성된 AI 질문 (null = 아직 미완료)
   const [prefetchedQuestions, setPrefetchedQuestions] = useState(null);
   const questionPromiseRef = useRef(null);
+  const questionRequestIdRef = useRef(0);
 
   // ── 완료 ──
   const [finalCaption, setFinalCaption] = useState('');
@@ -66,6 +88,7 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     people: [...people],
     location: location === '기타' ? customLocation : location,
     freeText: freeText.trim(),
+    captionCategories: normalizeCaptionCategories(captionCategories),
   });
 
   const buildSimpleCaption = (s1) => {
@@ -74,6 +97,9 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     if (s1.year) parts.push(`${s1.year}에`);
     if (s1.location) parts.push(`${s1.location}에서`);
     if (s1.people?.length) parts.push(`${s1.people.join(', ')}과(와) 함께`);
+    if (s1.captionCategories?.length) {
+      s1.captionCategories.forEach((item) => parts.push(`${item.category}: ${item.value}`));
+    }
     if (s1.freeText) parts.push(s1.freeText);
     return parts.length ? parts.join(' ') + ' 찍은 사진입니다.' : '소중한 추억 사진입니다.';
   };
@@ -90,6 +116,63 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
   const togglePerson = (p) =>
     setPeople(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
+  const updateCaptionCategory = (id, field, value) => {
+    setCaptionCategories(prev => prev.map(item => (
+      item.id === id ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const addCaptionCategory = () => {
+    setCaptionCategories(prev => [...prev, createCaptionCategory()]);
+  };
+
+  const removeCaptionCategory = (id) => {
+    setCaptionCategories(prev => (
+      prev.length <= 1 ? [createCaptionCategory()] : prev.filter(item => item.id !== id)
+    ));
+  };
+
+  const CaptionCategoryFields = () => (
+    <div className="form-section">
+      <label className="form-label">
+        보호자 입력 캡션 카테고리
+        <span className="form-hint"> (선택 사항)</span>
+      </label>
+      <p className="form-help-text">
+        통화 중 확인하고 싶은 내용을 자유롭게 정해주세요. 예: 인물 - 민석이, 장소 - 제주 바다
+      </p>
+      <div className="caption-category-list">
+        {captionCategories.map((item, index) => (
+          <div className="caption-category-row" key={item.id}>
+            <input
+              className="text-input caption-category-name"
+              placeholder="카테고리명"
+              value={item.category}
+              onChange={e => updateCaptionCategory(item.id, 'category', e.target.value)}
+            />
+            <input
+              className="text-input caption-category-value"
+              placeholder="기대 답변"
+              value={item.value}
+              onChange={e => updateCaptionCategory(item.id, 'value', e.target.value)}
+            />
+            <button
+              type="button"
+              className="caption-category-remove"
+              onClick={() => removeCaptionCategory(item.id)}
+              aria-label={`${index + 1}번째 카테고리 삭제`}
+            >
+              삭제
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="caption-category-add" onClick={addCaptionCategory}>
+        카테고리 추가
+      </button>
+    </div>
+  );
 
   // ─────────────────────────────────────
   // Firebase 작업
@@ -195,6 +278,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     const photoDocRef = doc(db, 'users', patientId, 'photos', docId);
     const starters = buildConversationStarters(step1Data, answersData);
     const desc = caption || buildSimpleCaption(step1Data);
+    const normalizedCaptionCategories = normalizeCaptionCategories(step1Data?.captionCategories || []);
+    const guardianAnswerKeywords = buildAnswerKeywordsFromCategories(normalizedCaptionCategories);
     await updateDoc(photoDocRef, {
       description: desc,
       detailedDescription: desc,
@@ -205,6 +290,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       freeText: step1Data?.freeText || null,
       finalCaption: caption || null,
       conversationStarters: starters,
+      captionCategories: normalizedCaptionCategories,
+      answerKeywords: guardianAnswerKeywords,
     });
   };
 
@@ -229,9 +316,18 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
     // 정답 키워드 추출 (사진 + 캡션 + 보호자 입력 멀티모달 분석)
     try {
-      const answerKeywords = await extractAnswerKeywords(imageBase64, caption, step1DataForKeywords);
-      if (answerKeywords.length > 0) {
-        await updateDoc(photoDocRef, { answerKeywords });
+      const guardianAnswerKeywords = buildAnswerKeywordsFromCategories(step1DataForKeywords?.captionCategories || []);
+      const extractedKeywords = await extractAnswerKeywords(imageBase64, caption, step1DataForKeywords);
+      const mergedKeywords = [...guardianAnswerKeywords];
+      (extractedKeywords || []).forEach((keyword) => {
+        const category = String(keyword.category || '').trim();
+        const value = String(keyword.value || '').trim();
+        if (!category || !value) return;
+        const exists = mergedKeywords.some((item) => item.category === category && item.value === value);
+        if (!exists) mergedKeywords.push({ category, value });
+      });
+      if (mergedKeywords.length > 0) {
+        await updateDoc(photoDocRef, { answerKeywords: mergedKeywords });
       }
     } catch (err) {
       console.warn('정답 키워드 추출 실패 (무시):', err);
@@ -253,6 +349,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
         const docId = await uploadPhotoEarly(file);
         const desc = buildSimpleCaption(step1Data);
         const starters = buildConversationStarters(step1Data, []);
+        const normalizedCaptionCategories = normalizeCaptionCategories(step1Data?.captionCategories || []);
+        const guardianAnswerKeywords = buildAnswerKeywordsFromCategories(normalizedCaptionCategories);
         const photoDocRef = doc(db, 'users', patientId, 'photos', docId);
         await updateDoc(photoDocRef, {
           description: desc,
@@ -264,6 +362,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
           freeText: step1Data?.freeText || null,
           finalCaption: desc,
           conversationStarters: starters,
+          captionCategories: normalizedCaptionCategories,
+          answerKeywords: guardianAnswerKeywords,
         });
       } catch (err) {
         console.error('묶음 업로드 중 오류 (파일 건너뜀):', err);
@@ -282,6 +382,22 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   const resolveDocId = () =>
     photoDocId ? Promise.resolve(photoDocId) : (docIdPromiseRef.current ?? Promise.resolve(null));
 
+  const startQuestionPrefetch = (step1DataForQuestions) => {
+    const requestId = questionRequestIdRef.current + 1;
+    questionRequestIdRef.current = requestId;
+    setPrefetchedQuestions(null);
+    const qPromise = generateFollowUpQuestions(imageBase64, step1DataForQuestions);
+    questionPromiseRef.current = qPromise;
+    qPromise
+      .then(qs => {
+        if (questionRequestIdRef.current === requestId) setPrefetchedQuestions(qs);
+      })
+      .catch(() => {
+        if (questionRequestIdRef.current === requestId) setPrefetchedQuestions([]);
+      });
+    return qPromise;
+  };
+
   // STEP 0: 사진 선택 → 즉시 step1 이동 (업로드 + AI 질문 생성은 백그라운드)
   const handleUploadNext = () => {
     if (!selectedFile) { alert('사진을 선택해주세요.'); return; }
@@ -296,19 +412,15 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       .then(docId => setPhotoDocId(docId))
       .catch(err => console.error('백그라운드 업로드 실패:', err));
 
-    // 백그라운드 2: AI 질문 생성 (이미지만으로 사전 생성)
-    setPrefetchedQuestions(null);
-    const qPromise = generateFollowUpQuestions(imageBase64, null);
-    questionPromiseRef.current = qPromise;
-    qPromise
-      .then(qs => setPrefetchedQuestions(qs))
-      .catch(() => setPrefetchedQuestions([]));
+    // 백그라운드 2: AI 질문 생성 (Step1을 건너뛰는 경우를 위한 사전 생성)
+    startQuestionPrefetch(null);
   };
 
   // STEP 1 → confirm_ai
   const handleStep1Next = () => {
     const s1 = buildStep1Data();
     setSavedStep1(s1);
+    startQuestionPrefetch(s1);
     setStep('confirm_ai');
   };
 
@@ -584,6 +696,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
           )}
         </div>
 
+        <CaptionCategoryFields />
+
         <div className="action-row">
           <button className="btn-skip" onClick={() => { setBatchFiles([]); setStep('upload'); }}>취소</button>
           <button className="btn-primary" onClick={runBatchUpload}>{batchFiles.length}장 업로드</button>
@@ -716,6 +830,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
             onChange={e => setFreeText(e.target.value)}
           />
         </div>
+
+        <CaptionCategoryFields />
 
         <div className="action-row">
           <button className="btn-skip" onClick={handleStep1Skip}>건너뛰기</button>

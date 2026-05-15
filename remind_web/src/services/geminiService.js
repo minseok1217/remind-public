@@ -15,6 +15,20 @@ const readProxyJson = async (resp) => {
 const i = 5;
 const t = 4;
 
+const normalizeCaptionCategories = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      category: String(item.category || '').trim(),
+      value: String(item.value || '').trim(),
+    }))
+    .filter((item) => item.category && item.value);
+
+const formatCaptionCategoriesForPrompt = (items = []) => {
+  const normalized = normalizeCaptionCategories(items);
+  if (normalized.length === 0) return '정보 없음';
+  return normalized.map((item) => `- ${item.category}: ${item.value}`).join('\n');
+};
+
 const buildPromptText = (userDescription) => `당신은 치매 어르신과의 회상 치료 대화를 돕는 AI 분석가입니다. 사진과 보호자 설명을 분석하여 어르신과 자연스러운 대화를 나눌 수 있는 정보를 추출해주세요.
 
 보호자 설명: ${userDescription || '(설명 없음)'}
@@ -209,12 +223,23 @@ const summarizeStep1 = (step1Data) => {
   if (step1Data.people?.length) parts.push(`함께한 사람: ${step1Data.people.join(', ')}`);
   if (step1Data.location) parts.push(`장소: ${step1Data.location}`);
   if (step1Data.freeText) parts.push(`추가 메모: ${step1Data.freeText}`);
+  if (step1Data.captionCategories?.length) {
+    parts.push(`보호자 지정 평가 카테고리:\n${formatCaptionCategoriesForPrompt(step1Data.captionCategories)}`);
+  }
   return parts.length ? parts.join('\n') : '(선택된 정보 없음)';
 };
 
 // Step2: AI 후속 질문 1~2개 생성
 export const generateFollowUpQuestions = async (imageBase64, step1Data) => {
   const summary = summarizeStep1(step1Data);
+  const excludedQuestionTargets = [
+    step1Data?.year ? `- 연도/시기: ${step1Data.year}` : null,
+    step1Data?.people?.length ? `- 함께한 사람: ${step1Data.people.join(', ')}` : null,
+    step1Data?.location ? `- 장소: ${step1Data.location}` : null,
+  ].filter(Boolean);
+  const excludedText = excludedQuestionTargets.length
+    ? excludedQuestionTargets.join('\n')
+    : '없음';
   const prompt = `당신은 치매 어르신의 추억 사진 캡션 작성을 돕는 AI 도우미입니다.
 보호자가 이 사진에 대해 제공한 정보:
 ${summary}
@@ -222,9 +247,14 @@ ${summary}
 이 사진을 분석하여, 캡션 작성에 필요한 추가 정보를 수집하기 위해 보호자에게 물어볼 질문을 1~2개 한국어로 만들어주세요.
 - 질문 대상은 반드시 보호자입니다. 어르신(환자)에게 묻는 것이 아닙니다.
 - 이미 제공된 정보는 다시 묻지 마세요
+- 보호자가 이미 입력한 아래 항목은 AI 추가 질문에서 제외하세요.
+${excludedText}
+- 특히 연도/시기, 함께한 사람, 장소가 이미 제공되어 있으면 해당 값을 확인하거나 다시 묻는 질문을 만들지 마세요.
+- 대신 사진 속 상황, 관계의 맥락, 당시 감정, 특별한 사건, 보호자가 알고 있는 구체적인 배경처럼 아직 비어 있는 정보만 물어보세요.
 - 보호자가 알고 있을 법한 구체적인 정보를 물어보세요
 - "어르신께서 기억하시나요?" 같은 표현은 절대 사용하지 마세요
-- 예: "이 사진은 어디서 찍으신 건지 알고 계신가요?", "이 날 특별한 행사나 모임이 있었나요?", "사진 속 분들은 누구인지 알려주시겠어요?"
+- 예시는 참고만 하되, 이미 제공된 연도/함께한 사람/장소를 다시 묻는 예시는 사용하지 마세요.
+- 좋은 예: "이 날 특별히 기억나는 일이 있었나요?", "사진 속 분위기가 어땠는지 알려주실 수 있나요?", "이때 가족분들 사이에 어떤 이야기가 있었나요?"
 
 다음 JSON 형식으로만 반환하세요 (다른 텍스트 없이):
 {"questions": ["질문1", "질문2"]}`;
@@ -403,10 +433,14 @@ ${answer || '(답변 없음)'}
 
 export const extractAnswerKeywords = async (imageBase64, captionText, step1Data) => {
   const parts = [];
+  const dynamicCategories = normalizeCaptionCategories(step1Data?.captionCategories || []);
   if (step1Data?.year) parts.push(`연도/시기: ${step1Data.year}`);
   if (step1Data?.location) parts.push(`장소(선택 항목): ${step1Data.location}`);
   if (step1Data?.people?.length) parts.push(`함께한 사람(선택 항목): ${step1Data.people.join(', ')}`);
   if (step1Data?.freeText) parts.push(`보호자 메모: ${step1Data.freeText}`);
+  if (dynamicCategories.length) {
+    parts.push(`보호자 지정 평가 카테고리:\n${formatCaptionCategoriesForPrompt(dynamicCategories)}`);
+  }
   if (captionText) parts.push(`생성된 캡션: ${captionText}`);
 
   if (parts.length === 0 && !imageBase64) return [];
@@ -421,7 +455,8 @@ ${parts.length ? parts.join('\n') : '(입력 없음)'}
 - 사진에서 확인되거나 보호자가 언급한 구체적인 명사만 추출하세요
 - 보호자가 직접 언급한 정보를 최우선으로 하고, 사진에서만 보이는 정보를 보완으로 활용하세요
 - "산", "바다"처럼 두루뭉술한 단어 대신 보호자 메모에 구체적인 이름이 있으면 그것을 사용하세요
-- 카테고리: 장소, 인물, 연도/시기, 행사/사건, 활동, 사물 중 해당하는 것만 사용
+- 보호자가 지정한 평가 카테고리가 있으면 반드시 그 카테고리명만 사용하고, 기대 답변을 정답 키워드로 유지하세요
+- 보호자 지정 평가 카테고리가 없을 때만 사진과 캡션에서 자연스럽게 필요한 카테고리를 1~6개 생성하세요
 - 불명확하거나 추상적인 정보는 제외하세요
 - 최대 6개까지만 추출하세요
 
@@ -449,12 +484,30 @@ ${parts.length ? parts.join('\n') : '(입력 없음)'}
 };
 
 export const evaluateConversationReport = async (chatHistory, photoContext = null) => {
-  const shouldEvaluateGuardianCaption = Boolean(
+  const baseGuardianCaptionEvaluation = Boolean(
     photoContext &&
     photoContext.source !== 'orientation_images' &&
     photoContext.ownerId !== 'orientation_images' &&
     !String(photoContext.id || '').startsWith('orientation_')
   );
+  const dynamicCaptionCategories = normalizeCaptionCategories(photoContext?.captionCategories || []);
+  const answerKeywordCategories = (photoContext?.answerKeywords || [])
+    .map((item) => ({
+      category: String(item.category || '').trim(),
+      value: String(item.value || '').trim(),
+    }))
+    .filter((item) => item.category && item.value);
+  const captionEvaluationCategories = dynamicCaptionCategories.length > 0
+    ? dynamicCaptionCategories
+    : answerKeywordCategories;
+  const shouldEvaluateGuardianCaption = baseGuardianCaptionEvaluation && captionEvaluationCategories.length > 0;
+  const guardianCaptionJsonTemplate = captionEvaluationCategories.map((item) => ({
+    category: item.category,
+    expectedValues: [item.value],
+    matchedValues: [],
+    matched: null,
+    detail: '근거',
+  }));
 
   const conversation = (chatHistory || [])
     .map((msg) => `${msg.role === 'user' ? '환자' : 'AI'}: ${msg.parts?.[0]?.text || ''}`)
@@ -469,6 +522,8 @@ export const evaluateConversationReport = async (chatHistory, photoContext = nul
 - 상세 설명: ${photoContext.detailedDescription || '정보 없음'}
 - 정서/분위기: ${photoContext.emotion || '정보 없음'}
 - 상황: ${photoContext.situation || '정보 없음'}
+- 보호자 지정 평가 카테고리:
+${formatCaptionCategoriesForPrompt(captionEvaluationCategories)}
 - 정답 키워드: ${JSON.stringify(photoContext.answerKeywords || [], null, 2)}
 ` : '[보호자 입력 사진 정보 없음]';
 
@@ -479,7 +534,8 @@ export const evaluateConversationReport = async (chatHistory, photoContext = nul
 평가 원칙:
 - 문장의 완성도, 정서 상태, 주제 이탈률은 반드시 대화 맥락을 보고 판단하세요.
 - 보호자 입력 캡션은 보호자 사진 정보가 있을 때만 평가하세요.
-- 보호자 입력 캡션은 연도/시기, 인물, 장소, 활동, 사물 5개 범주 각각이 환자 답변에서 맞게 언급되었는지 판단하세요.
+- 보호자 입력 캡션은 고정 범주가 아니라 보호자가 사진별로 지정한 평가 카테고리만 사용해 판단하세요.
+- guardianCaption.categories는 보호자 지정 평가 카테고리와 같은 카테고리명, 같은 순서로 반환하세요.
 - 모르면 낮게 추정하지 말고 "판단 근거 부족"이라고 적으세요.
 - score는 0~100 정수입니다. topicDeviationRate는 낮을수록 좋은 이탈률(0~100)입니다.
 
@@ -502,11 +558,7 @@ ${conversation || '(대화 없음)'}
     "passed": false,
     "detail": "평가 근거",
     "categories": [
-      {"category": "연도/시기", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
-      {"category": "인물", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
-      {"category": "장소", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
-      {"category": "활동", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"},
-      {"category": "사물", "expectedValues": [], "matchedValues": [], "matched": null, "detail": "근거"}
+${JSON.stringify(guardianCaptionJsonTemplate, null, 6).slice(1, -1)}
     ]
   }
 }`;
@@ -523,6 +575,15 @@ ${conversation || '(대화 없음)'}
       if (Array.isArray(parsed.items)) {
         parsed.items = parsed.items.filter((item) => item?.id !== 'guardianCaption');
       }
+    } else if (parsed.guardianCaption) {
+      const returnedCategories = Array.isArray(parsed.guardianCaption.categories)
+        ? parsed.guardianCaption.categories
+        : [];
+      parsed.guardianCaption.categories = guardianCaptionJsonTemplate.map((expected) => {
+        const found = returnedCategories.find((item) => item?.category === expected.category);
+        return found ? { ...expected, ...found } : expected;
+      });
+      parsed.captionMatches = parsed.guardianCaption.categories;
     }
     return parsed;
   } catch (error) {
@@ -890,6 +951,10 @@ export const chatWithGemini = async (message, history = [], photoContext = null,
   // 사진 컨텍스트가 있으면 시스템 프롬프트에 추가
   let photoInfo = '';
   if (photoContext) {
+    const captionSource = Array.isArray(photoContext.captionCategories) && photoContext.captionCategories.length > 0
+      ? photoContext.captionCategories
+      : (photoContext.answerKeywords || []);
+    const captionCategoryPrompt = formatCaptionCategoriesForPrompt(captionSource);
     photoInfo = `
 [현재 보고 있는 사진 정보]
 - 설명: ${photoContext.detailedDescription || photoContext.description || ''}
@@ -898,6 +963,8 @@ export const chatWithGemini = async (message, history = [], photoContext = null,
 - 분위기: ${photoContext.emotion || '정보 없음'}
 - 상황: ${photoContext.situation || '정보 없음'}
 - 추천 대화 주제: ${(photoContext.conversationStarters || []).join(', ') || '정보 없음'}
+- 보호자 지정 확인 카테고리:
+${captionCategoryPrompt}
 
 이 정보를 바탕으로 어르신과 사진에 대해 따뜻하게 대화하세요.`;
   }
@@ -930,6 +997,8 @@ export const chatWithGemini = async (message, history = [], photoContext = null,
 ${photoInfo}[추가 규칙]
 - 괄호 안 지문/행동 표현 금지 (예: (웃으며), (조용히)).
 ${photoRule}
+- 보호자 지정 확인 카테고리가 있으면 통화 초반에 한 번에 몰아서 묻지 말고, 대화 흐름에 맞춰 하나씩 자연스럽게 질문해 답변을 들으세요.
+- 보호자 지정 확인 카테고리가 정보 없음이면 일반 회상 질문으로 진행하세요.
 ${strictTimingRules}
 - 어르신이 피곤해하거나 종료를 원하면 따뜻하게 마무리하고 [통화끝] 출력.
 - [현재 경과 시간: ${elapsedMinutes}분] 전략 타이밍에 맞게 대화 진행.`;

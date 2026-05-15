@@ -803,6 +803,7 @@ function VoiceChatScreen({ onBack }) {
       conversationStarters: photoData?.conversationStarters || keywordsObj.conversationStarters || [],
       year: photoData?.year || '',
       finalCaption: photoData?.finalCaption || '',
+      captionCategories: photoData?.captionCategories || [],
       answerKeywords: photoData?.answerKeywords || [],
       imageName: getPhotoName(photoData),
       photoType: getPhotoTypeLabel(photoData),

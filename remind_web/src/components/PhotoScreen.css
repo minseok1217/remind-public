@@ -208,6 +208,55 @@
   color: #999;
 }
 
+.form-help-text {
+  margin: -2px 0 0;
+  color: #767676;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.caption-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.caption-category-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(120px, 1.2fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.caption-category-remove,
+.caption-category-add {
+  border: 1px solid #d8e1dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #555;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.caption-category-remove {
+  padding: 10px 12px;
+}
+
+.caption-category-add {
+  align-self: flex-start;
+  padding: 9px 12px;
+  color: #008f54;
+  border-color: #00C16E;
+  background: #f0fdf4;
+}
+
+.caption-category-remove:hover,
+.caption-category-add:hover {
+  border-color: #00C16E;
+  color: #00A35C;
+}
+
 /* 칩 그룹 */
 .chip-group {
   display: flex;
@@ -388,6 +437,16 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 520px) {
+  .caption-category-row {
+    grid-template-columns: 1fr;
+  }
+
+  .caption-category-remove {
+    justify-self: flex-start;
+  }
 }
 
 /* ── 완료 카드 ── */

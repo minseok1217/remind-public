@@ -152,7 +152,11 @@ const shouldEvaluateGuardianCaption = (photoContext) => Boolean(
   photoContext &&
   photoContext.source !== 'orientation_images' &&
   photoContext.ownerId !== 'orientation_images' &&
-  !String(photoContext.id || '').startsWith('orientation_')
+  !String(photoContext.id || '').startsWith('orientation_') &&
+  (
+    (Array.isArray(photoContext.captionCategories) && photoContext.captionCategories.length > 0) ||
+    (Array.isArray(photoContext.answerKeywords) && photoContext.answerKeywords.length > 0)
+  )
 );
 
 const buildEvaluationReport = ({ metrics, scores, llmReport, photoContext }) => {
