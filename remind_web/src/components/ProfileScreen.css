@@ -505,6 +505,269 @@
   margin: 5px 0;
 }
 
+.patient-row-card {
+  background: #fff;
+  border: 1px solid #eef1ef;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: visible;
+}
+
+.patient-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.patient-row-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #1f2933;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.patient-row-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.patient-row-name {
+  color: var(--gray-900);
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patient-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.patient-row-status.connected {
+  color: #00a85d;
+}
+
+.patient-row-status.disconnected {
+  color: #8f8f8f;
+}
+
+.patient-row-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.patient-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.patient-connect-btn,
+.patient-icon-btn,
+.patient-edit-save-btn,
+.patient-edit-cancel-btn {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.patient-connect-btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #dcfaed;
+  color: #00a85d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.patient-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f6f8f7;
+  color: #4b5563;
+}
+
+.patient-icon-btn.edit {
+  color: #00a85d;
+}
+
+.patient-icon-btn.delete {
+  color: #df3939;
+}
+
+.patient-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.patient-row-card .patient-card-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #eef1ef;
+  padding: 14px;
+}
+
+.patient-edit-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.patient-edit-save-btn,
+.patient-edit-cancel-btn {
+  flex: 1;
+  min-height: 42px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.patient-edit-save-btn {
+  background: #00c16e;
+  color: #fff;
+}
+
+.patient-edit-cancel-btn {
+  background: #eef1ef;
+  color: #555;
+}
+
+.kmmse-difficulty-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.kmmse-difficulty-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.kmmse-difficulty-badge.level-상 {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.kmmse-difficulty-badge.level-중 {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.kmmse-difficulty-badge.level-하 {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.kmmse-help-button {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d7ded9;
+  border-radius: 50%;
+  background: #f6f8f7;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+}
+
+.kmmse-help-button:hover,
+.kmmse-help-button:focus {
+  border-color: #00c16e;
+  color: #00a85d;
+}
+
+.kmmse-help-tooltip {
+  position: absolute;
+  right: -4px;
+  top: calc(100% + 8px);
+  z-index: 20;
+  width: min(200px, 72vw);
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d7ded9;
+  border-radius: 10px;
+  background: #fff;
+  color: #344054;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.kmmse-help-button:hover .kmmse-help-tooltip,
+.kmmse-help-button:focus .kmmse-help-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 480px) {
+  .kmmse-difficulty-value {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .kmmse-help-tooltip {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: auto;
+    bottom: 24px;
+    width: auto;
+    max-width: none;
+    z-index: 1200;
+    transform: translateY(8px);
+  }
+
+  .kmmse-help-button:hover .kmmse-help-tooltip,
+  .kmmse-help-button:focus .kmmse-help-tooltip {
+    transform: translateY(0);
+  }
+}
+
 .profile-action-section {
   margin-bottom: 40px; /* Add margin-bottom here as it was in my denied write_to_file */
 }

@@ -53,6 +53,7 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
   const [editPatients, setEditPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userType, setUserType] = useState('guardian'); // 'guardian' or 'patient'
+  const [expandedPatientId, setExpandedPatientId] = useState(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -110,6 +111,7 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                 placeType: pData.place_type || '집',
                 placeName: pData.place_name || '',
                 floor: pData.floor || '',
+                difficulty: pData.difficulty || '',
                 status: link.status // family_links에서 status 추가
               });
             }
@@ -150,7 +152,8 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               city: pData.city || '',
               placeType: pData.place_type || '집',
               placeName: pData.place_name || '',
-              floor: pData.floor || ''
+              floor: pData.floor || '',
+              difficulty: pData.difficulty || ''
             }]);
             setEditPatients([{
               id: currentUser.uid,
@@ -162,7 +165,8 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               city: pData.city || '',
               placeType: pData.place_type || '집',
               placeName: pData.place_name || '',
-              floor: pData.floor || ''
+              floor: pData.floor || '',
+              difficulty: pData.difficulty || ''
             }]);
             setSelectedPatientId(currentUser.uid);
           }
@@ -586,25 +590,81 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
     }
   };
 
+  const getAvatarColor = (name) => {
+    const palette = ['#b7e4c7', '#ffd6a5', '#ffafcc', '#bde0fe', '#d4bbf5', '#caffbf', '#ffc8dd', '#a0c4ff'];
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return palette[Math.abs(hash) % palette.length];
+  };
+
   const renderPatientCard = (patient) => {
     const isSelected = patient.id === selectedPatientId;
     const currentEditPatient = editPatients.find(p => p.id === patient.id) || patient;
-    const isConnectedPatient = patient.status === '연결됨'; // 연결 상태 확인
+    const isConnectedPatient = patient.status === '연결됨';
+    const isExpanded = expandedPatientId === patient.id || (isEditingPatientInfo && isSelected);
+
+    const toggleExpand = (e) => {
+      e.stopPropagation();
+      setExpandedPatientId(prev => prev === patient.id ? null : patient.id);
+      handleSelectPatient(patient.id);
+    };
 
     return (
-      <div 
-        key={patient.id} 
-        className={`profile-info-card patient-card ${isConnectedPatient ? 'selected' : ''}`}
-        onClick={() => handleSelectPatient(patient.id)}
-      >
-        {isConnectedPatient && (
-          <div className="connected-patients-header">연결됨</div>
-        )}
-        <div className="patient-card-content-wrapper">
-          <div className="icon-circle">
-            <img src={user_icon} className="icon-circle-small-img" alt="User Icon" />
+      <div key={patient.id} className="patient-row-card">
+        <div className="patient-row-header" onClick={toggleExpand}>
+          <div className="patient-row-avatar" style={{ backgroundColor: getAvatarColor(patient.name) }}>
+            {(patient.name || '?').slice(0, 2)}
           </div>
-          <div className="profile-info-content">
+          <div className="patient-row-info">
+            <span className="patient-row-name">{patient.name || '이름 미입력'}</span>
+            <span className={`patient-row-status ${isConnectedPatient ? 'connected' : 'disconnected'}`}>
+              <span className="patient-row-status-dot" />
+              {isConnectedPatient ? '연결됨' : '미연결'}
+            </span>
+          </div>
+          <div className="patient-row-actions" onClick={(e) => e.stopPropagation()}>
+            {!isEditingPatientInfo && userType === 'guardian' && (
+              <>
+                {!isConnectedPatient && (
+                  <button
+                    className="patient-connect-btn"
+                    onClick={() => handleConnectPatient(patient.id)}
+                    title="연결하기"
+                  >
+                    연결하기
+                  </button>
+                )}
+                <button
+                  className="patient-icon-btn edit"
+                  onClick={() => {
+                    handleEditPatientInfoClick(patient.id);
+                    setExpandedPatientId(patient.id);
+                  }}
+                  title="수정"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+                <button
+                  className="patient-icon-btn delete"
+                  onClick={() => handleDeletePatient(patient.id)}
+                  disabled={isSaving}
+                  title="삭제"
+                >
+                  <img src={trash_icon} className="trash-icon" alt="삭제" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="patient-card-content-wrapper">
+            <div className="profile-info-content">
             <div className="profile-info-row">
               <div className="profile-info-label">이름</div>
               {isEditingPatientInfo && isSelected ? (
@@ -613,7 +673,7 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                   value={currentEditPatient.name}
                   onChange={(e) => handlePatientInputChange(patient.id, 'name', e.target.value)}
                   className="profile-info-input"
-                  onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+                  onClick={(e) => e.stopPropagation()}
                 />
               ) : (
                 <div className="profile-info-value">{patient.name || '미입력'}</div>
@@ -649,7 +709,7 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                   onChange={(e) => handlePatientInputChange(patient.id, 'phoneNumber', e.target.value)}
                   className="profile-info-input"
                   placeholder="010-0000-0000"
-                  onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+                  onClick={(e) => e.stopPropagation()}
                 />
               ) : (
                 <div className="profile-info-value">{patient.phoneNumber || '미입력'}</div>
@@ -661,9 +721,9 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
                 <input
                   type="time"
                   value={currentEditPatient.callTime ? currentEditPatient.callTime.substring(0, 2) + ':' + currentEditPatient.callTime.substring(2, 4) : '12:00'}
-                  onChange={(e) => handlePatientInputChange(patient.id, 'callTime', e.target.value.replace(':', ''))} // HHmm 형식으로 저장
+                  onChange={(e) => handlePatientInputChange(patient.id, 'callTime', e.target.value.replace(':', ''))}
                   className="profile-info-input"
-                  onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+                  onClick={(e) => e.stopPropagation()}
                 />
               ) : (
                 <div className="profile-info-value">
@@ -674,7 +734,7 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
             <div className="profile-info-row">
               <div className="profile-info-label">성별</div>
               {isEditingPatientInfo && isSelected ? (
-                <div className="popup-gender-buttons" onClick={(e) => e.stopPropagation()}> {/* 클릭 이벤트 전파 방지 */}
+                <div className="popup-gender-buttons" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     className={`popup-gender-btn ${currentEditPatient.gender === '남성' ? 'active' : ''}`}
@@ -693,6 +753,28 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               ) : (
                 <div className="profile-info-value">{patient.gender || '미입력'}</div>
               )}
+            </div>
+            <div className="profile-info-row">
+              <div className="profile-info-label">난이도</div>
+              <div className="profile-info-value kmmse-difficulty-value">
+                {currentEditPatient.difficulty ? (
+                  <span className={`kmmse-difficulty-badge level-${currentEditPatient.difficulty}`}>
+                    {currentEditPatient.difficulty}
+                  </span>
+                ) : (
+                  '검사 전'
+                )}
+                <button
+                  type="button"
+                  className="kmmse-help-button"
+                  aria-label="K-MMSE 난이도 설명"
+                >
+                  ?
+                  <span className="kmmse-help-tooltip">
+                    인지 기능 평가 결과를 바탕으로, <br></br>활동의 난이도를 조정한 값
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* 위치 정보 표시 */}
@@ -777,34 +859,27 @@ function ProfileScreen({ currentUser, onBack, onLogout }) {
               </>
             )}
           </div>
-          <div className="patient-card-actions">
-            {!isEditingPatientInfo && userType === 'guardian' && (
-              <>
-                <button 
-                  className="patient-action-button edit-patient-btn"
-                  onClick={(e) => { e.stopPropagation(); handleEditPatientInfoClick(patient.id); }}
-                >
-                  수정
-                </button>
-                <button 
-                  className="patient-action-button delete-patient-btn"
-                  onClick={(e) => { e.stopPropagation(); handleDeletePatient(patient.id); }}
+
+            {isEditingPatientInfo && isSelected && (
+              <div className="patient-edit-actions">
+                <button
+                  className="patient-edit-save-btn"
+                  onClick={handleSavePatientInfo}
                   disabled={isSaving}
                 >
-                  <img src={trash_icon} className="trash-icon" alt="Delete Icon" />
+                  {isSaving ? '저장 중...' : '수정 완료'}
                 </button>
-                {!isConnectedPatient &&
-                  <button 
-                    className="patient-action-button connect-patient-btn"
-                    onClick={(e) => { e.stopPropagation(); handleConnectPatient(patient.id); }}
-                  >
-                    연결
-                  </button>
-                }
-              </>
+                <button
+                  className="patient-edit-cancel-btn"
+                  onClick={handleCancelPatientInfoEdit}
+                  disabled={isSaving}
+                >
+                  취소
+                </button>
+              </div>
             )}
           </div>
-        </div>
+        )}
       </div>
     );
   };

@@ -8,7 +8,7 @@ import './VoiceChatScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
 import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
-const SILENCE_TIMEOUT_MS = 1700;
+const SILENCE_TIMEOUT_MS = 800;
 const AUTO_LISTEN_DELAY_MS = 700;
 const PRE_CALL_CHECK_QUESTIONS = [
   '안녕하세요. 저는 Remind 서비스 상담사입니다. 대화를 시작하기 전에 몸 상태를 잠깐 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
@@ -217,7 +217,7 @@ function VoiceChatScreen({ onBack }) {
     stopListening: stopSpeechRecognition,
   } = useScribeSpeechRecognition({
     finalizeDelayMs: SILENCE_TIMEOUT_MS,
-    webSpeechSilenceMs: SILENCE_TIMEOUT_MS,
+    webSpeechSilenceMs: SILENCE_TIMEOUT_MS - 500,
   });
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
@@ -974,7 +974,7 @@ function VoiceChatScreen({ onBack }) {
     let firstQuestion = '';
     try {
       firstQuestion = await chatWithGemini(
-        '사전 건강 확인과 자기소개는 이미 했습니다. 자기소개를 반복하지 말고 사진을 보며 이어질 첫 질문을 해주세요.',
+        '사전 건강 확인과 자기소개는 이미 했습니다. 몸 상태, 식사, 약, 수면, 자기소개를 반복하지 말고 바로 사진을 보며 이어질 첫 질문만 해주세요.',
         [],
         enrichedContext,
         conversationDifficultyRef.current,
@@ -999,7 +999,7 @@ function VoiceChatScreen({ onBack }) {
     setStatus('AI가 질문했어요. 천천히 말씀해 주세요.');
   };
 
-  const startConversationWithoutPhoto = (greeting = '안녕하세요. 오늘 기분은 어떠세요?', skipPreCallCheck = false) => {
+  const startConversationWithoutPhoto = (greeting = '오늘은 편안하게 이야기를 나눠볼게요. 최근에 기억에 남는 일이 있으셨나요?', skipPreCallCheck = false) => {
     setHasPhoto(false);
     setShowPhoto(false);
     if (!skipPreCallCheck) {
@@ -1116,7 +1116,7 @@ function VoiceChatScreen({ onBack }) {
     } catch (error) {
       console.error('❌ 사진 로드 오류:', error);
       const usedFallback = await startWithFallbackPhoto();
-      if (!usedFallback) startConversationWithoutPhoto('안녕하세요. 오늘 어떤 하루였는지 들려주세요.');
+      if (!usedFallback) startConversationWithoutPhoto('오늘 하루 중 기억에 남는 일을 천천히 들려주세요.');
     }
   };
 
@@ -1171,6 +1171,7 @@ function VoiceChatScreen({ onBack }) {
   useEffect(() => {
     isMountedRef.current = true;
     callStartTimeRef.current = Date.now();
+    stopSpeaking();
     loadPhotoAndStart();
     return () => {
       isMountedRef.current = false;
