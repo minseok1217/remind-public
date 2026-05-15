@@ -1,6 +1,29 @@
 const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 const VOICE_ID = '8jHHF8rMqMlg8if2mOUe';
 
+// 순우리말 수사 변환 (1~99)
+const _NATIVE_ONES = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉'];
+const _NATIVE_TENS = ['', '열', '스물', '서른', '마흔', '쉰', '예순', '일흔', '여든', '아흔'];
+
+function toNativeKorean(n) {
+  if (n <= 0 || n >= 100) return String(n);
+  const tens = Math.floor(n / 10);
+  const ones = n % 10;
+  if (tens === 0) return _NATIVE_ONES[ones];
+  if (ones === 0) return _NATIVE_TENS[tens];
+  return _NATIVE_TENS[tens] + _NATIVE_ONES[ones];
+}
+
+// 순우리말 수사를 써야 하는 단위 앞의 숫자를 변환
+const _NATIVE_COUNTER_RE = /(\d+)\s*(문제|개|명|마리|장|권|잔|병|그루|살|가지|줄|대|채|켤레|벌|쌍|쪽|자루|송이|포기|다발|묶음|바퀴|판|걸음)/g;
+
+function preprocessTTS(text) {
+  return text.replace(_NATIVE_COUNTER_RE, (_, num, counter) => {
+    const n = parseInt(num, 10);
+    return (n >= 1 && n <= 99) ? toNativeKorean(n) + counter : _ ;
+  });
+}
+
 let currentAudio = null;
 let currentAbortController = null;
 let ttsGeneration = 0;
@@ -20,8 +43,14 @@ let ttsGeneration = 0;
 //   }
 // };
 
-// 주상씨 코드
 export const cancelTTS = () => {
+  ttsGeneration += 1;
+
+  if (currentAbortController) {
+    try { currentAbortController.abort(); } catch {}
+    currentAbortController = null;
+  }
+
   try {
     if (window?.speechSynthesis?.cancel) {
       window.speechSynthesis.cancel();
@@ -31,10 +60,7 @@ export const cancelTTS = () => {
   }
 
   if (currentAudio) {
-    try {
-      currentAudio.pause();
-    } catch {}
-
+    try { currentAudio.pause(); currentAudio.src = ''; } catch {}
     currentAudio = null;
   }
 };
@@ -65,7 +91,8 @@ export const webSpeak = (text, generation = ttsGeneration) =>
     }, 300);
   });
 
-export const tts = async (text) => {
+export const tts = async (rawText) => {
+  const text = preprocessTTS(rawText);
   const generation = ttsGeneration;
   if (!ELEVENLABS_API_KEY) return webSpeak(text, generation);
   const abortController = new AbortController();

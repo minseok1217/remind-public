@@ -1270,7 +1270,7 @@ function VoiceChatScreen({ onBack }) {
           setStatus('대화를 마무리할게요.');
           await saveCallLog();
           if (hasPhoto) await markPhotoAsCompleted();
-          setTimeout(() => { alert('대화를 종료합니다. 건강하세요!'); onBack(); }, 2500);
+          setTimeout(() => { alert('대화를 종료합니다. 건강하세요!'); stopSpeaking(); onBack(); }, 2500);
         } else {
           endSignalCountRef.current = 0;
           setUiState('ready');
