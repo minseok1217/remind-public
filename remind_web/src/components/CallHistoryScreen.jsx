@@ -6,7 +6,6 @@ import backicon from '../assets/back_icon.png';
 import clockicon from '../assets/clock_icon.png';
 import timeicon from '../assets/time_icon.png';
 import dateicon from '../assets/date_icon.png';
-import { createDummyCallLog } from '../utils/dummyCallLog';
 
 function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
   const [loading, setLoading] = useState(true);
@@ -99,12 +98,6 @@ function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
     }
   };
 
-  const handleViewDummyDetail = () => {
-    if (onNavigate) {
-      onNavigate('callDetail', { callLog: createDummyCallLog() });
-    }
-  };
-
   if (loading) {
     return (
       <div className="call-history-screen">
@@ -131,15 +124,9 @@ function CallHistoryScreen({ currentUser, onBack, onNavigate }) {
         <div className="ch-empty">
           <div className="ch-empty-icon">📞</div>
           <p>통화 기록이 없습니다.</p>
-          <button className="ch-detail-btn" onClick={handleViewDummyDetail}>
-            더미 분석 결과 보기
-          </button>
         </div>
       ) : (
         <div className="ch-date-groups">
-          <button className="ch-detail-btn" onClick={handleViewDummyDetail}>
-            더미 분석 결과 보기
-          </button>
           {callRecords.map((group) => (
             <div key={group.dateKey} className="ch-date-group">
               <div className="ch-cards">
