@@ -11,7 +11,7 @@ import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition'
 const SILENCE_TIMEOUT_MS = 800;
 const AUTO_LISTEN_DELAY_MS = 700;
 const PRE_CALL_CHECK_QUESTIONS = [
-  '안녕하세요. 저는 Remind 서비스 상담사입니다. 대화를 시작하기 전에 몸 상태를 잠깐 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
+  '안녕하세요. 저는 Remind 서비스 상담사입니다. 회상 요법을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
   '오늘 식사는 잘 챙겨 드셨어요?',
   '오늘 드셔야 하는 약은 챙겨 드셨나요?',
   '어젯밤에는 잠을 편하게 주무셨나요?',
@@ -69,6 +69,7 @@ const buildConversationMessages = (chatHistory) => {
       if (role === 'patient') {
         patientTurn += 1;
         message.patientTurn = patientTurn;
+        if (msg.audio) message.audio = msg.audio;
       }
       return message;
     })
@@ -309,6 +310,10 @@ function VoiceChatScreen({ onBack }) {
   const animFrameRef = useRef(null);
   const waitingDotsRef = useRef(null);
   const userPausedRef = useRef(false);
+  const patientRecorderRef = useRef(null);
+  const patientRecorderStreamRef = useRef(null);
+  const patientAudioChunksRef = useRef([]);
+  const pendingPatientAudioRef = useRef(null);
   const {
     startListening: startSpeechRecognition,
     stopListening: stopSpeechRecognition,
@@ -641,6 +646,106 @@ function VoiceChatScreen({ onBack }) {
     return false;
   };
 
+  const getSupportedAudioMimeType = () => {
+    if (!window.MediaRecorder) return '';
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+    return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+  };
+
+  const blobToDataUrl = (blob) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+
+  const startPatientAudioRecording = async () => {
+    pendingPatientAudioRef.current = null;
+    patientAudioChunksRef.current = [];
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      const mimeType = getSupportedAudioMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const startedAt = Date.now();
+      patientRecorderStreamRef.current = stream;
+      patientRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) patientAudioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        const chunks = patientAudioChunksRef.current;
+        patientAudioChunksRef.current = [];
+        stream.getTracks().forEach((track) => track.stop());
+        if (patientRecorderStreamRef.current === stream) patientRecorderStreamRef.current = null;
+        if (patientRecorderRef.current === recorder) patientRecorderRef.current = null;
+        if (!chunks.length) return;
+
+        const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
+        const dataUrl = await blobToDataUrl(blob);
+        if (!dataUrl) return;
+
+        pendingPatientAudioRef.current = {
+          dataUrl,
+          mimeType: blob.type,
+          size: blob.size,
+          durationMs: Date.now() - startedAt,
+        };
+      };
+      recorder.start();
+    } catch (error) {
+      console.warn('[VoiceChat] 환자 발화 녹음 시작 실패:', error);
+    }
+  };
+
+  const stopPatientAudioRecording = () => new Promise((resolve) => {
+    const recorder = patientRecorderRef.current;
+    const stream = patientRecorderStreamRef.current;
+    if (!recorder) {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        patientRecorderStreamRef.current = null;
+      }
+      resolve();
+      return;
+    }
+
+    const cleanup = () => resolve();
+    recorder.addEventListener('stop', cleanup, { once: true });
+    try {
+      if (recorder.state !== 'inactive') recorder.stop();
+      else cleanup();
+    } catch {
+      cleanup();
+    }
+  });
+
+  const takePendingPatientAudio = () => {
+    const audio = pendingPatientAudioRef.current;
+    pendingPatientAudioRef.current = null;
+    if (!audio) return null;
+    // Firestore 문서 크기 보호용. 긴 녹음은 추후 Storage 업로드로 교체하는 것이 안전합니다.
+    if ((audio.dataUrl || '').length > 300000) {
+      console.warn('[VoiceChat] 발화 녹음이 커서 call_log에 저장하지 않았습니다:', audio.size);
+      return null;
+    }
+    return audio;
+  };
+
+  const appendPatientMessage = (text) => {
+    const message = { role: 'user', parts: [{ text }] };
+    const audio = takePendingPatientAudio();
+    if (audio) message.audio = audio;
+    chatHistoryRef.current.push(message);
+  };
+
   const normalizeStatus = (value) => (value || '').replace(/\s+/g, '');
 
   const isUncalledPhoto = (photoData) => {
@@ -851,7 +956,7 @@ function VoiceChatScreen({ onBack }) {
   const handlePreCallAnswer = async (text) => {
     const currentIndex = preCallCheckRef.current.index;
     preCallCheckRef.current.answers[currentIndex] = text;
-    chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
+    appendPatientMessage(text);
 
     const currentQuestion = PRE_CALL_CHECK_QUESTIONS[currentIndex];
     const reaction = await generatePreCallReaction({
@@ -1005,12 +1110,14 @@ function VoiceChatScreen({ onBack }) {
 
   const finalizeRecognizedSpeech = async (recognizedText = '') => {
     clearSilenceTimer();
+    await stopPatientAudioRecording();
     const text = (recognizedText || `${finalTranscriptRef.current} ${interimTranscriptRef.current}`).replace(/\s+/g, ' ').trim();
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     if (!text) {
       setUiState('ready');
       setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
+      pendingPatientAudioRef.current = null;
       scheduleAutoListen(400);
       return;
     }
@@ -1018,6 +1125,7 @@ function VoiceChatScreen({ onBack }) {
       setCaption(`당신: ${text}`);
       setUiState('ready');
       setStatus('천천히 이어서 말씀해 주세요.');
+      pendingPatientAudioRef.current = null;
       scheduleAutoListen(300);
       return;
     }
@@ -1043,6 +1151,7 @@ function VoiceChatScreen({ onBack }) {
       setStatus('듣고 있어요...');
       finalTranscriptRef.current = '';
       interimTranscriptRef.current = '';
+      startPatientAudioRecording();
       startSpeechRecognition(
         (text) => {
           setIsRecording(false);
@@ -1052,6 +1161,9 @@ function VoiceChatScreen({ onBack }) {
         () => {
           setIsRecording(false);
           isRecordingRef.current = false;
+          stopPatientAudioRecording().then(() => {
+            pendingPatientAudioRef.current = null;
+          });
           setUiState('ready');
           setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
           scheduleAutoListen(400);
@@ -1072,6 +1184,9 @@ function VoiceChatScreen({ onBack }) {
   const stopRecording = () => {
     clearSilenceTimer();
     stopSpeechRecognition();
+    stopPatientAudioRecording().then(() => {
+      pendingPatientAudioRef.current = null;
+    });
     setIsRecording(false);
     isRecordingRef.current = false;
   };
@@ -1255,7 +1370,7 @@ function VoiceChatScreen({ onBack }) {
         conversationDifficultyRef.current,
         elapsedMinutes
       );
-      chatHistoryRef.current.push({ role: 'user', parts: [{ text }] });
+      appendPatientMessage(text);
       chatHistoryRef.current.push({ role: 'model', parts: [{ text: fullText }] });
       const hasEndTag = fullText.includes('[END_CALL]') || fullText.includes('[통화끝]');
       const displayText = cleanStageDirections(fullText.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
