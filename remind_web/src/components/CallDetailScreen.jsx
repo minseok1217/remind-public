@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import './CallDetailScreen.css';
@@ -25,6 +25,8 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [photoDescription, setPhotoDescription] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
+  const messageRefs = useRef({});
 
   const analysis = callLog?.analysis || {};
   const scores = analysis.scores || {};
@@ -79,8 +81,16 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
     return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
   };
 
-  // Parse conversation into messages
   const parseConversation = () => {
+    if (Array.isArray(callLog?.messages) && callLog.messages.length > 0) {
+      return callLog.messages.map((message, idx) => ({
+        id: message.id || `msg_${idx}`,
+        role: message.role === 'ai' || message.role === 'model' ? 'ai' : 'patient',
+        text: message.text || '',
+        patientTurn: message.patientTurn || null,
+      }));
+    }
+
     if (!conversation) return [];
     return conversation.split('\n').filter(line => line.trim()).map((line, idx) => {
       const isAI = line.startsWith('AI:');
@@ -120,6 +130,11 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       String(photoContext.id || '').startsWith('orientation_')
     );
     const hasPhotoEvaluationContext = Boolean(photoUrl || photoContext.description || photoContext.detailedDescription || photoContext.finalCaption);
+    const patientMessageIds = messages.filter((message) => message.role === 'patient').map((message) => message.id);
+    const withEvidenceFallback = (item) => ({
+      ...item,
+      evidenceMessageIds: item.evidenceMessageIds?.length ? item.evidenceMessageIds : patientMessageIds,
+    });
 
     return [
       savedById.vocabularyDiversity || buildFallbackReportItem({
@@ -160,13 +175,33 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
           : '사진 또는 보호자 입력 캡션 없이 진행된 통화입니다.',
         categories: captionCategories
       })
-    ].filter((item) => shouldShowGuardianCaption || item.id !== 'guardianCaption');
+    ]
+      .filter((item) => shouldShowGuardianCaption || item.id !== 'guardianCaption')
+      .map(withEvidenceFallback);
   };
 
   const evaluationItems = getEvaluationItems();
 
+  const scrollToEvidence = (messageIds = []) => {
+    const targetId = messageIds.find((id) => messageRefs.current[id]);
+    if (!targetId) return;
+    setSelectedMessageId(targetId);
+    messageRefs.current[targetId].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const ReportItem = ({ item }) => (
-    <div className="cd-report-item">
+    <div
+      className={`cd-report-item ${item.evidenceMessageIds?.length ? 'clickable' : ''}`}
+      onClick={() => scrollToEvidence(item.evidenceMessageIds)}
+      role={item.evidenceMessageIds?.length ? 'button' : undefined}
+      tabIndex={item.evidenceMessageIds?.length ? 0 : undefined}
+      onKeyDown={(event) => {
+        if ((event.key === 'Enter' || event.key === ' ') && item.evidenceMessageIds?.length) {
+          event.preventDefault();
+          scrollToEvidence(item.evidenceMessageIds);
+        }
+      }}
+    >
       <div className="cd-report-head">
         <span className="cd-report-label">{item.label}</span>
         <span className={`cd-report-badge ${item.passed === false ? 'bad' : item.passed === null ? 'neutral' : 'good'}`}>
@@ -179,6 +214,18 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
         </div>
       )}
       <p className="cd-report-detail">{item.detail}</p>
+      {item.evidenceMessageIds?.length > 0 && (
+        <button
+          type="button"
+          className="cd-evidence-btn"
+          onClick={(event) => {
+            event.stopPropagation();
+            scrollToEvidence(item.evidenceMessageIds);
+          }}
+        >
+          관련 대화 보기
+        </button>
+      )}
       {item.categories?.length > 0 && (
         <div className="cd-caption-checks">
           {item.categories.map((category) => (
@@ -262,11 +309,17 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       {/* Conversation Section */}
       {messages.length > 0 && (
         <div className="cd-conversation-section">
-          <div className="cd-conversation-title">주요 대화 내용</div>
+          <div className="cd-conversation-title">대화 내용</div>
           <div className="cd-conversation-card">
             <div className="cd-messages">
               {messages.map(msg => (
-                <div key={msg.id} className={`cd-message ${msg.role}`}>
+                <div
+                  key={msg.id}
+                  ref={(el) => {
+                    if (el) messageRefs.current[msg.id] = el;
+                  }}
+                  className={`cd-message ${msg.role} ${selectedMessageId === msg.id ? 'selected' : ''}`}
+                >
                   <div className="cd-message-role">
                     {msg.role === 'ai' ? 
                       <div className='chat-ai-label'>

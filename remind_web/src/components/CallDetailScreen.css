@@ -280,6 +280,17 @@
   padding: 14px;
 }
 
+.cd-report-item.clickable {
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cd-report-item.clickable:hover,
+.cd-report-item.clickable:focus {
+  background: #f1fbf6;
+  box-shadow: 0 0 0 1px rgba(0, 193, 110, 0.22);
+}
+
 .cd-report-head {
   display: flex;
   justify-content: space-between;
@@ -322,6 +333,18 @@
   color: #666;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.cd-evidence-btn {
+  margin-top: 10px;
+  border: 1px solid #00C16E;
+  border-radius: 8px;
+  background: #fff;
+  color: #00A35C;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .cd-caption-checks {
@@ -437,6 +460,14 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  scroll-margin: 80px;
+  transition: background-color 0.2s ease;
+}
+
+.cd-message.selected {
+  border-radius: 12px;
+  background: rgba(0, 193, 110, 0.12);
+  padding: 8px;
 }
 
 .cd-message-role {
