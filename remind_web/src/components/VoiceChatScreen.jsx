@@ -190,6 +190,8 @@ function VoiceChatScreen({ onBack }) {
   const autoListenTimerRef = useRef(null);
   const introTimerRef = useRef(null);
   const isMountedRef = useRef(false);
+  const startupIdRef = useRef(0);
+  const preCallStartedRef = useRef(false);
   const firstQuestionAskedRef = useRef(false);
   const uiStateRef = useRef('loading');
   const autoListenEnabledRef = useRef(true);
@@ -224,6 +226,11 @@ function VoiceChatScreen({ onBack }) {
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
   useEffect(() => { autoListenEnabledRef.current = autoListenEnabled; }, [autoListenEnabled]);
   useEffect(() => { userPausedRef.current = userPaused; }, [userPaused]);
+
+  const isActiveStartup = (startupId) =>
+    isMountedRef.current &&
+    !isEndingCallRef.current &&
+    (startupId === undefined || startupIdRef.current === startupId);
 
   useEffect(() => {
     timerIntervalRef.current = setInterval(() => {
@@ -680,6 +687,7 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const processTTSQueue = async () => {
+    if (!isMountedRef.current || isEndingCallRef.current) return;
     if (ttsQueueRef.current.length === 0) {
       isSpeakingRef.current = false;
       if (!showPhoto) stopWaveAnimation();
@@ -690,15 +698,18 @@ function VoiceChatScreen({ onBack }) {
     if (!showPhoto) startSpeakingWave();
     const text = ttsQueueRef.current.shift();
     await tts(text);
+    if (!isMountedRef.current || isEndingCallRef.current) return;
     processTTSQueue();
   };
 
   const addToTTSQueue = (text) => {
+    if (!isMountedRef.current || isEndingCallRef.current) return;
     ttsQueueRef.current.push(text);
     if (!isSpeakingRef.current) processTTSQueue();
   };
 
   const speakAssistantText = (text, statusText = '천천히 말씀해 주세요.') => {
+    if (!isMountedRef.current || isEndingCallRef.current) return;
     const displayText = cleanStageDirections(text).trim();
     if (!displayText) return;
     chatHistoryRef.current.push({ role: 'model', parts: [{ text: displayText }] });
@@ -717,6 +728,8 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const startPreCallCheck = ({ photoData = null, context = null, fallbackGreeting = '' } = {}) => {
+    if (!isMountedRef.current || preCallStartedRef.current) return;
+    preCallStartedRef.current = true;
     preCallCheckRef.current = {
       active: true,
       index: 0,
@@ -1013,8 +1026,9 @@ function VoiceChatScreen({ onBack }) {
     addToTTSQueue(greeting);
   };
 
-  const startWithFallbackPhoto = async () => {
+  const startWithFallbackPhoto = async (startupId) => {
     const fallback = await buildFallbackPhotoFromOrientation();
+    if (!isActiveStartup(startupId)) return false;
     if (!fallback) {
       console.warn('[VoiceChat] orientation fallback 사진도 찾지 못했습니다.');
       return false;
@@ -1039,7 +1053,7 @@ function VoiceChatScreen({ onBack }) {
     return true;
   };
 
-  const loadPhotoAndStart = async () => {
+  const loadPhotoAndStart = async (startupId) => {
     try {
       const user = auth.currentUser;
       console.log('[VoiceChat] loadPhotoAndStart 시작:', {
@@ -1051,7 +1065,9 @@ function VoiceChatScreen({ onBack }) {
         return;
       }
       const ownerId = await resolvePhotoOwnerId(user.uid);
+      if (!isActiveStartup(startupId)) return;
       await loadConversationDifficulty(ownerId);
+      if (!isActiveStartup(startupId)) return;
       console.log('[VoiceChat] 사진 ownerId 결정:', {
         loginUid: user.uid,
         ownerId,
@@ -1060,6 +1076,7 @@ function VoiceChatScreen({ onBack }) {
       currentPhotoOwnerIdRef.current = ownerId;
       const photosRef = collection(db, 'users', ownerId, 'photos');
       const snapshot = await getDocs(photosRef);
+      if (!isActiveStartup(startupId)) return;
       const photos = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       console.log('[VoiceChat] users/{ownerId}/photos 조회 결과:', {
         ownerId,
@@ -1074,7 +1091,8 @@ function VoiceChatScreen({ onBack }) {
       });
       if (selectablePhotos.length === 0) {
         console.warn('[VoiceChat] 보호자/환자 등록 사진이 없어 fallback을 시도합니다.');
-        const usedFallback = await startWithFallbackPhoto();
+        const usedFallback = await startWithFallbackPhoto(startupId);
+        if (!isActiveStartup(startupId)) return;
         if (!usedFallback) startConversationWithoutPhoto();
         return;
       }
@@ -1098,6 +1116,7 @@ function VoiceChatScreen({ onBack }) {
       });
       const context = extractPhotoContext(photoData);
       const selectedPhoto = { ...photoData, id: photoData.id, ownerId, url: photoUrl };
+      if (!isActiveStartup(startupId)) return;
       setCurrentPhoto(selectedPhoto);
       currentPhotoRef.current = selectedPhoto;
       currentPhotoIdRef.current = photoData.id;
@@ -1110,12 +1129,15 @@ function VoiceChatScreen({ onBack }) {
         startPreCallCheck({ photoData, context });
       } else {
         console.warn('[VoiceChat] 선택된 사용자 사진에 URL이 없어 fallback을 시도합니다:', photoData.id);
-        const usedFallback = await startWithFallbackPhoto();
+        const usedFallback = await startWithFallbackPhoto(startupId);
+        if (!isActiveStartup(startupId)) return;
         if (!usedFallback) startConversationWithoutPhoto();
       }
     } catch (error) {
+      if (!isActiveStartup(startupId)) return;
       console.error('❌ 사진 로드 오류:', error);
-      const usedFallback = await startWithFallbackPhoto();
+      const usedFallback = await startWithFallbackPhoto(startupId);
+      if (!isActiveStartup(startupId)) return;
       if (!usedFallback) startConversationWithoutPhoto('오늘 하루 중 기억에 남는 일을 천천히 들려주세요.');
     }
   };
@@ -1170,11 +1192,15 @@ function VoiceChatScreen({ onBack }) {
 
   useEffect(() => {
     isMountedRef.current = true;
+    const startupId = startupIdRef.current + 1;
+    startupIdRef.current = startupId;
+    preCallStartedRef.current = false;
     callStartTimeRef.current = Date.now();
     stopSpeaking();
-    loadPhotoAndStart();
+    loadPhotoAndStart(startupId);
     return () => {
       isMountedRef.current = false;
+      startupIdRef.current += 1;
       clearSilenceTimer();
       clearAutoListenTimer();
       clearIntroTimer();

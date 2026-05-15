@@ -28,7 +28,7 @@ import chart_icon_off from './assets/chart_icon_off.png';
 import info_icon_on from './assets/info_icon_on.png'; 
 import info_icon_off from './assets/info_icon_off.png'; 
 
-const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = true;
+const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = false;
 
 function App() {
   const [activeNav, setActiveNav] = useState('home');
