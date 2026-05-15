@@ -431,46 +431,41 @@ ${answer || '(답변 없음)'}
   }
 };
 
-export const extractAnswerKeywords = async (imageBase64, captionText, step1Data) => {
-  const parts = [];
-  const dynamicCategories = normalizeCaptionCategories(step1Data?.captionCategories || []);
-  if (step1Data?.year) parts.push(`연도/시기: ${step1Data.year}`);
-  if (step1Data?.location) parts.push(`장소(선택 항목): ${step1Data.location}`);
-  if (step1Data?.people?.length) parts.push(`함께한 사람(선택 항목): ${step1Data.people.join(', ')}`);
-  if (step1Data?.freeText) parts.push(`보호자 메모: ${step1Data.freeText}`);
-  if (dynamicCategories.length) {
-    parts.push(`보호자 지정 평가 카테고리:\n${formatCaptionCategoriesForPrompt(dynamicCategories)}`);
-  }
-  if (captionText) parts.push(`생성된 캡션: ${captionText}`);
+export const extractAnswerKeywords = async (answers, step1Data) => {
+  // 실제 답변이 있는 항목만 필터링
+  const validAnswers = (answers || []).filter(qa => qa.answer && qa.answer.trim());
+  if (validAnswers.length === 0) return [];
 
-  if (parts.length === 0 && !imageBase64) return [];
+  // 이미 수집된 3가지 기본 정보
+  const knownInfo = [];
+  if (step1Data?.year) knownInfo.push(`연도: ${step1Data.year}`);
+  if (step1Data?.people?.length) knownInfo.push(`함께한 사람: ${step1Data.people.join(', ')}`);
+  if (step1Data?.location) knownInfo.push(`장소: ${step1Data.location}`);
+
+  const conversationText = validAnswers
+    .map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`)
+    .join('\n\n');
 
   const prompt = `당신은 치매 어르신의 회상 치료를 위한 AI입니다.
-첨부된 사진과 보호자가 입력한 정보를 함께 분석하여, 어르신의 기억력 평가에 활용할 핵심 정답 키워드를 추출해주세요.
+보호자와 AI 간의 대화를 분석하여, 어르신의 기억력 평가에 활용할 추가 정답 키워드를 추출해주세요.
 
-보호자 입력 정보:
-${parts.length ? parts.join('\n') : '(입력 없음)'}
+[이미 수집된 기본 정보 - 중복 추출 금지]
+${knownInfo.length ? knownInfo.join('\n') : '(없음)'}
+
+[보호자 대화 내용]
+${conversationText}
 
 추출 규칙:
-- 사진에서 확인되거나 보호자가 언급한 구체적인 명사만 추출하세요
-- 보호자가 직접 언급한 정보를 최우선으로 하고, 사진에서만 보이는 정보를 보완으로 활용하세요
-- "산", "바다"처럼 두루뭉술한 단어 대신 보호자 메모에 구체적인 이름이 있으면 그것을 사용하세요
-- 보호자가 지정한 평가 카테고리가 있으면 반드시 그 카테고리명만 사용하고, 기대 답변을 정답 키워드로 유지하세요
-- 보호자 지정 평가 카테고리가 없을 때만 사진과 캡션에서 자연스럽게 필요한 카테고리를 1~6개 생성하세요
-- 불명확하거나 추상적인 정보는 제외하세요
-- 최대 6개까지만 추출하세요
+- 위 "이미 수집된 기본 정보"와 겹치는 카테고리(연도, 함께한 사람, 장소)는 추출하지 마세요
+- 보호자의 답변에서 구체적인 명사·고유명사만 추출하세요
+- 추상적이거나 불명확한 표현은 제외하세요
+- 최대 4개까지만 추출하세요
 
 다음 JSON 형식으로만 반환하세요 (다른 텍스트 없이):
 {"answerKeywords": [{"category": "카테고리명", "value": "추출된값"}]}`;
 
   try {
-    // 이미지가 있으면 멀티모달로, 없으면 텍스트만으로 호출
-    let response;
-    if (imageBase64) {
-      response = await callGeminiWithCustomPrompt(imageBase64, prompt);
-    } else {
-      response = await callGeminiTextOnly(prompt);
-    }
+    const response = await callGeminiTextOnly(prompt);
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
