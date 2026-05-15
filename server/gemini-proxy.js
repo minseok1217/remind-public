@@ -74,7 +74,7 @@ app.post('/api/gemini/analyze', async (req, res) => {
 
 // 텍스트 채팅 엔드포인트
 app.post('/api/gemini/chat', async (req, res) => {
-  const { message, history, photoContext } = req.body || {};
+  const { message, history, photoContext, systemPrompt: clientSystemPrompt } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message required' });
 
   // 사진 컨텍스트가 있으면 시스템 프롬프트에 추가
@@ -92,7 +92,7 @@ app.post('/api/gemini/chat', async (req, res) => {
 이 정보를 바탕으로 어르신과 사진에 대해 따뜻하게 대화하세요.`;
   }
 
-  const systemPrompt = `당신은 치매 노인을 위한 다정하고 침착한 '회상 치료사'입니다.
+  const systemPrompt = clientSystemPrompt || `당신은 치매 노인을 위한 다정하고 침착한 '회상 치료사'입니다.
 ${photoInfo}
 [대화 규칙]
 1. 답변은 어르신이 듣기 편하도록 1~2문장 이내로 짧고 천천히 하세요.
