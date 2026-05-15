@@ -28,6 +28,8 @@ import chart_icon_off from './assets/chart_icon_off.png';
 import info_icon_on from './assets/info_icon_on.png'; 
 import info_icon_off from './assets/info_icon_off.png'; 
 
+const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = false;
+
 function App() {
   const [activeNav, setActiveNav] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
@@ -44,9 +46,13 @@ function App() {
   const [showCallButton, setShowCallButton] = useState(true);
   const forceOrientationRef = useRef(false);
 
-  const ORIENT_DATE_KEY = 'orient_done_date';
+  const getOrientDateKey = (uid = currentUser?.uid) =>
+    uid ? `orient_done_date_${uid}` : 'orient_done_date';
   const isOrientationDoneToday = () =>
-    localStorage.getItem(ORIENT_DATE_KEY) === new Date().toDateString();
+    SKIP_ORIENTATION_TRAINING_FOR_DEBUG ||
+    localStorage.getItem(getOrientDateKey()) === new Date().toDateString() ||
+    localStorage.getItem('orient_done_date') === new Date().toDateString();
+  const getCallPhaseForToday = () => isOrientationDoneToday() ? 'voice' : 'orientation';
 
   // 통화 탭 진입 시: 오늘 이미 완료했으면 바로 voice, 아니면 orientation 리셋
   useEffect(() => {
@@ -54,11 +60,11 @@ function App() {
       setCallPhase('orientation');
     } else if (forceOrientationRef.current) {
       forceOrientationRef.current = false;
-      setCallPhase('orientation');
+      setCallPhase(isOrientationDoneToday() ? 'voice' : 'orientation');
     } else if (isOrientationDoneToday()) {
       setCallPhase('voice');
     }
-  }, [activeNav]);
+  }, [activeNav, currentUser]);
 
   const handleStatsNavigate = (type, data) => {
     setSubScreen({ type, data });
@@ -171,12 +177,12 @@ function App() {
     const openCall = ({ forceOrientation = false } = {}) => {
       console.log(forceOrientation ? '지남력 훈련 화면 이동' : '통화 화면 이동');
       forceOrientationRef.current = forceOrientation;
+      setCallPhase(getCallPhaseForToday());
       setActiveNav('call');
-      setCallPhase(forceOrientation || !isOrientationDoneToday() ? 'orientation' : 'voice');
     };
 
     window.openVoiceChatScreenPage = () => {
-      openCall({ forceOrientation: true });
+      openCall();
     };
 
     window.openOrientationTrainingScreenPage = () => {
@@ -187,7 +193,7 @@ function App() {
       delete window.openVoiceChatScreenPage;
       delete window.openOrientationTrainingScreenPage;
     };
-  }, []);
+  }, [currentUser]);
 
   const handleLogout = async () => {
     if (window.confirm('로그아웃 하시겠습니까?')) {
@@ -287,7 +293,10 @@ function App() {
             {userRole === '환자' && (
               <button
                 className={`nav-item ${activeNav === 'call' ? 'active' : ''}`}
-                onClick={() => setActiveNav('call')}
+                onClick={() => {
+                  setCallPhase(getCallPhaseForToday());
+                  setActiveNav('call');
+                }}
                 title="통화"
               >
                 <span className="nav-icon">📞</span>
@@ -321,27 +330,24 @@ function App() {
         )}
         {activeNav === 'photo' && <PhotoScreen currentUser={currentUser} onBack={() => setActiveNav('home')} onGoToManagement={() => setActiveNav('management')} />}
         {activeNav === 'management' && <PhotoManagementScreen currentUser={currentUser} onBack={() => setActiveNav('photo')} />}
-        {activeNav === 'call' && callPhase === 'orientation' && (
-          <div className="full-screen-call">
-            <OrientationTrainingScreen
-              currentUser={currentUser}
-              onComplete={() => {
-                localStorage.setItem(ORIENT_DATE_KEY, new Date().toDateString());
-                setCallPhase('voice');
-              }}
-              onBack={() => setActiveNav('home')}
-            />
-          </div>
+        {activeNav === 'call' && callPhase === 'orientation' && !isOrientationDoneToday() && (
+          <OrientationTrainingScreen
+            currentUser={currentUser}
+            onComplete={() => {
+              localStorage.setItem(getOrientDateKey(), new Date().toDateString());
+              localStorage.setItem('orient_done_date', new Date().toDateString());
+              setCallPhase('voice');
+            }}
+            onBack={() => setActiveNav('home')}
+          />
         )}
-        {activeNav === 'call' && callPhase === 'voice' && (
-          <div className="full-screen-call">
-            <VoiceChatScreen
-              onBack={() => {
-                setCallPhase('orientation');
-                setActiveNav('home');
-              }}
-            />
-          </div>
+        {activeNav === 'call' && (callPhase === 'voice' || isOrientationDoneToday()) && (
+          <VoiceChatScreen
+            onBack={() => {
+              setCallPhase('orientation');
+              setActiveNav('home');
+            }}
+          />
         )}
         {activeNav === 'stats' && !subScreen && (
           <StatsScreen
