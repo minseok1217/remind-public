@@ -38,13 +38,23 @@ const isAnswerCorrectLocally = (correctAnswer, userAnswer) => {
   return user.includes(correct) || correct.includes(user);
 };
 
+// 받침 유무에 따라 '이에요' 또는 '예요' 반환
+const eyo = (word) => {
+  if (!word) return '이에요';
+  const code = word[word.length - 1].charCodeAt(0);
+  if (code >= 0xAC00 && code <= 0xD7A3) {
+    return (code - 0xAC00) % 28 !== 0 ? '이에요' : '예요';
+  }
+  return '이에요';
+};
+
 const buildLocalHint = (q) => {
   if (q?.type === 'name' && q.description) {
     return `힌트예요. 이것은 ${q.description}`;
   }
 
   if (q?.type === 'description' && q.itemName) {
-    return `힌트예요. 사진 속 이름은 "${q.itemName}"이에요. 이 이름과 가장 잘 맞는 설명을 골라 보세요.`;
+    return `힌트예요. 사진 속 이름은 "${q.itemName}"${eyo(q.itemName)}. 이 이름과 가장 잘 맞는 설명을 골라 보세요.`;
   }
 
   const cleanAnswer = String(q?.answer || '').replace(/^\d번\((.*)\)$/, '$1').trim();
@@ -282,7 +292,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
         answer: doc.name || '',
         description: doc.description || '',
         hint: '',
-        explanation: `정답은 "${doc.name}"이에요!`,
+        explanation: `정답은 "${doc.name}"${eyo(doc.name)}!`,
       }));
 
       // ── 설명 맞추기 3문제 (같은 type의 다른 사진 설명을 보기로 활용) ──
@@ -503,7 +513,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
       const praise =
         attempt === 'first'
           ? praises[Math.floor(Math.random() * praises.length)]
-          : `맞아요! ${q.explanation || `${correctAns}이에요!`} 잘하셨어요!`;
+          : `맞아요! ${q.explanation || `${correctAns}${eyo(correctAns)}!`} 잘하셨어요!`;
 
       setIsSpeaking(true);
       isSpeakingRef.current = true;
@@ -561,7 +571,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
         // 2차 시도 후 정답 공개
         setPhase('result');
         phaseRef.current = 'result';
-        const explanation = q.explanation || `정답은 ${correctAns}이에요! 다음엔 꼭 기억해 보세요.`;
+        const explanation = q.explanation || `정답은 ${correctAns}${eyo(correctAns)}! 다음엔 꼭 기억해 보세요.`;
         setStatusMsg(explanation);
         setIsSpeaking(true);
         isSpeakingRef.current = true;
@@ -578,6 +588,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
   };
 
   const handleBack = () => {
+    mountedRef.current = false;
     stopListening();
     cancelTTS();
     onBack?.();
