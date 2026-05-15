@@ -172,6 +172,16 @@ a {
   padding-bottom: 90px;
 }
 
+/* 통화/훈련 전체 화면 오버레이 */
+.full-screen-call {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Scrollbar styling */
 .main-content::-webkit-scrollbar {
   width: 8px;

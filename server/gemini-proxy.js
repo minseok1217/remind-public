@@ -11,7 +11,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 const PORT = process.env.PORT || 3001;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generateContent';
 
 if (!GEMINI_API_KEY) {
   console.warn('Warning: GEMINI_API_KEY not set. Proxy will not work without it.');

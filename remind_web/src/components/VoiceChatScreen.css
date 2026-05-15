@@ -8,6 +8,7 @@
   background: #f7f7f7;
   position: relative;
   overflow: hidden;
+  flex: 1;
 }
 
 /* ── 헤더 ──────────────────────────────────────────────────────── */

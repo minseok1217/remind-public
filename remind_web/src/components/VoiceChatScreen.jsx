@@ -1185,13 +1185,18 @@ function VoiceChatScreen({ onBack }) {
     };
   }, []);
 
-  const handleBack = async () => {
+  const handleBack = () => {
     isEndingCallRef.current = true;
     setAutoListenEnabled(false);
     stopRecording();
-    await saveCallLog();
-    if (hasPhoto && currentPhotoIdRef.current) await markPhotoAsCompleted();
+    stopSpeaking();
+    stopSpeechRecognition();
     onBack();
+    saveCallLog()
+      .then(() => {
+        if (hasPhoto && currentPhotoIdRef.current) markPhotoAsCompleted().catch(() => {});
+      })
+      .catch(() => {});
   };
 
   const handleMicClick = () => {
