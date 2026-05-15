@@ -50,6 +50,101 @@ const joinReactionAndQuestion = (reaction, question) => {
   return `${reaction} ${question}`;
 };
 
+const getMessageText = (msg) => msg?.parts?.[0]?.text || '';
+
+const buildConversationMessages = (chatHistory) => {
+  let patientTurn = 0;
+  return (chatHistory || [])
+    .map((msg, index) => {
+      const text = getMessageText(msg).trim();
+      if (!text) return null;
+      const role = msg.role === 'user' ? 'patient' : 'ai';
+      const message = {
+        id: `msg_${index}`,
+        order: index,
+        role,
+        speaker: role === 'patient' ? '환자' : 'AI',
+        text,
+      };
+      if (role === 'patient') {
+        patientTurn += 1;
+        message.patientTurn = patientTurn;
+      }
+      return message;
+    })
+    .filter(Boolean);
+};
+
+const toKeywordSet = (text) =>
+  String(text || '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .map((word) => word.replace(/[을를이가은는에서로와과의도만]/g, '').trim())
+    .filter((word) => word.length >= 2);
+
+const findRelevantMessageIds = (item, messages) => {
+  const patientMessages = messages.filter((msg) => msg.role === 'patient');
+  if (patientMessages.length === 0) return [];
+
+  if (item.id === 'emotionalState') {
+    const emotionPattern = /좋|행복|기쁘|즐거|감사|사랑|웃|재미|신나|편안|따뜻|그립|슬프|힘들|아프|걱정|무서|화나|짜증|외로|우울|불안|싫/;
+    const matched = patientMessages.filter((msg) => emotionPattern.test(msg.text));
+    return (matched.length > 0 ? matched : patientMessages).map((msg) => msg.id);
+  }
+
+  if (item.id === 'sentenceCompleteness') {
+    const matched = patientMessages.filter((msg) =>
+      /(어+|음+|그+|아+|에+)/.test(msg.text) ||
+      msg.text.length < 8 ||
+      !/[.?!。？！요다]$/.test(msg.text.trim())
+    );
+    return (matched.length > 0 ? matched : patientMessages).map((msg) => msg.id);
+  }
+
+  if (item.id === 'topicDeviation') {
+    const deviated = [];
+    for (let i = 0; i < messages.length - 1; i += 1) {
+      if (messages[i].role !== 'ai' || messages[i + 1].role !== 'patient') continue;
+      const questionKeywords = toKeywordSet(messages[i].text);
+      const answerKeywords = toKeywordSet(messages[i + 1].text);
+      const hasCommonKeyword = questionKeywords.some((keyword) =>
+        answerKeywords.some((answerKeyword) => answerKeyword.includes(keyword) || keyword.includes(answerKeyword))
+      );
+      if (!hasCommonKeyword && questionKeywords.length > 0) deviated.push(messages[i + 1]);
+    }
+    return (deviated.length > 0 ? deviated : patientMessages).map((msg) => msg.id);
+  }
+
+  if (item.id === 'guardianCaption' && Array.isArray(item.categories)) {
+    const evidenceWords = item.categories
+      .flatMap((category) => [
+        ...(category.expectedValues || []),
+        ...(category.matchedValues || []),
+      ])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+    const matched = evidenceWords.length > 0
+      ? patientMessages.filter((msg) => evidenceWords.some((word) => msg.text.includes(word)))
+      : [];
+    return (matched.length > 0 ? matched : patientMessages).map((msg) => msg.id);
+  }
+
+  return patientMessages.map((msg) => msg.id);
+};
+
+const attachReportEvidence = (report, messages) => {
+  if (!report?.items) return report;
+  return {
+    ...report,
+    items: report.items.map((item) => ({
+      ...item,
+      evidenceMessageIds: item.evidenceMessageIds?.length
+        ? item.evidenceMessageIds
+        : findRelevantMessageIds(item, messages),
+    })),
+  };
+};
+
 const sanitizeForFirestore = (value) => {
   if (value === undefined) return null;
   if (value === null) return null;
@@ -827,6 +922,9 @@ function VoiceChatScreen({ onBack }) {
         photoContext: usedPhotoContext,
         llmReport
       });
+      const messages = buildConversationMessages(chatHistoryRef.current);
+      const patientUtterances = messages.filter((message) => message.role === 'patient');
+      const reportWithEvidence = attachReportEvidence(analysis.report || llmReport || null, messages);
       const conversationText = chatHistoryRef.current.map((msg) => {
         const role = msg.role === 'user' ? '환자' : 'AI';
         return `${role}: ${msg.parts[0]?.text || ''}`;
@@ -849,6 +947,8 @@ function VoiceChatScreen({ onBack }) {
         photoId: currentPhotoIdRef.current || null,
         hasPhoto,
         conversation: conversationText,
+        messages,
+        patientUtterances,
         totalUtterances: analysis.totalUtterances,
         totalWords: analysis.totalWords,
         photoContext: usedPhotoContext,
@@ -861,7 +961,7 @@ function VoiceChatScreen({ onBack }) {
           scores: analysis.scores,
           status: analysis.status,
           insights: analysis.insights,
-          report: analysis.report || llmReport || null,
+          report: reportWithEvidence,
         },
         status: analysis.status.label,
         cognitiveScore: analysis.scores.cognitive,
@@ -877,13 +977,15 @@ function VoiceChatScreen({ onBack }) {
         photoOwnerId: currentPhotoOwnerIdRef.current || user.uid,
         callDate: serverTimestamp(), callDuration, photoId: currentPhotoIdRef.current || null,
         hasPhoto, conversation: conversationText, totalUtterances: analysis.totalUtterances,
+        messages,
+        patientUtterances,
         totalWords: analysis.totalWords,
         photoContext: usedPhotoContext,
         preCallCheck: {
           questions: PRE_CALL_CHECK_QUESTIONS,
           answers: preCallCheckRef.current.answers || [],
         },
-        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: insightLines, report: analysis.report || llmReport || null },
+        analysis: { metrics: analysis.metrics, scores: analysis.scores, status: analysis.status, insights: insightLines, report: reportWithEvidence },
         changesFromPrevious,
         summary: {
           status: analysis.status,
