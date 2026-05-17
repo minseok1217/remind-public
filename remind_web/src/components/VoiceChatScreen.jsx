@@ -66,6 +66,11 @@ const summarizeAudioForCallLog = (audio) => {
   };
 };
 
+const summarizeTtsAudioForCallLog = (audio, text) => {
+  const summarized = summarizeAudioForCallLog(audio);
+  return summarized ? { ...summarized, ttsText: text || null } : null;
+};
+
 const buildConversationMessages = (chatHistory) => {
   let patientTurn = 0;
   return (chatHistory || [])
@@ -77,7 +82,7 @@ const buildConversationMessages = (chatHistory) => {
         id: `msg_${index}`,
         order: index,
         role,
-        speaker: role === 'patient' ? '환자' : 'AI',
+        speaker: role === 'patient' ? 'OO님' : 'AI',
         text,
       };
       if (role === 'patient') {
@@ -926,6 +931,34 @@ function VoiceChatScreen({ onBack }) {
     isSpeakingRef.current = false;
   };
 
+  const uploadAssistantAudio = async ({ blob, mimeType, size, text }) => {
+    const user = auth.currentUser;
+    if (!user || !blob) return null;
+
+    try {
+      const extension = getAudioExtension(mimeType);
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extension}`;
+      const path = `users/${user.uid}/call_audio/${callSessionIdRef.current}/ai_${fileName}`;
+      const ref = storageRef(storage, path);
+      const snapshot = await uploadBytes(ref, blob, {
+        contentType: mimeType || 'audio/mpeg',
+      });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return {
+        hasAudio: true,
+        downloadURL,
+        storagePath: path,
+        mimeType: mimeType || null,
+        size: size || null,
+        durationMs: null,
+        ttsText: text || null,
+      };
+    } catch (error) {
+      console.warn('[VoiceChat] AI 음성 Storage 업로드 실패:', error);
+      return null;
+    }
+  };
+
   const processTTSQueue = async () => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
     if (ttsQueueRef.current.length === 0) {
@@ -936,15 +969,29 @@ function VoiceChatScreen({ onBack }) {
     }
     isSpeakingRef.current = true;
     if (!showPhoto) startSpeakingWave();
-    const text = ttsQueueRef.current.shift();
-    await tts(text);
+    const item = ttsQueueRef.current.shift();
+    const text = typeof item === 'string' ? item : item.text;
+    await tts(text, {
+      onAudioBlob: (blob, processedText) => {
+        if (!item?.message) return;
+        return uploadAssistantAudio({
+          blob,
+          mimeType: blob.type || 'audio/mpeg',
+          size: blob.size,
+          text: processedText || text,
+        }).then((audio) => {
+          if (audio) item.message.audio = audio;
+          else item.message.audio = summarizeTtsAudioForCallLog(item.message.audio, text);
+        });
+      },
+    });
     if (!isMountedRef.current || isEndingCallRef.current) return;
     processTTSQueue();
   };
 
-  const addToTTSQueue = (text) => {
+  const addToTTSQueue = (text, message = null) => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
-    ttsQueueRef.current.push(text);
+    ttsQueueRef.current.push({ text, message });
     if (!isSpeakingRef.current) processTTSQueue();
   };
 
@@ -952,9 +999,10 @@ function VoiceChatScreen({ onBack }) {
     if (!isMountedRef.current || isEndingCallRef.current) return;
     const displayText = cleanStageDirections(text).trim();
     if (!displayText) return;
-    chatHistoryRef.current.push({ role: 'model', parts: [{ text: displayText }] });
+    const message = { role: 'model', parts: [{ text: displayText }] };
+    chatHistoryRef.current.push(message);
     setCaption(`AI: ${displayText}`);
-    addToTTSQueue(displayText);
+    addToTTSQueue(displayText, message);
     setUiState('ready');
     setStatus(statusText);
   };
@@ -1071,7 +1119,7 @@ function VoiceChatScreen({ onBack }) {
       const patientUtterances = messages.filter((message) => message.role === 'patient');
       const reportWithEvidence = attachReportEvidence(analysis.report || llmReport || null, messages);
       const conversationText = chatHistoryRef.current.map((msg) => {
-        const role = msg.role === 'user' ? '환자' : 'AI';
+        const role = msg.role === 'user' ? 'OO님' : 'AI';
         return `${role}: ${msg.parts[0]?.text || ''}`;
       }).join('\n');
       const previousCallLog = await loadLatestPreviousCallLog(user.uid);
@@ -1262,9 +1310,10 @@ function VoiceChatScreen({ onBack }) {
     }
 
     const displayText = cleanStageDirections(firstQuestion.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
-    chatHistoryRef.current.push({ role: 'model', parts: [{ text: displayText }] });
+    const assistantMessage = { role: 'model', parts: [{ text: displayText }] };
+    chatHistoryRef.current.push(assistantMessage);
     setCaption(`AI: ${displayText}`);
-    addToTTSQueue(displayText);
+    addToTTSQueue(displayText, assistantMessage);
     setUiState('ready');
     setStatus('AI가 질문했어요. 천천히 말씀해 주세요.');
   };
@@ -1279,8 +1328,9 @@ function VoiceChatScreen({ onBack }) {
     setUiState('ready');
     setStatus('대화를 시작할게요. 천천히 말씀해 주세요.');
     setCaption(`AI: ${greeting}`);
-    chatHistoryRef.current.push({ role: 'model', parts: [{ text: greeting }] });
-    addToTTSQueue(greeting);
+    const assistantMessage = { role: 'model', parts: [{ text: greeting }] };
+    chatHistoryRef.current.push(assistantMessage);
+    addToTTSQueue(greeting, assistantMessage);
   };
 
   const startWithFallbackPhoto = async (startupId) => {
@@ -1415,10 +1465,11 @@ function VoiceChatScreen({ onBack }) {
       const assistantText = canEndByTime && !fullText.includes('[END_CALL]') && !fullText.includes('[통화끝]')
         ? '오늘 대화는 여기서 마무리할게요. 함께 이야기해 주셔서 고마워요. 건강하게 쉬세요. [통화끝]'
         : fullText;
-      chatHistoryRef.current.push({ role: 'model', parts: [{ text: assistantText }] });
+      const assistantMessage = { role: 'model', parts: [{ text: assistantText }] };
+      chatHistoryRef.current.push(assistantMessage);
       const hasEndTag = assistantText.includes('[END_CALL]') || assistantText.includes('[통화끝]');
       const displayText = cleanStageDirections(assistantText.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
-      if (displayText) { setCaption(`AI: ${displayText}`); addToTTSQueue(displayText); }
+      if (displayText) { setCaption(`AI: ${displayText}`); addToTTSQueue(displayText, assistantMessage); }
       if (hasEndTag) {
         const userWantsToEnd = containsEndIntent(text);
 
@@ -1464,9 +1515,10 @@ function VoiceChatScreen({ onBack }) {
     stopSpeechRecognition();
 
     const closingText = '오늘 대화는 여기서 마무리할게요. 함께 이야기해 주셔서 고마워요. 건강하게 쉬세요.';
-    chatHistoryRef.current.push({ role: 'model', parts: [{ text: `${closingText} [통화끝]` }] });
+    const assistantMessage = { role: 'model', parts: [{ text: `${closingText} [통화끝]` }] };
+    chatHistoryRef.current.push(assistantMessage);
     setCaption(`AI: ${closingText}`);
-    addToTTSQueue(closingText);
+    addToTTSQueue(closingText, assistantMessage);
     setStatus('대화를 마무리할게요.');
 
     saveCallLog()

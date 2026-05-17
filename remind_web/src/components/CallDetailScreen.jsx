@@ -107,7 +107,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
           id: message.id || `msg_${idx}`,
           order: message.order ?? idx,
           role: message.role === 'ai' || message.role === 'model' ? 'ai' : 'patient',
-          speaker: message.speaker || (message.role === 'ai' || message.role === 'model' ? 'AI' : '환자'),
+          speaker: message.speaker || (message.role === 'ai' || message.role === 'model' ? 'AI' : 'OO?'),
           text: message.text || '',
           patientTurn: message.patientTurn || null,
           audio: message.audio || null,
@@ -121,15 +121,15 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
     const lines = conversation.split('\n').filter(line => line.trim());
     lines.forEach((line) => {
       const isAI = line.startsWith('AI:');
-      const isPatient = line.startsWith('환자:');
+      const isPatient = line.startsWith('OO') || line.startsWith('환자:') || line.startsWith('?섏옄:');
       const role = isAI ? 'ai' : (isPatient ? 'patient' : null);
-      const text = line.replace(/^(AI|환자):\s*/, '');
+      const text = line.replace(/^AI:\s*/, '').replace(/^OO님:\s*/, '').replace(/^환자:\s*/, '').replace(/^\?섏옄:\s*/, '');
       if (role) {
         parsed.push({
           id: `msg_${parsed.length}`,
           order: parsed.length,
           role,
-          speaker: role === 'ai' ? 'AI' : '환자',
+          speaker: role === 'ai' ? 'AI' : 'OO?',
           text
         });
         return;
@@ -142,6 +142,21 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   };
 
   const messages = parseConversation();
+  const resolveEvidenceMessageIds = (messageIds = []) => {
+    const ids = Array.isArray(messageIds) ? messageIds.filter(Boolean) : [];
+    const existingIds = new Set(messages.map((message) => message.id));
+    const directMatches = ids.filter((id) => existingIds.has(id));
+    if (directMatches.length > 0) return directMatches;
+
+    return ids
+      .map((id) => {
+        const match = String(id).match(/^msg_(\d+)$/);
+        if (!match) return null;
+        const order = Number(match[1]);
+        return messages.find((message) => message.order === order)?.id || null;
+      })
+      .filter(Boolean);
+  };
   const getPlayableText = (message) => message?.audio?.ttsText || message?.text || '';
   const getAudioSource = (message) => message?.audio?.downloadURL || message?.audio?.dataUrl || '';
   const hasPlayableAudio = (message) => Boolean(getAudioSource(message) || getPlayableText(message));
@@ -200,10 +215,13 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
     );
     const hasPhotoEvaluationContext = Boolean(photoUrl || photoContext.description || photoContext.detailedDescription || photoContext.finalCaption);
     const patientMessageIds = messages.filter((message) => message.role === 'patient').map((message) => message.id);
-    const withEvidenceFallback = (item) => ({
-      ...item,
-      evidenceMessageIds: item.evidenceMessageIds?.length ? item.evidenceMessageIds : patientMessageIds,
-    });
+    const withEvidenceFallback = (item) => {
+      const resolvedEvidenceIds = resolveEvidenceMessageIds(item.evidenceMessageIds);
+      return {
+        ...item,
+        evidenceMessageIds: resolvedEvidenceIds.length ? resolvedEvidenceIds : patientMessageIds,
+      };
+    };
 
     return [
       normalizeReportItem({
@@ -252,7 +270,8 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
   const evaluationItems = getEvaluationItems();
 
   const scrollToEvidence = (messageIds = []) => {
-    const targetId = messageIds.find((id) => messageRefs.current[id]);
+    const resolvedIds = resolveEvidenceMessageIds(messageIds);
+    const targetId = resolvedIds.find((id) => messageRefs.current[id]);
     if (!targetId) return;
     setSelectedMessageId(targetId);
     messageRefs.current[targetId].scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -266,7 +285,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
     const currentIndex = audioMessages.findIndex((item) => item.id === message.id);
     setPlaybackIndex(currentIndex);
     setSelectedMessageId(message.id);
-    setCurrentAudioLabel(`${message.speaker || (message.role === 'ai' ? 'AI' : '환자')} 대화부터 재생 중`);
+    setCurrentAudioLabel(`${message.speaker || (message.role === 'ai' ? 'AI' : 'OO님')} 대화부터 재생 중`);
     playbackQueueRef.current = queue;
     setPlaybackState('playing');
 
@@ -528,7 +547,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
                       </div>
                       :
                       <div className='chat-user-label'>
-                        <span>환자</span>
+                        <span>OO님</span>
                         <div className="chat-icon-circle">
                           <img src={usericon} className='chat-icon' />
                         </div>

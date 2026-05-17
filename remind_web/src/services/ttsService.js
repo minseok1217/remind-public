@@ -91,7 +91,7 @@ export const webSpeak = (text, generation = ttsGeneration) =>
     }, 300);
   });
 
-export const tts = async (rawText) => {
+export const tts = async (rawText, options = {}) => {
   const text = preprocessTTS(rawText);
   const generation = ttsGeneration;
   if (!ELEVENLABS_API_KEY) return webSpeak(text, generation);
@@ -121,6 +121,7 @@ export const tts = async (rawText) => {
       return webSpeak(text, generation);
     }
     const blob = await r.blob();
+    await options.onAudioBlob?.(blob, text);
     if (generation !== ttsGeneration) return;
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
