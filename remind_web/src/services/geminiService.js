@@ -22,8 +22,8 @@ const sanitizeGeminiHistory = (history = []) =>
     })
     .filter(Boolean);
 
-const i = 5;
-const t = 4;
+export const CALL_END_MINUTES = 5;
+export const REFLECTION_START_MINUTES = 4;
 
 const normalizeCaptionCategories = (items = []) =>
   (Array.isArray(items) ? items : [])
@@ -674,9 +674,9 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
 - 올바른 대응: 다른 각도로 개방형 재질문을 한다.
 
 [대화 전략]
-- 0~${t}분: ${imageName}과 연결된 구체적 기억(인물·사건·감정)을 깊이 회상하도록 유도한다.
-- ${t}~${i}분: "오늘 대화에서 가장 기억에 남는 게 뭐예요?"로 스스로 정리하게 한다.
-- ${i}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+- 0~${REFLECTION_START_MINUTES}분: ${imageName}과 연결된 구체적 기억(인물·사건·감정)을 깊이 회상하도록 유도한다.
+- ${REFLECTION_START_MINUTES}~${CALL_END_MINUTES}분: "오늘 대화에서 가장 기억에 남는 게 뭐예요?"로 스스로 정리하게 한다.
+- ${CALL_END_MINUTES}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
 
 // - 0~10분: ${imageName}과 연결된 구체적 기억(인물·사건·감정)을 깊이 회상하도록 유도한다.
 // - 10~15분: "오늘 대화에서 가장 기억에 남는 게 뭐예요?"로 스스로 정리하게 한다.
@@ -715,9 +715,9 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
 - 올바른 대응: 선택지로 전환하여 힌트를 제공한다.
 
 [대화 전략]
-- 0~${t}분: 1~5단계를 순서대로 진행한다.
-- ${t}~${i}분: 현재 감정을 확인하며 마무리한다.
-- ${i}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+- 0~${REFLECTION_START_MINUTES}분: 1~5단계를 순서대로 진행한다.
+- ${REFLECTION_START_MINUTES}~${CALL_END_MINUTES}분: 현재 감정을 확인하며 마무리한다.
+- ${CALL_END_MINUTES}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
 // - 0~10분: 1~5단계를 순서대로 진행한다.
 // - 10~15분: 현재 감정을 확인하며 마무리한다.
 // - 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
@@ -763,9 +763,9 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
 - 올바른 대응: "괜찮아요, 그냥 같이 보는 것만으로도 충분해요." 후 감각 공유로 전환.
 
 [대화 전략]
-- 0~${t}분: 에코잉과 동반자 화법으로 어르신과 함께 감각·기억을 공유한다.
-- ${t}~${i}분: 감정 확인 후 존재를 긍정하며 마무리한다.
-- ${i}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
+- 0~${REFLECTION_START_MINUTES}분: 에코잉과 동반자 화법으로 어르신과 함께 감각·기억을 공유한다.
+- ${REFLECTION_START_MINUTES}~${CALL_END_MINUTES}분: 감정 확인 후 존재를 긍정하며 마무리한다.
+- ${CALL_END_MINUTES}분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
 // - 0~10분: 에코잉과 동반자 화법으로 어르신과 함께 감각·기억을 공유한다.
 // - 10~15분: 감정 확인 후 존재를 긍정하며 마무리한다.
 // - 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
@@ -983,7 +983,7 @@ ${captionCategoryPrompt}
   const photoType = photoContext ? (photoContext.photoType || photoContext.type || '개인적') : '보편적';
   const systemInstruction = photoName
     ? getSystemInstruction(normalizeDifficultyLevel(difficulty), photoName, photoType)
-    : '당신은 치매 어르신을 돕는 전문 요양보호사입니다. 응답은 1~2문장으로 짧고 따뜻하게 하며, 한 번에 하나의 질문만 합니다. ${i}분이 지나면 반드시 [통화끝]을 출력하고 마무리합니다.';
+    : `당신은 치매 어르신을 돕는 전문 요양보호사입니다. 응답은 1~2문장으로 짧고 따뜻하게 하며, 한 번에 하나의 질문만 합니다. ${CALL_END_MINUTES}분이 지나면 반드시 [통화끝]을 출력하고 마무리합니다.`;
 
   const photoRule = photoContext
     ? '- 사진을 이미 보여주고 있으므로 "사진을 준비하지 못했다"는 말 금지.'
@@ -992,12 +992,12 @@ ${captionCategoryPrompt}
 
   const strictTimingRules = `
 [통화 시간 규칙 - 반드시 준수]
-- 통화는 기본 ${i}분을 채우는 것을 목표로 한다.
-- 현재 경과 시간이 ${i}분 미만이면 AI가 먼저 통화를 마무리하거나 [통화끝]/[END_CALL]을 출력하면 안 된다.
-- ${i}분 미만에는 "마무리할게요", "오늘은 여기까지" 같은 종료 분위기 문장도 피하고, 자연스럽게 다음 질문을 이어간다.
-- 예외: 어르신이 직접 그만하고 싶다, 끊고 싶다, 너무 피곤하다, 힘들다고 명확히 말한 경우에만 ${i}분 전에도 따뜻하게 마무리하고 [통화끝]을 출력할 수 있다.
-- 현재 경과 시간이 ${t}~${i}분이면 오늘 대화에서 기억에 남는 점이나 현재 기분을 물으며 천천히 정리한다.
-- 현재 경과 시간이 ${i}분 이상이면 따뜻하게 마무리하고 반드시 [통화끝]을 출력한다.
+- 통화는 기본 ${CALL_END_MINUTES}분을 채우는 것을 목표로 한다.
+- 현재 경과 시간이 ${CALL_END_MINUTES}분 미만이면 AI가 먼저 통화를 마무리하거나 [통화끝]/[END_CALL]을 출력하면 안 된다.
+- ${CALL_END_MINUTES}분 미만에는 "마무리할게요", "오늘은 여기까지" 같은 종료 분위기 문장도 피하고, 자연스럽게 다음 질문을 이어간다.
+- 예외: 어르신이 직접 그만하고 싶다, 끊고 싶다, 너무 피곤하다, 힘들다고 명확히 말한 경우에만 ${CALL_END_MINUTES}분 전에도 따뜻하게 마무리하고 [통화끝]을 출력할 수 있다.
+- 현재 경과 시간이 ${REFLECTION_START_MINUTES}~${CALL_END_MINUTES}분이면 오늘 대화에서 기억에 남는 점이나 현재 기분을 물으며 천천히 정리한다.
+- 현재 경과 시간이 ${CALL_END_MINUTES}분 이상이면 따뜻하게 마무리하고 반드시 [통화끝]을 출력한다.
 - 현재 경과 시간은 ${elapsedMinutes}분이다. 이 시간을 기준으로 종료 가능 여부를 판단한다.`;
 
   const systemPrompt = `${systemInstruction}

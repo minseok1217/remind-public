@@ -143,7 +143,8 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
 
   const messages = parseConversation();
   const getPlayableText = (message) => message?.audio?.ttsText || message?.text || '';
-  const hasPlayableAudio = (message) => Boolean(message?.audio?.dataUrl || getPlayableText(message));
+  const getAudioSource = (message) => message?.audio?.downloadURL || message?.audio?.dataUrl || '';
+  const hasPlayableAudio = (message) => Boolean(getAudioSource(message) || getPlayableText(message));
   const audioMessages = messages.filter(hasPlayableAudio);
 
   const clampScore = (value) => Math.max(0, Math.min(Number(value) || 0, 100));
@@ -269,9 +270,10 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
     playbackQueueRef.current = queue;
     setPlaybackState('playing');
 
-    if (message.audio?.dataUrl) {
+    const audioSource = getAudioSource(message);
+    if (audioSource) {
       cancelTTS();
-      setCurrentAudioSrc(message.audio.dataUrl);
+      setCurrentAudioSrc(audioSource);
       setTimeout(() => audioRef.current?.play?.().catch(() => {}), 0);
       return;
     }
