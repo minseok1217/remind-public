@@ -1517,12 +1517,6 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
                 setShowPhoto(false);
               }}
             />
-            {photoKeywords && (
-              <div className="vc_photo-keywords">
-                {photoKeywords.emotion && <span className="vc_keyword-tag">{photoKeywords.emotion}</span>}
-                {photoKeywords.location && <span className="vc_keyword-tag">📍 {photoKeywords.location}</span>}
-              </div>
-            )}
           </div>
         ) : (
           <div className="vc_wave-container" data-state={currentStateKey}>

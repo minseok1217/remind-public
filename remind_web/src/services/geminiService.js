@@ -12,6 +12,16 @@ const readProxyJson = async (resp) => {
   return resp.json();
 };
 
+const sanitizeGeminiHistory = (history = []) =>
+  (Array.isArray(history) ? history : [])
+    .map((item) => {
+      const role = item?.role === 'model' ? 'model' : 'user';
+      const text = item?.parts?.[0]?.text;
+      if (typeof text !== 'string' || !text.trim()) return null;
+      return { role, parts: [{ text }] };
+    })
+    .filter(Boolean);
+
 const i = 5;
 const t = 4;
 
@@ -765,11 +775,12 @@ export const chatWithPhoto = async (message, history = [], imageName = '', photo
   const typeMap = { place: '장소', job: '직업', object: '사물' };
   const photoTypeKo = typeMap[photoType] || photoType || '사진';
   const systemInstruction = getSystemInstruction(difficulty, imageName || '사진', photoTypeKo);
+  const safeHistory = sanitizeGeminiHistory(history);
 
   const contents = [
     { role: 'user', parts: [{ text: systemInstruction }] },
     { role: 'model', parts: [{ text: '네, 알겠습니다. 지시에 따라 어르신과 대화하겠습니다.' }] },
-    ...history,
+    ...safeHistory,
     { role: 'user', parts: [{ text: message }] },
   ];
 
@@ -777,7 +788,7 @@ export const chatWithPhoto = async (message, history = [], imageName = '', photo
     const resp = await fetch('/api/gemini/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history, imageName, photoType, difficulty }),
+      body: JSON.stringify({ message, history: safeHistory, imageName, photoType, difficulty }),
     });
     if (resp.ok) {
       const json = await readProxyJson(resp);
@@ -943,6 +954,7 @@ export const generateOrientationHint = async (question, answer) => {
 // difficulty: '상' | '중' | '하' | null (기본값 '중')
 // elapsedMinutes: 통화 경과 시간(분) - 타이밍 기반 전략에 사용
 export const chatWithGemini = async (message, history = [], photoContext = null, difficulty = '중', elapsedMinutes = 0) => {
+  const safeHistory = sanitizeGeminiHistory(history);
   // 사진 컨텍스트가 있으면 시스템 프롬프트에 추가
   let photoInfo = '';
   if (photoContext) {
@@ -1001,7 +1013,7 @@ ${strictTimingRules}
   const contents = [
     { role: 'user', parts: [{ text: systemPrompt }] },
     { role: 'model', parts: [{ text: '네, 알겠습니다. 따뜻하게 대화하겠습니다.' }] },
-    ...history,
+    ...safeHistory,
     { role: 'user', parts: [{ text: message }] }
   ];
 
@@ -1010,7 +1022,7 @@ ${strictTimingRules}
     const resp = await fetch('/api/gemini/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history, photoContext, difficulty, elapsedMinutes, systemPrompt }),
+      body: JSON.stringify({ message, history: safeHistory, photoContext, difficulty, elapsedMinutes, systemPrompt }),
     });
     if (resp.ok) {
       const json = await readProxyJson(resp);
