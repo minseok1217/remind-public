@@ -1060,11 +1060,7 @@ function VoiceChatScreen({ onBack }) {
     }
 
     const reactionText = reactionResult?.reaction || getPreCallReaction(currentIndex, text);
-<<<<<<< HEAD
     const shouldRepeat = reactionResult?.shouldRepeat ?? false;
-=======
-    const shouldRepeat = reactionResult.repeat || false;
->>>>>>> 9aa76c1741cbe0644ae316bcd789fff4822ab1c5
     if (!shouldRepeat) { preCallCheckRef.current.index += 1; }
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
       const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
