@@ -136,6 +136,9 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setLoading(true); // role 확인 전까지 렌더링 방지
+      }
       setCurrentUser(user);
       if (user) {
         // 역할 조회
