@@ -9,7 +9,7 @@ import './VoiceChatScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
 import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
-const SILENCE_TIMEOUT_MS = 800;
+const SILENCE_TIMEOUT_MS = 1800;
 const AUTO_LISTEN_DELAY_MS = 700;
 const CALL_END_SECONDS = CALL_END_MINUTES * 60;
 const PRE_CALL_CHECK_QUESTIONS = [
@@ -1665,7 +1665,6 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
           <span className="vc_pill-label">{pillLabel}</span>
         </div>
         </div>
-
       </div>
     </div>
   );
