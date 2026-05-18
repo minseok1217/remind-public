@@ -159,5 +159,30 @@ app.get('/api/elevenlabs/scribe-token', async (req, res) => {
   }
 });
 
+// 텍스트 전용 캡션 생성 엔드포인트
+app.post('/api/gemini/caption', async (req, res) => {
+  const { customPrompt } = req.body || {};
+  if (!customPrompt) return res.status(400).json({ error: 'customPrompt required' });
+  if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: customPrompt }] }] }),
+    });
+    if (!response.ok) {
+      const txt = await response.text();
+      return res.status(502).json({ error: 'Gemini API error', details: txt });
+    }
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return res.json({ text });
+  } catch (err) {
+    console.error('Caption proxy error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // 서버 시작 (모든 라우트 정의 후 마지막에!)
 app.listen(PORT, () => console.log(`Gemini proxy listening on http://localhost:${PORT}`));

@@ -29,7 +29,7 @@ import info_icon_on from './assets/info_icon_on.png';
 import info_icon_off from './assets/info_icon_off.png'; 
 
 
-const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = false; // 지남력 훈련 스킵 여부 true면 안함 (디버그용)
+const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = true; // 지남력 훈련 스킵 여부 true면 안함 (디버그용)
 
 function App() {
   const [activeNav, setActiveNav] = useState('home');

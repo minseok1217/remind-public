@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import './KMMSEScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
 import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
+import logo from '../assets/logo.png';
 
 const WORD_BANK = [
   '사과','오렌지','포도','귤','수박','딸기','바나나','참외','복숭아','토마토',
@@ -493,7 +494,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     return (
       <div className="kmmse-screen">
         <div className="kmmse-card" style={{ alignItems: 'center', gap: 20 }}>
-          <div className="kmmse-logo">∞</div>
+          <img className="kmmse-logo" src={logo} alt="로고" />
           <p className="kmmse-subtitle">검사를 준비하는 중입니다...</p>
         </div>
       </div>
@@ -606,7 +607,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
     return (
       <div className="kmmse-screen">
         <div className="kmmse-card">
-          <div className="kmmse-logo">∞</div>
+          <img className="kmmse-logo" src={logo} alt="로고" />
           <p className="kmmse-narration-text" style={{ textAlign:'center', whiteSpace:'pre-line' }}>
             {currentStep.text}
           </p>
@@ -633,7 +634,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       {/* 도입 나레이션 (버튼으로 시작) */}
       {currentStep?.type === 'narration' && (
         <div className="kmmse-card">
-          <div className="kmmse-logo">∞</div>
+          <img className="kmmse-logo" src={logo} alt="로고" />
           <h2 className="kmmse-title">{currentStep.title}</h2>
           <p className="kmmse-narration-text">{currentStep.text}</p>
           {isSpeaking ? (

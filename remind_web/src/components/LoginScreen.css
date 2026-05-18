@@ -76,6 +76,21 @@
   flex: 0 0 auto;
 }
 
+.login-logo-img {
+  width: 180px;
+  height: 90px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.login-brand-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2d2d2d;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
 .login-auth-screen .login-group {
   position: relative;
   width: 157px;

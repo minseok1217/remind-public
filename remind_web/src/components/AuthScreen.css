@@ -29,8 +29,9 @@
 }
 
 .auth-infinity-logo {
-  width: 80px;
-  height: 40px;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
   margin-bottom: 8px;
 }
 

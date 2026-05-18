@@ -62,10 +62,9 @@
 
 /* 로고 */
 .kmmse-logo {
-  font-size: 48px;
-  color: #41d17f;
-  line-height: 1;
-  font-weight: 700;
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
 }
 
 /* 섹션 전환 헤더 배지 */

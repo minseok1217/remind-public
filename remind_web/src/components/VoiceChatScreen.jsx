@@ -1060,18 +1060,19 @@ function VoiceChatScreen({ onBack }) {
     }
 
     const reactionText = reactionResult?.reaction || getPreCallReaction(currentIndex, text);
+    const shouldRepeat = reactionResult?.shouldRepeat ?? false;
     if (!shouldRepeat) { preCallCheckRef.current.index += 1; }
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
       const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
       speakAssistantText(
-        joinReactionAndQuestion(reaction, nextQuestion),
+        joinReactionAndQuestion(reactionText, nextQuestion),
         '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.'
       );
       return;
     }
 
     speakAssistantText(
-      `${reaction} 이제 사진을 보면서 이야기를 나눠볼게요.`,
+      `${reactionText} 이제 사진을 보면서 이야기를 나눠볼게요.`,
       '사진 대화를 시작할게요.'
     );
     await finishPreCallCheck();
@@ -1400,20 +1401,31 @@ function VoiceChatScreen({ onBack }) {
         photoIds: photos.map((p) => p.id),
       });
       const pendingPhotos = photos.filter(isUncalledPhoto);
-      const selectablePhotos = pendingPhotos.length > 0 ? pendingPhotos : photos;
       console.log('[VoiceChat] 선택 가능한 사진:', {
         pendingPhotos: pendingPhotos.length,
-        selectablePhotos: selectablePhotos.length,
+        totalPhotos: photos.length,
       });
-      if (selectablePhotos.length === 0) {
+      if (photos.length === 0) {
         console.warn('[VoiceChat] 보호자/환자 등록 사진이 없어 fallback을 시도합니다.');
         const usedFallback = await startWithFallbackPhoto(startupId);
         if (!isActiveStartup(startupId)) return;
         if (!usedFallback) startConversationWithoutPhoto();
         return;
       }
-      selectablePhotos.sort((a, b) => getPhotoCreatedTime(b) - getPhotoCreatedTime(a));
-      const photoData = selectablePhotos[0];
+      let photoData;
+      if (pendingPhotos.length > 0) {
+        // 미사용 사진 중 랜덤 선택 (항상 같은 사진 반복 방지)
+        const idx = Math.floor(Math.random() * pendingPhotos.length);
+        photoData = pendingPhotos[idx];
+      } else {
+        // 모든 사진 사용 완료 → 가장 오래 전에 사용한 사진 선택 (LRU)
+        const sortedByLRU = [...photos].sort((a, b) => {
+          const dateA = a.lastCallDate ? new Date(a.lastCallDate).getTime() : 0;
+          const dateB = b.lastCallDate ? new Date(b.lastCallDate).getTime() : 0;
+          return dateA - dateB;
+        });
+        photoData = sortedByLRU[0];
+      }
       const photoUrl = getPhotoUrl(photoData);
       console.log('[VoiceChat] 사용자 사진 선택:', {
         id: photoData.id,

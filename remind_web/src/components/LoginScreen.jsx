@@ -88,6 +88,7 @@ function LoginScreen({ onSwitchToSignup, onSwitchToFindId, onSwitchToFindPasswor
       <div className="login-auth-container">
         <div className="login-auth-header">
           <img className="login-logo-img" src={logo} alt="REMIND CALL 로고" />
+          <p className="login-brand-name">REMIND CALL</p>
           <p className="login-text-wrapper">기억을 잇다, 마음을 잇다</p>
         </div>
 
