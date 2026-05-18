@@ -414,7 +414,7 @@ export const generatePreCallReaction = async ({ question, answer, questionIndex 
 - 진단, 처방, 단정은 하지 않습니다.
 - 답변의 뉘앙스를 반영하되 과장하지 않습니다.
 - 다음 질문은 작성하지 않습니다. 반응 문장만 작성합니다.
-- OO님이 약을 못 챙겼다고 답한 경우에는 보호자에게 확인해보면 좋겠다는 정도로만 부드럽게 말합니다.
+- OO님이 약을 못 챙겼다고 답한 경우에는 확인해보면 좋겠다는 정도로만 부드럽게 말합니다.
 
 [현재 질문 번호]
 ${questionIndex + 1}
@@ -426,7 +426,9 @@ ${question}
 ${answer || '(답변 없음)'}
 
 다음 JSON 형식으로만 반환하세요.
-{"reaction":"반응 문장"}`;
+- 답변이 질문과 무관하거나 주제에서 벗어난 경우 repeat를 true로 설정합니다.
+- 질문에 대한 답을 하지 못했더라도, '모르겠어', '기억이 안 나' 등 질문에 대한 응답으로 볼 수 있는 경우에는 repeat를 false로 설정합니다.
+{"reaction":"반응 문장", "repeat":true/false}`;
 
   try {
     const response = await callGeminiTextOnly(prompt);

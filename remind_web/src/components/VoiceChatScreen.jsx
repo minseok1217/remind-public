@@ -1047,12 +1047,20 @@ function VoiceChatScreen({ onBack }) {
     await appendPatientMessage(text);
 
     const currentQuestion = PRE_CALL_CHECK_QUESTIONS[currentIndex];
-    const reaction = await generatePreCallReaction({
-      question: currentQuestion,
-      answer: text,
-      questionIndex: currentIndex,
-    }) || getPreCallReaction(currentIndex, text);
-    preCallCheckRef.current.index += 1;
+
+    let reactionResult = null;
+    try {
+      reactionResult = await generatePreCallReaction({
+        question: currentQuestion,
+        answer: text,
+        questionIndex: currentIndex,
+      });
+    } catch (e) {
+      console.error('generatePreCallReaction error:', e);
+    }
+
+    const reactionText = reactionResult?.reaction || getPreCallReaction(currentIndex, text);
+    if (!shouldRepeat) { preCallCheckRef.current.index += 1; }
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
       const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
       speakAssistantText(
