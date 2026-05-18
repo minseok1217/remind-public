@@ -1060,18 +1060,19 @@ function VoiceChatScreen({ onBack }) {
     }
 
     const reactionText = reactionResult?.reaction || getPreCallReaction(currentIndex, text);
+    const shouldRepeat = reactionResult.repeat || false;
     if (!shouldRepeat) { preCallCheckRef.current.index += 1; }
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
       const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
       speakAssistantText(
-        joinReactionAndQuestion(reaction, nextQuestion),
+        joinReactionAndQuestion(reactionText, nextQuestion),
         '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.'
       );
       return;
     }
 
     speakAssistantText(
-      `${reaction} 이제 사진을 보면서 이야기를 나눠볼게요.`,
+      `${reactionText} 이제 사진을 보면서 이야기를 나눠볼게요.`,
       '사진 대화를 시작할게요.'
     );
     await finishPreCallCheck();
