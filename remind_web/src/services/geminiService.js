@@ -641,10 +641,14 @@ ${summaryParts.join('\n')}
 // ──────────────────────────────────────────────────────────
 // 회상 치료 통화 전용 시스템 프롬프트 + Gemini 호출
 // ──────────────────────────────────────────────────────────
-const getSystemInstruction = (level, imageName, photoTypeKo) => {
+const getSystemInstruction = (level, imageName, photoTypeKo, patientName = 'OO') => {
   if (level === '상') {
     return `당신은 경도 치매 OO님을 돕는 전문 요양보호사입니다.
 대상 사진: ${imageName} (${photoTypeKo})
+
+[호칭 - 반드시 준수]
+- 사용자에 대한 호칭은 '${patientName}님'으로 통일한다.
+- 환자라는 단어를 사용하지 않는다.
 
 [대화 시작 - 반드시 준수]
 - 사전 건강 확인과 자기소개는 이미 완료되었다.
@@ -689,6 +693,10 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
     return `당신은 경증 치매 OO님을 돕는 전문 요양보호사입니다.
 대상 사진: ${imageName} (${photoTypeKo})
 
+[호칭 - 반드시 준수]
+- 사용자에 대한 호칭은 '${patientName}님'으로 통일한다.
+- 환자라는 단어를 사용하지 않는다.
+
 [대화 시작 - 반드시 준수]
 - 사전 건강 확인과 자기소개는 이미 완료되었다.
 - 자기소개, 몸 상태, 식사, 약, 수면 질문을 반복하지 않는다.
@@ -728,6 +736,10 @@ const getSystemInstruction = (level, imageName, photoTypeKo) => {
   // 하
   return `당신은 중등도 이상 치매 OO님을 돕는 전문 요양보호사입니다.
 대상 사진: ${imageName} (${photoTypeKo})
+
+[호칭 - 반드시 준수]
+- OO님에 대한 호칭은 '${patientName}님'으로 통일한다.
+- 환자라는 단어를 사용하지 않는다.
 
 [대화 목적]
 OO님이 유대감과 정서적 안정을 느끼게 하는 것이 목표다.
@@ -773,10 +785,10 @@ OO님이 유대감과 정서적 안정을 느끼게 하는 것이 목표다.
 // - 15분: 반드시 [통화끝]을 출력하고 대화를 마친다.`;
 };
 
-export const chatWithPhoto = async (message, history = [], imageName = '', photoType = '', difficulty = '중') => {
+export const chatWithPhoto = async (message, history = [], imageName = '', photoType = '', difficulty = '중', patientName = 'OO') => {
   const typeMap = { place: '장소', job: '직업', object: '사물' };
   const photoTypeKo = typeMap[photoType] || photoType || '사진';
-  const systemInstruction = getSystemInstruction(difficulty, imageName || '사진', photoTypeKo);
+  const systemInstruction = getSystemInstruction(difficulty, imageName || '사진', photoTypeKo, patientName);
   const safeHistory = sanitizeGeminiHistory(history);
 
   const contents = [
@@ -955,7 +967,7 @@ export const generateOrientationHint = async (question, answer) => {
 // 채팅 기능 (클라이언트에서 직접 Gemini 호출)
 // difficulty: '상' | '중' | '하' | null (기본값 '중')
 // elapsedMinutes: 통화 경과 시간(분) - 타이밍 기반 전략에 사용
-export const chatWithGemini = async (message, history = [], photoContext = null, difficulty = '중', elapsedMinutes = 0) => {
+export const chatWithGemini = async (message, history = [], photoContext = null, difficulty = '중', elapsedMinutes = 0, patientName = 'OO') => {
   const safeHistory = sanitizeGeminiHistory(history);
   // 사진 컨텍스트가 있으면 시스템 프롬프트에 추가
   let photoInfo = '';
@@ -984,7 +996,7 @@ ${captionCategoryPrompt}
     : null;
   const photoType = photoContext ? (photoContext.photoType || photoContext.type || '개인적') : '보편적';
   const systemInstruction = photoName
-    ? getSystemInstruction(normalizeDifficultyLevel(difficulty), photoName, photoType)
+    ? getSystemInstruction(normalizeDifficultyLevel(difficulty), photoName, photoType, patientName)
     : `당신은 치매 OO님을 돕는 전문 요양보호사입니다. 응답은 1~2문장으로 짧고 따뜻하게 하며, 한 번에 하나의 질문만 합니다. ${CALL_END_MINUTES}분이 지나면 반드시 [통화끝]을 출력하고 마무리합니다.`;
 
   const photoRule = photoContext
@@ -1013,7 +1025,8 @@ ${photoRule}
 - 이미 OO님이 답한 내용으로 확인된 카테고리는 반복해서 묻지 말고, 다음 미확인 카테고리로 넘어가세요.
 - 보호자 지정 확인 카테고리가 정보 없음이면 일반 회상 질문으로 진행하세요.
 ${strictTimingRules}
-- OO님이 피곤해하거나 종료를 원하면 따뜻하게 마무리하고 [통화끝] 출력.
+- OO님이 반복적으로 피곤해하거나 종료를 원하면 공감하는 말과 함께 "통화를 그만하고 싶으신가요?"를 물어봄.
+- "통화를 그만하고 싶으신가요?" 질문에 긍정하면 따뜻하게 마무리하고 [통화끝] 출력. 부정하면 계속 진행
 - [현재 경과 시간: ${elapsedMinutes}분] 전략 타이밍에 맞게 대화 진행.`;
 
   const contents = [
