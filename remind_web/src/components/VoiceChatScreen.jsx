@@ -1304,7 +1304,8 @@ function VoiceChatScreen({ onBack }) {
         [],
         enrichedContext,
         conversationDifficultyRef.current,
-        0
+        0,
+        auth.currentUser.name
       );
     } catch (error) {
       console.warn('[VoiceChat] 첫 질문 생성 실패, 기본 질문 사용:', error);
@@ -1467,7 +1468,8 @@ function VoiceChatScreen({ onBack }) {
         chatHistoryRef.current,
         hasPhoto ? photoKeywords : null,
         conversationDifficultyRef.current,
-        elapsedMinutes
+        elapsedMinutes,
+        auth.currentUser.name
       );
       await appendPatientMessage(text);
       const assistantText = canEndByTime && !fullText.includes('[END_CALL]') && !fullText.includes('[통화끝]')
