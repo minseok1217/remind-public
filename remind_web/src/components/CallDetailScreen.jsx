@@ -7,7 +7,7 @@ import charticon from '../assets/chart_icon_on.png';
 import aiicon from '../assets/ai_icon.png';
 import usericon from '../assets/user_icon.png';
 import infoicon from '../assets/info_icon.png';
-import { cancelTTS, webSpeak } from '../services/ttsService';
+import { cancelTTS, tts, pauseTTS, resumeTTS } from '../services/ttsService';
 
 const normalizeInsights = (insights) => {
   if (Array.isArray(insights)) {
@@ -299,7 +299,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
 
     setCurrentAudioSrc('');
     cancelTTS();
-    await webSpeak(getPlayableText(message));
+    await tts(getPlayableText(message));
     if (playbackRunIdRef.current !== runId) return;
     const [next, ...rest] = playbackQueueRef.current;
     if (next) {
@@ -345,11 +345,9 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       return;
     }
 
-    if (window.speechSynthesis?.speaking && !window.speechSynthesis.paused) {
-      window.speechSynthesis.pause();
-      setPlaybackState('paused');
-      setCurrentAudioLabel('일시정지됨');
-    }
+    pauseTTS();
+    setPlaybackState('paused');
+    setCurrentAudioLabel('일시정지됨');
   };
 
   const resumePlayback = () => {
@@ -360,11 +358,9 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
       return;
     }
 
-    if (window.speechSynthesis?.paused) {
-      window.speechSynthesis.resume();
-      setPlaybackState('playing');
-      setCurrentAudioLabel('재생 중');
-    }
+    resumeTTS();
+    setPlaybackState('playing');
+    setCurrentAudioLabel('재생 중');
   };
 
   const stopPlayback = () => {
@@ -613,7 +609,7 @@ function CallDetailScreen({ callLog, currentUser, onBack }) {
               </div>
               <audio
                 ref={audioRef}
-                src={currentAudioSrc}
+                src={currentAudioSrc || null}
                 onEnded={handleAudioEnded}
                 onPlay={() => setPlaybackState('playing')}
                 onPause={() => {

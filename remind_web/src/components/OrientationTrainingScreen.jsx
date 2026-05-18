@@ -740,13 +740,6 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
           </div>
         )}
 
-        {/* 사용자 발화 */}
-        {transcript && !['correct', 'result'].includes(phase) && (
-          <div className="ot-transcript">
-            <span className="ot-transcript-label">내 대답</span>
-            <span className="ot-transcript-text">"{transcript}"</span>
-          </div>
-        )}
 
         {/* 상태 인디케이터 */}
         <div className="ot-indicator-area">

@@ -714,18 +714,11 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
                 <span /><span /><span /><span /><span />
               </div>
               <p className="kmmse-listening-label">
-                {voiceTranscript ? '계속 말씀해 주세요...' : '말씀해 주세요...'}
+                {voiceTranscript ? '확인했어요!' : '말씀해 주세요...'}
               </p>
             </div>
           )}
 
-          {/* 인식된 음성 표시 */}
-          {voiceTranscript && (
-            <div className="kmmse-voice-result">
-              <span className="kmmse-voice-result-label">인식된 내용</span>
-              <span className="kmmse-voice-result-text">"{voiceTranscript}"</span>
-            </div>
-          )}
 
           {/* 선택지 버튼 (터치 fallback) */}
           {currentStep.inputType === 'choice' && (

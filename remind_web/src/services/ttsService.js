@@ -43,6 +43,40 @@ let ttsGeneration = 0;
 //   }
 // };
 
+export const pauseTTS = () => {
+  if (currentAudio && !currentAudio.paused) {
+    try { currentAudio.pause(); } catch {}
+  }
+  try {
+    if (window?.speechSynthesis?.speaking && !window.speechSynthesis.paused) {
+      window.speechSynthesis.pause();
+    }
+  } catch {}
+};
+
+export const resumeTTS = () => {
+  if (currentAudio && currentAudio.paused && currentAudio.src) {
+    try { currentAudio.play().catch(() => {}); } catch {}
+  }
+  try {
+    if (window?.speechSynthesis?.paused) {
+      window.speechSynthesis.resume();
+    }
+  } catch {}
+};
+
+export const isTTSPaused = () => {
+  if (currentAudio && currentAudio.paused && currentAudio.src) return true;
+  if (window?.speechSynthesis?.paused) return true;
+  return false;
+};
+
+export const isTTSPlaying = () => {
+  if (currentAudio && !currentAudio.paused) return true;
+  if (window?.speechSynthesis?.speaking && !window.speechSynthesis.paused) return true;
+  return false;
+};
+
 export const cancelTTS = () => {
   ttsGeneration += 1;
 

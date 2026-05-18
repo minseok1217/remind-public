@@ -1658,45 +1658,6 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
         </div>
         </div>
 
-        {/* 마이크 버튼 */}
-        <div className="vc_control-area">
-<button
-            className={`vc_mic-btn ${uiState}`}
-            onClick={handleMicClick}
-            disabled={uiState === 'loading' || uiState === 'processing'}
-          >
-            <span className="vc_mic-icon">
-              {uiState === 'loading' && (
-                <svg width="42" height="42" viewBox="0 0 28 28" fill="none">
-                  <circle cx="14" cy="14" r="10" stroke="currentColor" strokeWidth="2" strokeDasharray="40 20" strokeLinecap="round">
-                    <animateTransform attributeName="transform" type="rotate" from="0 14 14" to="360 14 14" dur="1s" repeatCount="indefinite"/>
-                  </circle>
-                </svg>
-              )}
-              {(uiState === 'ready' || uiState === 'recording') && (
-                <svg width="42" height="42" viewBox="0 0 28 28" fill="none">
-                  <rect x="10" y="3" width="8" height="14" rx="4" fill="currentColor"/>
-                  <path d="M5 14c0 4.97 4.03 9 9 9s9-4.03 9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="14" y1="23" x2="14" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              )}
-              {uiState === 'processing' && (
-                <svg width="42" height="42" viewBox="0 0 28 28" fill="none">
-                  <circle cx="8" cy="14" r="2.5" fill="currentColor"><animate attributeName="opacity" values="1;0.2;1" dur="1.2s" begin="0s" repeatCount="indefinite"/></circle>
-                  <circle cx="14" cy="14" r="2.5" fill="currentColor"><animate attributeName="opacity" values="1;0.2;1" dur="1.2s" begin="0.4s" repeatCount="indefinite"/></circle>
-                  <circle cx="20" cy="14" r="2.5" fill="currentColor"><animate attributeName="opacity" values="1;0.2;1" dur="1.2s" begin="0.8s" repeatCount="indefinite"/></circle>
-                </svg>
-              )}
-            </span>
-            <span className="vc_mic-label">
-              {uiState === 'loading' && '준비 중'}
-              {uiState === 'ready' && isSpeakingRef.current && '내가 말하기'}
-              {uiState === 'ready' && !isSpeakingRef.current && (autoListenEnabled ? '자동 듣기' : '통화 계속하기')}
-              {uiState === 'recording' && '잠시 통화 멈추기'}
-              {uiState === 'processing' && '생각 중'}
-            </span>
-          </button>
-        </div>
       </div>
     </div>
   );
