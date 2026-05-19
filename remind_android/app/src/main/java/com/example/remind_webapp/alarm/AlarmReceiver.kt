@@ -17,6 +17,14 @@ class AlarmReceiver : BroadcastReceiver() {
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onReceive(context: Context, intent: Intent) {
+        val activityIntent = Intent(context, AlarmActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+        }
+
+        context.startActivity(activityIntent)
 
         Log.d("TESTLOG", "AlarmReceiver onReceive called")
 

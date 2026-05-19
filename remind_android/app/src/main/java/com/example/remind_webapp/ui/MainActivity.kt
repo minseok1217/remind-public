@@ -20,6 +20,11 @@ import kotlinx.coroutines.launch
 import androidx.core.content.edit
 import android.widget.Toast
 import android.content.Intent
+import android.net.Uri
+import android.webkit.ConsoleMessage
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 
 class MainActivity : AppCompatActivity() {
 
@@ -28,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private var startPage: String? = null
     private val PREFS_NAME = "alarm_prefs"
     private val KEY_ALARM_PERMISSION_GRANTED = "alarm_permission_granted"
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +56,11 @@ class MainActivity : AppCompatActivity() {
         webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.settings.javaScriptCanOpenWindowsAutomatically = true
         webView.settings.setSupportMultipleWindows(true)
+
+        webView.settings.javaScriptEnabled = true
+        webView.settings.allowFileAccess = true
+        webView.settings.allowContentAccess = true
+        webView.settings.domStorageEnabled = true
 
         startPage = startPage ?: ""
 
@@ -123,11 +134,18 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        webViewManager.handleFileChooserResult(
-            requestCode,
-            resultCode,
-            data
-        )
+        if (requestCode == 100) {
+
+            val results =
+                if (resultCode == RESULT_OK && data != null) {
+                    arrayOf(data.data!!)
+                } else {
+                    null
+                }
+
+            filePathCallback?.onReceiveValue(results)
+            filePathCallback = null
+        }
     }
 
     private fun sendFcmTokenToWeb(token: String) {

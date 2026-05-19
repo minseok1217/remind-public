@@ -13,6 +13,7 @@ import com.example.remind_webapp.R
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
+import android.app.NotificationManager
 
 class AlarmActivity : AppCompatActivity() {
 
@@ -30,6 +31,11 @@ class AlarmActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val notificationManager =
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(1001)
+        setContentView(R.layout.activity_alarm)
 
         setShowWhenLocked(true)
         setTurnScreenOn(true)

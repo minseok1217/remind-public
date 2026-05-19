@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">remind_webapp</string>
+    <string name="app_name">리마인드</string>
     <string name="slogan">기억을 잇다, 마음을 잇다</string>
     <string name="logo">REMIND CALL</string>
     <string name="refuse">거절</string>

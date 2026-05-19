@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -13,6 +12,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.remind_webapp.R
+import android.content.Context
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 
 class SplashActivity : AppCompatActivity() {
 
@@ -74,6 +77,8 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private fun handleSplashFlow() {
+        requestIgnoreBatteryOptimization()
+
         lifecycleScope.launch {
             navigateToMain()
         }
@@ -86,6 +91,24 @@ class SplashActivity : AppCompatActivity() {
             putExtra("START_PAGE", startPage)
         }
         startActivity(intent)
+    }
+
+    private fun requestIgnoreBatteryOptimization() {
+
+        val powerManager =
+            getSystemService(Context.POWER_SERVICE) as PowerManager
+
+        val packageName = packageName
+
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:$packageName")
+            )
+
+            startActivity(intent)
+        }
     }
 
     companion object {

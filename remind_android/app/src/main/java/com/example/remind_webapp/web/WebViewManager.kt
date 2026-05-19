@@ -6,6 +6,7 @@ import android.webkit.WebView
 import com.example.remind_webapp.bridge.WebBridge
 import android.content.Intent
 import android.net.Uri
+import android.webkit.ConsoleMessage
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 
@@ -30,6 +31,21 @@ class WebViewManager(
         webView.webViewClient = WebViewClientImpl()
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+
+                Log.d(
+                    "WEBVIEW_CONSOLE",
+                    """
+            message: ${consoleMessage.message()}
+            source: ${consoleMessage.sourceId()}
+            line: ${consoleMessage.lineNumber()}
+            level: ${consoleMessage.messageLevel()}
+            """.trimIndent()
+                )
+
+                return true
+            }
+
             override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
                 Log.d("TESTLOG", "🔥 permission 요청 들어옴: ${request.resources.joinToString()}")
                 request.grant(request.resources)
