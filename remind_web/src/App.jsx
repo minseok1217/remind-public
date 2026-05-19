@@ -46,6 +46,7 @@ function App() {
   const [callPhase, setCallPhase] = useState('orientation');
   const [showCallButton, setShowCallButton] = useState(true);
   const forceOrientationRef = useRef(false);
+  const [pendingNotificationNav, setPendingNotificationNav] = useState(false);
 
   const getOrientDateKey = (uid = currentUser?.uid) =>
     uid ? `orient_done_date_${uid}` : 'orient_done_date';
@@ -176,6 +177,36 @@ function App() {
 
     return unsubscribe;
   }, []); // Empty dependency array means this runs once on mount and unmount
+
+  // 앱 최초 로드 시 URL 파라미터로 알림 클릭 감지 (탭이 닫혀 있다가 새로 열린 경우)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('open') === 'voicechat') {
+      setPendingNotificationNav(true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  // 서비스 워커 postMessage 수신 (탭이 이미 열려 있었던 경우)
+  useEffect(() => {
+    const handleSWMessage = (event) => {
+      if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.action === 'open_voicechat') {
+        setPendingNotificationNav(true);
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', handleSWMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
+  }, []);
+
+  // 대기 중인 알림 이동 처리: 로그인 완료 + 환자 계정일 때 통화 화면으로 이동
+  useEffect(() => {
+    if (pendingNotificationNav && currentUser && loggedInAccountType === 'patient' && !loading && !showSplash) {
+      setPendingNotificationNav(false);
+      forceOrientationRef.current = false;
+      setCallPhase(getCallPhaseForToday());
+      setActiveNav('call');
+    }
+  }, [pendingNotificationNav, currentUser, loggedInAccountType, loading, showSplash]);
 
   useEffect(() => {
     const openCall = ({ forceOrientation = false } = {}) => {

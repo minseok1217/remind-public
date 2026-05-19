@@ -29,16 +29,12 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener('notificationclick', function(event) {
   console.log('[Service Worker] 알림 클릭 감지');
-  
+
   event.notification.close();
 
-  // 백엔드에서 지정한 대시보드 URL 주소 가져오기
-  let targetUrl = "https://remind-aa99f.web.app/dashboard";
-  if (event.notification.data && event.notification.data.url) {
-    targetUrl = event.notification.data.url;
-  } else if (event.notification.clickAction) {
-    targetUrl = event.notification.clickAction;
-  }
+  const appOrigin = "https://remind-aa99f.web.app";
+  // 탭이 닫혀 있을 때 열 URL (파라미터로 voicechat 진입 신호 전달)
+  const newTabUrl = appOrigin + "/?open=voicechat";
 
   const promiseChain = clients.matchAll({
     type: 'window',
@@ -46,7 +42,6 @@ self.addEventListener('notificationclick', function(event) {
   }).then((windowClients) => {
     let matchingClient = null;
 
-    // 우리 서비스 탭이 브라우저에 이미 켜져 있는지 확인
     for (let i = 0; i < windowClients.length; i++) {
       const client = windowClients[i];
       if (client.url.includes("remind-aa99f.web.app")) {
@@ -55,15 +50,15 @@ self.addEventListener('notificationclick', function(event) {
       }
     }
 
-    // 1. 이미 켜져 있는 탭이 있다면 해당 탭을 대시보드 경로로 이동시키고 포커스
+    // 1. 이미 열린 탭이 있으면 postMessage로 voicechat 이동 신호를 보내고 포커스
     if (matchingClient) {
-      return matchingClient.navigate(targetUrl).then(client => client.focus());
+      matchingClient.postMessage({ type: 'NOTIFICATION_CLICK', action: 'open_voicechat' });
+      return matchingClient.focus();
     }
-    
-    // 2. 아예 다 닫혀 있다면 새 탭으로 대시보드 열기
-    // (이때 웹앱 내부 소스코드에서 기존 자동 로그인 세션을 체크하여 화면을 띄우게 됩니다)
+
+    // 2. 탭이 없으면 ?open=voicechat 파라미터와 함께 새 탭 열기
     if (clients.openWindow) {
-      return clients.openWindow(targetUrl);
+      return clients.openWindow(newTabUrl);
     }
   });
 
