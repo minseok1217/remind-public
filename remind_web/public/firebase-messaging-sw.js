@@ -15,15 +15,15 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const time = payload?.data?.time;
-  const title = payload?.notification?.title || 'Remind';
-  const body = payload?.notification?.body || (time ? `${time} 통화 시간이 되었어요.` : '통화 시간이 되었어요.');
+  const data = payload?.data || {};
+  const title = data.title || payload?.notification?.title || 'AI 전화 알림';
+  const body = data.body || payload?.notification?.body || '설정된 AI 전화 시간이 되었습니다.';
 
   self.registration.showNotification(title, {
     body,
     icon: '/logo.png',
     badge: '/logo.png',
-    data: payload?.data || {},
+    data,
   });
 });
 
