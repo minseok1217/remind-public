@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { getAuth, signOut } from 'firebase/auth'; // getAuth, signOut 추가
-import { getMessaging, getToken } from 'firebase/messaging';
 import { auth, db } from '../firebase';
 import { doc, getDoc, collection, query, where, setDoc, onSnapshot } from 'firebase/firestore';
 import { generateAndStoreTempCode } from '../services/familyLinkService';
@@ -10,8 +9,6 @@ import bell_icon from '../assets/bell_icon.png'; // 종 아이콘 추가
 import clock_icon from '../assets/clock_icon.png'; // 시계 아이콘 추가
 import user_icon from '../assets/user_icon.png'; // 사용자 아이콘 추가
 import info_icon from '../assets/Info_icon.png'; // 정보 아이콘 추가
-
-const messaging = getMessaging();
 
 function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 이름 변경
   const [patientInfo, setPatientInfo] = useState(null);
@@ -79,8 +76,23 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
     const saveWebToken = async () => {
     try {
       if (!currentUser) return;
+      if (
+        typeof Notification === 'undefined' ||
+        typeof navigator === 'undefined' ||
+        !('serviceWorker' in navigator)
+      ) {
+        console.log('현재 환경에서는 Web Notification API를 지원하지 않습니다.');
+        return;
+      }
 
       // 알림 권한 요청
+      const { getMessaging, getToken, isSupported } = await import('firebase/messaging');
+      const supported = await isSupported();
+      if (!supported) {
+        console.log('현재 환경에서는 Firebase Web Messaging을 지원하지 않습니다.');
+        return;
+      }
+
       const permission = await Notification.requestPermission();
 
       if (permission !== 'granted') {
@@ -89,6 +101,7 @@ function MainScreen_p({ currentUser, onViewAllCallHistory }) { // 컴포넌트 �
       }
 
       // 웹 FCM 토큰 발급
+      const messaging = getMessaging();
       const token = await getToken(messaging, {
         vapidKey: 'BICnNiBjz2YYOKjSaz1-vxMYl2sNbsYG3gM1Yp--9s8jRw9saiBkn2HWXJyvgc8FqUSwD9H27ALIS8yF9-xs6F0'
       });

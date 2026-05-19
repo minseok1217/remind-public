@@ -11,6 +11,8 @@ import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition'
 
 const SILENCE_TIMEOUT_MS = 1800;
 const AUTO_LISTEN_DELAY_MS = 700;
+const isAndroidSpeechBridgeAvailable = () => Boolean(window.AndroidSpeechBridge?.startListening);
+const getAutoListenDelay = () => isAndroidSpeechBridgeAvailable() ? 1800 : AUTO_LISTEN_DELAY_MS;
 const CALL_END_SECONDS = CALL_END_MINUTES * 60;
 const PRE_CALL_CHECK_QUESTIONS = [
   '안녕하세요. 저는 Remind 서비스 상담사입니다. 회상 요법을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
@@ -323,6 +325,7 @@ function VoiceChatScreen({ onBack }) {
   const conversationDifficultyRef = useRef('중');
   const callLogSavedRef = useRef(false);
   const timeLimitEndStartedRef = useRef(false);
+  const noSpeechRetryCountRef = useRef(0);
   const callSessionIdRef = useRef(`call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
   const preCallCheckRef = useRef({
     active: false,
@@ -345,6 +348,7 @@ function VoiceChatScreen({ onBack }) {
   const patientAudioChunksRef = useRef([]);
   const pendingPatientAudioRef = useRef(null);
   const {
+    supported: speechSupported,
     startListening: startSpeechRecognition,
     stopListening: stopSpeechRecognition,
   } = useScribeSpeechRecognition({
@@ -609,8 +613,10 @@ function VoiceChatScreen({ onBack }) {
       stopWaveAnimation();
       return;
     }
-    if (uiState === 'recording') {
+    if (uiState === 'recording' && !isAndroidSpeechBridgeAvailable()) {
       startListeningWave();
+    } else if (uiState === 'recording') {
+      stopMicStream();
     } else if (uiState === 'processing') {
       stopMicStream();
       startWaitingDots();
@@ -653,13 +659,39 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const scheduleAutoListen = (delay = AUTO_LISTEN_DELAY_MS) => {
-    if (!autoListenEnabledRef.current || isEndingCallRef.current) return;
+    if (!autoListenEnabledRef.current || isEndingCallRef.current) {
+      console.log(`[VoiceDebug] 자동 듣기 예약 건너뜀: autoListen=${autoListenEnabledRef.current}, ending=${isEndingCallRef.current}`);
+      return;
+    }
     clearAutoListenTimer();
+    console.log(`[VoiceDebug] 자동 듣기 예약: delay=${delay}, androidBridge=${Boolean(window.AndroidSpeechBridge?.startListening)}`);
     autoListenTimerRef.current = setTimeout(() => {
       if (autoListenEnabledRef.current && !isEndingCallRef.current && !isRecordingRef.current && !processingRef.current && !isSpeakingRef.current && uiStateRef.current === 'ready') {
+        console.log('[VoiceDebug] 자동 듣기 시작 조건 충족');
         startRecording();
+      } else {
+        console.log(`[VoiceDebug] 자동 듣기 시작 조건 불충족: autoListen=${autoListenEnabledRef.current}, ending=${isEndingCallRef.current}, recording=${isRecordingRef.current}, processing=${processingRef.current}, speaking=${isSpeakingRef.current}, uiState=${uiStateRef.current}`);
       }
     }, delay);
+  };
+
+  const getNoSpeechRetryDelay = () => {
+    if (!window.AndroidSpeechBridge?.startListening) return 1200;
+    const retryCount = noSpeechRetryCountRef.current;
+    if (retryCount <= 1) return 2500;
+    if (retryCount === 2) return 5000;
+    return 8000;
+  };
+
+  const handleNoSpeechRetry = (reason) => {
+    noSpeechRetryCountRef.current += 1;
+    const retryDelay = getNoSpeechRetryDelay();
+    console.warn(`[VoiceDebug] 음성 인식 결과 없음, 자동 재시도 지연: reason=${reason}, retryCount=${noSpeechRetryCountRef.current}, retryDelay=${retryDelay}, androidBridge=${Boolean(window.AndroidSpeechBridge?.startListening)}`);
+
+    setUiState('ready');
+    setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
+    pendingPatientAudioRef.current = null;
+    scheduleAutoListen(retryDelay);
   };
 
   const cleanStageDirections = (text) => {
@@ -671,6 +703,9 @@ function VoiceChatScreen({ onBack }) {
   const isLikelyIncompleteUtterance = (text) => {
     const normalized = (text || '').trim();
     if (!normalized) return true;
+    if (/^(네|예|응|어|아니|아니요|좋아|좋아요|괜찮아|괜찮아요|먹었어|먹었어요|잤어|잤어요|챙겼어|챙겼어요)$/i.test(normalized)) {
+      return false;
+    }
     if (normalized.length < 3) return true;
     if (/^(어+|음+|아+|그+|저+|에+)[.!?\s]*$/i.test(normalized)) return true;
     return false;
@@ -685,6 +720,10 @@ function VoiceChatScreen({ onBack }) {
   const startPatientAudioRecording = async () => {
     pendingPatientAudioRef.current = null;
     patientAudioChunksRef.current = [];
+    if (isAndroidSpeechBridgeAvailable()) {
+      console.log('[VoiceDebug] Android 네이티브 음성인식 사용 중: Web MediaRecorder 녹음 생략');
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
 
     try {
@@ -964,7 +1003,7 @@ function VoiceChatScreen({ onBack }) {
     if (ttsQueueRef.current.length === 0) {
       isSpeakingRef.current = false;
       if (!showPhoto) stopWaveAnimation();
-      if (!isEndingCallRef.current && uiStateRef.current === 'ready') scheduleAutoListen();
+        if (!isEndingCallRef.current && uiStateRef.current === 'ready') scheduleAutoListen(getAutoListenDelay());
       return;
     }
     isSpeakingRef.current = true;
@@ -1206,38 +1245,58 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const finalizeRecognizedSpeech = async (recognizedText = '') => {
+    console.log('[VoiceDebug] finalizeRecognizedSpeech 호출:', {
+      recognizedText,
+      finalTranscript: finalTranscriptRef.current,
+      interimTranscript: interimTranscriptRef.current,
+    });
     clearSilenceTimer();
     await stopPatientAudioRecording();
     const text = (recognizedText || `${finalTranscriptRef.current} ${interimTranscriptRef.current}`).replace(/\s+/g, ' ').trim();
+    console.log('[VoiceDebug] 최종 사용자 발화 정리:', { text, hasText: Boolean(text) });
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     if (!text) {
-      setUiState('ready');
-      setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
-      pendingPatientAudioRef.current = null;
-      scheduleAutoListen(400);
+      console.warn('[VoiceDebug] 최종 발화 없음 → 다시 듣기 예약');
+      handleNoSpeechRetry('empty-final-text');
       return;
     }
     if (isLikelyIncompleteUtterance(text)) {
+      console.warn('[VoiceDebug] 불완전 발화로 판단:', { text });
       setCaption(`당신: ${text}`);
       setUiState('ready');
       setStatus('천천히 이어서 말씀해 주세요.');
       pendingPatientAudioRef.current = null;
-      scheduleAutoListen(300);
+      scheduleAutoListen(window.AndroidSpeechBridge?.startListening ? 1200 : 500);
       return;
     }
     setCaption(`당신: ${text}`);
     setUiState('processing');
       setStatus(preCallCheckRef.current.active ? '확인하고 있어요...' : '대답을 생각하는 중...');
       if (preCallCheckRef.current.active) {
+        console.log('[VoiceDebug] 사전 체크 답변 처리로 전달:', {
+          index: preCallCheckRef.current.index,
+          text,
+        });
         await handlePreCallAnswer(text);
       } else {
+        console.log('[VoiceDebug] Gemini 대화로 전달:', { text });
         await sendTextToGemini(text);
       }
   };
 
   const startRecording = () => {
-    if (isSpeakingRef.current || processingRef.current || isEndingCallRef.current || isRecordingRef.current) return;
+    console.log('[VoiceDebug] startRecording 요청:', {
+      isSpeaking: isSpeakingRef.current,
+      processing: processingRef.current,
+      isEndingCall: isEndingCallRef.current,
+      isRecording: isRecordingRef.current,
+      uiState: uiStateRef.current,
+    });
+    if (isSpeakingRef.current || processingRef.current || isEndingCallRef.current || isRecordingRef.current) {
+      console.warn('[VoiceDebug] startRecording 차단됨');
+      return;
+    }
     try {
       clearSilenceTimer();
       stopSpeaking();
@@ -1248,25 +1307,27 @@ function VoiceChatScreen({ onBack }) {
       setStatus('듣고 있어요...');
       finalTranscriptRef.current = '';
       interimTranscriptRef.current = '';
+      stopMicStream();
       startPatientAudioRecording();
+      console.log('[VoiceDebug] 음성인식 startSpeechRecognition 호출');
       startSpeechRecognition(
         (text) => {
+          console.log('[VoiceDebug] 음성인식 onResult:', { text });
           setIsRecording(false);
           isRecordingRef.current = false;
           finalizeRecognizedSpeech(text);
         },
         () => {
+          console.warn('[VoiceDebug] 음성인식 onNoResult');
           setIsRecording(false);
           isRecordingRef.current = false;
           stopPatientAudioRecording().then(() => {
-            pendingPatientAudioRef.current = null;
+            handleNoSpeechRetry('speech-no-result');
           });
-          setUiState('ready');
-          setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
-          scheduleAutoListen(400);
         },
         {
           onTranscript: (preview) => {
+            console.log('[VoiceDebug] 음성인식 preview:', { preview });
             finalTranscriptRef.current = preview;
             interimTranscriptRef.current = '';
             setCaption(`당신: ${preview}`);
@@ -1279,6 +1340,7 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const stopRecording = () => {
+    console.log('[VoiceDebug] stopRecording');
     clearSilenceTimer();
     stopSpeechRecognition();
     stopPatientAudioRecording().then(() => {
@@ -1471,6 +1533,12 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const sendTextToGemini = async (text) => {
+    console.log('[VoiceDebug] sendTextToGemini 시작:', {
+      text,
+      historyLength: chatHistoryRef.current.length,
+      hasPhoto,
+      difficulty: conversationDifficultyRef.current,
+    });
     processingRef.current = true;
     try {
       const elapsedMinutes = Math.floor(callSeconds / 60);
@@ -1484,6 +1552,10 @@ function VoiceChatScreen({ onBack }) {
         auth.currentUser.name
       );
       await appendPatientMessage(text);
+      noSpeechRetryCountRef.current = 0;
+      console.log('[VoiceDebug] 사용자 발화 chatHistory 추가 완료:', {
+        historyLength: chatHistoryRef.current.length,
+      });
       const assistantText = canEndByTime && !fullText.includes('[END_CALL]') && !fullText.includes('[통화끝]')
         ? '오늘 대화는 여기서 마무리할게요. 함께 이야기해 주셔서 고마워요. 건강하게 쉬세요. [통화끝]'
         : fullText;
@@ -1491,6 +1563,12 @@ function VoiceChatScreen({ onBack }) {
       chatHistoryRef.current.push(assistantMessage);
       const hasEndTag = assistantText.includes('[END_CALL]') || assistantText.includes('[통화끝]');
       const displayText = cleanStageDirections(assistantText.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
+      console.log('[VoiceDebug] Gemini 응답 수신:', {
+        fullText,
+        assistantText,
+        displayText,
+        hasEndTag,
+      });
       if (displayText) { setCaption(`AI: ${displayText}`); addToTTSQueue(displayText, assistantMessage); }
       if (hasEndTag) {
         const userWantsToEnd = containsEndIntent(text);
@@ -1594,6 +1672,12 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const handleMicClick = () => {
+    console.log('[VoiceDebug] 마이크 버튼 클릭:', {
+      isSpeaking: isSpeakingRef.current,
+      isRecording,
+      uiState,
+      autoListenEnabled,
+    });
     // AI가 말하는 중 → 즉시 끊고 녹음 시작
     if (isSpeakingRef.current) {
       stopSpeaking();
@@ -1679,6 +1763,7 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
           <span className="vc_pill-label">{pillLabel}</span>
         </div>
         </div>
+
       </div>
     </div>
   );
