@@ -9,11 +9,26 @@ import './VoiceChatScreen.css';
 import { tts, cancelTTS } from '../services/ttsService';
 import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
-const SILENCE_TIMEOUT_MS = 1800;
-const AUTO_LISTEN_DELAY_MS = 700;
+const VOICE_TIMING = {
+  userSilenceMs: 1800, // 사용자가 말을 멈춘 뒤 “발화 끝”으로 판단하는 시간입니다. 
+  webAutoListenDelayMs: 300, // AI 말이 끝난 뒤 앱에서 마이크를 켜기까지 기다리는 시간입니다.
+  androidAutoListenDelayMs: 300, // 브라우저 웹에서만 쓰는 자동 듣기 지연입니다.
+  androidIncompleteRetryDelayMs: 500,// 앱에서 너무 짧거나 애매한 발화가 잡혔을 때 다시 듣기까지 기다리는 시간입니다.
+  statusEchoRetryDelayMs: 2600, // 상태 문구가 음성으로 잘못 인식됐을 때 무시하고 다시 듣기까지 기다리는 시간
+};
+const SILENCE_TIMEOUT_MS = VOICE_TIMING.userSilenceMs;
+const AUTO_LISTEN_DELAY_MS = VOICE_TIMING.webAutoListenDelayMs;
 const isAndroidSpeechBridgeAvailable = () => Boolean(window.AndroidSpeechBridge?.startListening);
-const getAutoListenDelay = () => isAndroidSpeechBridgeAvailable() ? 1800 : AUTO_LISTEN_DELAY_MS;
+const getAutoListenDelay = () => isAndroidSpeechBridgeAvailable() ? VOICE_TIMING.androidAutoListenDelayMs : AUTO_LISTEN_DELAY_MS;
 const CALL_END_SECONDS = CALL_END_MINUTES * 60;
+const STATUS_ECHO_PHRASES = [
+  '듣고 있어요',
+  '말하고 있어요',
+  '기다리고 있어요',
+  '준비 중',
+  '대답을 생각하는 중',
+  '확인하고 있어요',
+];
 const PRE_CALL_CHECK_QUESTIONS = [
   '안녕하세요. 저는 Remind 서비스 상담사입니다. 회상 요법을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
   '오늘 식사는 잘 챙겨 드셨어요?',
@@ -700,6 +715,15 @@ function VoiceChatScreen({ onBack }) {
 
   const containsEndIntent = (text) => /그만|종료|끊|끝낼|끝내|쉬자|피곤|힘들/.test(text || '');
 
+  const isStatusEchoUtterance = (text) => {
+    const normalized = (text || '').replace(/[.!?\s]/g, '').trim();
+    if (!normalized) return false;
+    return STATUS_ECHO_PHRASES.some((phrase) => {
+      const compactPhrase = phrase.replace(/\s/g, '');
+      return normalized === compactPhrase || normalized.includes(compactPhrase);
+    });
+  };
+
   const isLikelyIncompleteUtterance = (text) => {
     const normalized = (text || '').trim();
     if (!normalized) return true;
@@ -1261,13 +1285,21 @@ function VoiceChatScreen({ onBack }) {
       handleNoSpeechRetry('empty-final-text');
       return;
     }
+    if (isStatusEchoUtterance(text)) {
+      console.warn(`[VoiceDebug] 상태 문구 에코 무시: text=${text}`);
+      setUiState('ready');
+      setStatus('천천히 말씀해 주세요.');
+      pendingPatientAudioRef.current = null;
+      scheduleAutoListen(VOICE_TIMING.statusEchoRetryDelayMs);
+      return;
+    }
     if (isLikelyIncompleteUtterance(text)) {
       console.warn('[VoiceDebug] 불완전 발화로 판단:', { text });
       setCaption(`당신: ${text}`);
       setUiState('ready');
       setStatus('천천히 이어서 말씀해 주세요.');
       pendingPatientAudioRef.current = null;
-      scheduleAutoListen(window.AndroidSpeechBridge?.startListening ? 1200 : 500);
+      scheduleAutoListen(isAndroidSpeechBridgeAvailable() ? VOICE_TIMING.androidIncompleteRetryDelayMs : 500);
       return;
     }
     setCaption(`당신: ${text}`);
@@ -1584,12 +1616,13 @@ function VoiceChatScreen({ onBack }) {
           endSignalCountRef.current = 0;
           setUiState('ready');
           setStatus('아직 통화를 이어갈게요. 천천히 말씀해 주세요.');
-          scheduleAutoListen(700);
+          scheduleAutoListen(getAutoListenDelay());
         }
       } else {
         endSignalCountRef.current = 0;
         setUiState('ready');
         setStatus('천천히 이어서 말씀해 주세요.');
+        scheduleAutoListen(getAutoListenDelay());
       }
     } catch (error) {
       console.error('❌ Gemini 오류:', error);
