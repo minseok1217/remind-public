@@ -31,6 +31,9 @@ service cloud.firestore {
       // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
       allow update, delete: if isSignedIn() && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
     }
+    match /patients/{patientId}/notification_tokens/{tokenId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
+    }
     match /family_links/{linkId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isSignedIn();

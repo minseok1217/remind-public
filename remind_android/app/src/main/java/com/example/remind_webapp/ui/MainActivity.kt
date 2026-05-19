@@ -1,7 +1,9 @@
 package com.example.remind_webapp.ui
 
+import android.Manifest
 import android.app.AlarmManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -12,6 +14,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.remind_webapp.R
 import com.example.remind_webapp.util.AlarmHelper
@@ -21,10 +25,14 @@ import androidx.core.content.edit
 import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.webkit.ConsoleMessage
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,7 +41,10 @@ class MainActivity : AppCompatActivity() {
     private var startPage: String? = null
     private val PREFS_NAME = "alarm_prefs"
     private val KEY_ALARM_PERMISSION_GRANTED = "alarm_permission_granted"
+    private val REQUEST_RECORD_AUDIO_FOR_SPEECH = 2001
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var pendingSpeechStart = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         webViewManager.init()
 
         webView.addJavascriptInterface(WebAppBridge(), "AndroidBridge")
+        webView.addJavascriptInterface(AndroidSpeechBridge(), "AndroidSpeechBridge")
         webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.settings.javaScriptCanOpenWindowsAutomatically = true
         webView.settings.setSupportMultipleWindows(true)
@@ -116,8 +128,181 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    inner class AndroidSpeechBridge : RecognitionListener {
+        @JavascriptInterface
+        fun startListening() {
+            Log.d("TESTLOG_SPEECH", "AndroidSpeechBridge.startListening called")
+            runOnUiThread {
+                startNativeSpeechRecognition()
+            }
+        }
+
+        @JavascriptInterface
+        fun stopListening() {
+            Log.d("TESTLOG_SPEECH", "AndroidSpeechBridge.stopListening called")
+            runOnUiThread {
+                stopNativeSpeechRecognition()
+            }
+        }
+
+        override fun onReadyForSpeech(params: Bundle?) = Unit
+        override fun onBeginningOfSpeech() = Unit
+        override fun onRmsChanged(rmsdB: Float) = Unit
+        override fun onBufferReceived(buffer: ByteArray?) = Unit
+        override fun onEndOfSpeech() = Unit
+        override fun onEvent(eventType: Int, params: Bundle?) = Unit
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val text = partialResults
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                .orEmpty()
+            Log.d("TESTLOG_SPEECH", "partial result: $text")
+            if (text.isNotBlank()) {
+                evaluateSpeechCallback("__androidSpeechOnTranscript", text)
+            }
+        }
+
+        override fun onResults(results: Bundle?) {
+            val text = results
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                .orEmpty()
+            Log.d("TESTLOG_SPEECH", "final result: $text")
+
+            if (text.isNotBlank()) {
+                evaluateSpeechCallback("__androidSpeechOnResult", text)
+            } else {
+                evaluateSpeechNoResult()
+            }
+        }
+
+        override fun onError(error: Int) {
+            val label = speechErrorLabel(error)
+            Log.w("TESTLOG_SPEECH", "SpeechRecognizer error: $error ($label)")
+            evaluateSpeechError(error, label)
+        }
+
+        private fun evaluateSpeechCallback(callbackName: String, text: String) {
+            val jsCode = "if (window.$callbackName) window.$callbackName(${JSONObject.quote(text)})"
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(jsCode, null)
+            }
+        }
+
+        private fun evaluateSpeechNoResult() {
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(
+                    "if (window.__androidSpeechOnNoResult) window.__androidSpeechOnNoResult()",
+                    null
+                )
+            }
+        }
+
+        private fun evaluateSpeechError(error: Int, label: String) {
+            val jsCode = "if (window.__androidSpeechOnError) window.__androidSpeechOnError($error, ${JSONObject.quote(label)})"
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(jsCode, null)
+            }
+        }
+
+        private fun speechErrorLabel(error: Int): String =
+            when (error) {
+                SpeechRecognizer.ERROR_AUDIO -> "ERROR_AUDIO"
+                SpeechRecognizer.ERROR_CLIENT -> "ERROR_CLIENT"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_INSUFFICIENT_PERMISSIONS"
+                SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK"
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT"
+                SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH"
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY"
+                SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER"
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
+                else -> "ERROR_UNKNOWN"
+            }
+    }
+
+    private fun startNativeSpeechRecognition() {
+        Log.d("TESTLOG_SPEECH", "startNativeSpeechRecognition")
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.w("TESTLOG_SPEECH", "RECORD_AUDIO permission is not granted. Requesting permission.")
+            pendingSpeechStart = true
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_RECORD_AUDIO_FOR_SPEECH
+            )
+            return
+        }
+
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Log.w("TESTLOG_SPEECH", "SpeechRecognizer is not available")
+            webViewManager.getWebView().evaluateJavascript(
+                "if (window.__androidSpeechOnNoResult) window.__androidSpeechOnNoResult()",
+                null
+            )
+            return
+        }
+
+        stopNativeSpeechRecognition()
+
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer = recognizer
+        recognizer.setRecognitionListener(AndroidSpeechBridge())
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ko-KR")
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 2500L)
+        }
+
+        recognizer.startListening(intent)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_RECORD_AUDIO_FOR_SPEECH) return
+
+        val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        Log.d("TESTLOG_SPEECH", "RECORD_AUDIO permission result: $granted")
+        if (granted && pendingSpeechStart) {
+            pendingSpeechStart = false
+            startNativeSpeechRecognition()
+        } else {
+            pendingSpeechStart = false
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(
+                    "if (window.__androidSpeechOnError) window.__androidSpeechOnError(9, 'ERROR_INSUFFICIENT_PERMISSIONS')",
+                    null
+                )
+            }
+        }
+    }
+
+    private fun stopNativeSpeechRecognition() {
+        Log.d("TESTLOG_SPEECH", "stopNativeSpeechRecognition")
+        speechRecognizer?.apply {
+            try { stopListening() } catch (_: Exception) {}
+            try { cancel() } catch (_: Exception) {}
+            try { destroy() } catch (_: Exception) {}
+        }
+        speechRecognizer = null
+    }
+
     private fun openStartPage() {
         if (startPage == "VoiceChatScreen") {
+            startPage = null
+            intent.removeExtra("START_PAGE")
+
             val jsCode = "window.openVoiceChatScreenPage()"
 
             webViewManager.getWebView().post {
@@ -199,5 +384,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
         }
+    }
+
+    override fun onDestroy() {
+        stopNativeSpeechRecognition()
+        super.onDestroy()
     }
 }
