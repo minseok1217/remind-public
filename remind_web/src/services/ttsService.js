@@ -99,7 +99,7 @@ export const cancelTTS = () => {
   }
 };
 
-export const webSpeak = (text, generation = ttsGeneration) =>
+export const webSpeak = (text, generation = ttsGeneration, options = {}) =>
   new Promise((resolve) => {
     window.speechSynthesis.cancel();
     if (generation !== ttsGeneration) {
@@ -116,7 +116,9 @@ export const webSpeak = (text, generation = ttsGeneration) =>
       if (generation !== ttsGeneration) {
         window.speechSynthesis.cancel();
         resolve();
+        return;
       }
+      options.onSpeechStart?.();
     };
     window.speechSynthesis.speak(u);
     // Chrome 버그: 긴 텍스트에서 speechSynthesis가 멈추는 현상 방지
@@ -128,7 +130,7 @@ export const webSpeak = (text, generation = ttsGeneration) =>
 export const tts = async (rawText, options = {}) => {
   const text = preprocessTTS(rawText);
   const generation = ttsGeneration;
-  if (!ELEVENLABS_API_KEY) return webSpeak(text, generation);
+  if (!ELEVENLABS_API_KEY) return webSpeak(text, generation, options);
   const abortController = new AbortController();
   currentAbortController = abortController;
   try {
@@ -152,7 +154,7 @@ export const tts = async (rawText, options = {}) => {
     if (generation !== ttsGeneration) return;
     if (!r.ok) {
       console.warn(`[TTS] ElevenLabs ${r.status} → webSpeak 전환`);
-      return webSpeak(text, generation);
+      return webSpeak(text, generation, options);
     }
     const blob = await r.blob();
     await options.onAudioBlob?.(blob, text);
@@ -168,11 +170,14 @@ export const tts = async (rawText, options = {}) => {
         try { audio.pause(); audio.src = ''; } catch {}
         URL.revokeObjectURL(url);
         if (currentAudio === audio) currentAudio = null;
-        if (fallback && generation === ttsGeneration) return webSpeak(text, generation).then(resolve);
+        if (fallback && generation === ttsGeneration) return webSpeak(text, generation, options).then(resolve);
         resolve();
       };
       audio.onended = () => cleanup(false);
       audio.onerror = () => cleanup(true);
+      audio.onplay = () => {
+        if (generation === ttsGeneration) options.onSpeechStart?.();
+      };
       if (generation !== ttsGeneration) {
         cleanup(false);
         return;
@@ -183,6 +188,6 @@ export const tts = async (rawText, options = {}) => {
     if (currentAbortController === abortController) currentAbortController = null;
     if (err?.name === 'AbortError' || generation !== ttsGeneration) return;
     console.warn('[TTS] 네트워크 오류:', err);
-    return webSpeak(text, generation);
+    return webSpeak(text, generation, options);
   }
 };

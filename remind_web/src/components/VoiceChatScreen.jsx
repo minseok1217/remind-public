@@ -24,7 +24,7 @@ const CALL_END_SECONDS = CALL_END_MINUTES * 60;
 const STATUS_ECHO_PHRASES = [
   '듣고 있어요',
   '말하고 있어요',
-  '기다리고 있어요',
+  '생각하고 있어요',
   '준비 중',
   '대답을 생각하는 중',
   '확인하고 있어요',
@@ -316,6 +316,7 @@ function VoiceChatScreen({ onBack }) {
 
   const chatHistoryRef = useRef([]);
   const ttsQueueRef = useRef([]);
+  const ttsProcessingRef = useRef(false);
   const isSpeakingRef = useRef(false);
   const currentPhotoIdRef = useRef(null);
   const currentPhotoOwnerIdRef = useRef(null);
@@ -991,6 +992,7 @@ function VoiceChatScreen({ onBack }) {
   const stopSpeaking = () => {
     cancelTTS();
     ttsQueueRef.current = [];
+    ttsProcessingRef.current = false;
     isSpeakingRef.current = false;
   };
 
@@ -1025,16 +1027,24 @@ function VoiceChatScreen({ onBack }) {
   const processTTSQueue = async () => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
     if (ttsQueueRef.current.length === 0) {
+      ttsProcessingRef.current = false;
       isSpeakingRef.current = false;
       if (!showPhoto) stopWaveAnimation();
         if (!isEndingCallRef.current && uiStateRef.current === 'ready') scheduleAutoListen(getAutoListenDelay());
       return;
     }
-    isSpeakingRef.current = true;
-    if (!showPhoto) startSpeakingWave();
+    ttsProcessingRef.current = true;
+    isSpeakingRef.current = false;
+    if (!showPhoto) stopWaveAnimation();
     const item = ttsQueueRef.current.shift();
     const text = typeof item === 'string' ? item : item.text;
     await tts(text, {
+      onSpeechStart: () => {
+        if (!isMountedRef.current || isEndingCallRef.current) return;
+        isSpeakingRef.current = true;
+        setStatus('말하고 있어요.');
+        if (!showPhoto) startSpeakingWave();
+      },
       onAudioBlob: (blob, processedText) => {
         if (!item?.message) return;
         return uploadAssistantAudio({
@@ -1049,13 +1059,15 @@ function VoiceChatScreen({ onBack }) {
       },
     });
     if (!isMountedRef.current || isEndingCallRef.current) return;
+    isSpeakingRef.current = false;
+    if (!showPhoto) stopWaveAnimation();
     processTTSQueue();
   };
 
   const addToTTSQueue = (text, message = null) => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
     ttsQueueRef.current.push({ text, message });
-    if (!isSpeakingRef.current) processTTSQueue();
+    if (!ttsProcessingRef.current) processTTSQueue();
   };
 
   const speakAssistantText = (text, statusText = '천천히 말씀해 주세요.') => {
@@ -1734,14 +1746,6 @@ function VoiceChatScreen({ onBack }) {
   };
 
 const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking' : uiState;
-  const pillColor =
-    currentStateKey === 'recording' ? '#41d17f' :
-    currentStateKey === 'speaking'  ? '#ff6996' :
-    '#8b5cf6';
-  const pillLabel =
-    currentStateKey === 'recording' ? '듣고 있어요' :
-    currentStateKey === 'speaking'  ? '말하고 있어요' :
-    uiState === 'loading' ? '준비 중' : '기다리고 있어요';
 
   return (
     <div className="vc_voice-chat-screen">
@@ -1790,11 +1794,6 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
           </div>
         )}
 
-        {/* 상태 pill */}
-        <div className="vc_status-pill" style={{ '--pill-color': pillColor }}>
-          <span className="vc_pill-dot" />
-          <span className="vc_pill-label">{pillLabel}</span>
-        </div>
         </div>
 
       </div>
