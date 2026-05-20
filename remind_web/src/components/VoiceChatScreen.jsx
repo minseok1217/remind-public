@@ -10,7 +10,8 @@ import { tts, cancelTTS } from '../services/ttsService';
 import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
 const VOICE_TIMING = {
-  userSilenceMs: 1800, // 사용자가 말을 멈춘 뒤 “발화 끝”으로 판단하는 시간입니다. 
+  userSilenceMs: 1300, // 사용자가 말을 멈춘 뒤 “발화 끝”으로 판단하는 시간입니다. 
+  sttNoResultMs: 7000, // 아무 말도 인식되지 않을 때 다시 듣기로 넘어가기까지 기다리는 시간입니다.
   webAutoListenDelayMs: 100, // AI 말이 끝난 뒤 앱에서 마이크를 켜기까지 기다리는 시간입니다.
   androidAutoListenDelayMs: 300, // 브라우저 웹에서만 쓰는 자동 듣기 지연입니다.
   androidIncompleteRetryDelayMs: 100,// 앱에서 너무 짧거나 애매한 발화가 잡혔을 때 다시 듣기까지 기다리는 시간입니다.
@@ -368,8 +369,9 @@ function VoiceChatScreen({ onBack }) {
     startListening: startSpeechRecognition,
     stopListening: stopSpeechRecognition,
   } = useScribeSpeechRecognition({
+    noResultMs: VOICE_TIMING.sttNoResultMs,
     finalizeDelayMs: SILENCE_TIMEOUT_MS,
-    webSpeechSilenceMs: SILENCE_TIMEOUT_MS - 500,
+    webSpeechSilenceMs: Math.max(900, SILENCE_TIMEOUT_MS - 300),
   });
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
