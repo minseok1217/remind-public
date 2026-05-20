@@ -10,13 +10,14 @@ import { tts, cancelTTS } from '../services/ttsService';
 import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition';
 
 const VOICE_TIMING = {
-  userSilenceMs: 1300, // 사용자가 말을 멈춘 뒤 “발화 끝”으로 판단하는 시간입니다. 
-  sttNoResultMs: 10000, // 아무 말도 인식되지 않을 때 다시 듣기로 넘어가기까지 기다리는 시간입니다.
+  userSilenceMs: 900, // 어르신 말 속도를 고려해 너무 빨리 끊지 않으면서 발화 종료 대기를 줄입니다.
+  sttFinalizeMs: 500, // STT가 마지막 인식 조각을 받은 뒤 최종 발화로 확정하기까지 기다리는 시간입니다.
+  sttNoResultMs: 8000, // 아무 말도 인식되지 않을 때 다시 듣기로 넘어가기까지 기다리는 시간입니다.
   maxNoSpeechRetries: 2, // 연속으로 말이 감지되지 않을 때 자동 재시도할 최대 횟수입니다.
-  webAutoListenDelayMs: 300, // AI 말이 끝난 뒤 앱에서 마이크를 켜기까지 기다리는 시간입니다.
-  androidAutoListenDelayMs: 300, // 브라우저 웹에서만 쓰는 자동 듣기 지연입니다.
+  webAutoListenDelayMs: 180, // AI 말이 끝난 뒤 앱에서 마이크를 켜기까지 기다리는 시간입니다.
+  androidAutoListenDelayMs: 180, // 앱에서 AI 말이 끝난 뒤 마이크를 켜기까지 기다리는 시간입니다.
   androidIncompleteRetryDelayMs: 100,// 앱에서 너무 짧거나 애매한 발화가 잡혔을 때 다시 듣기까지 기다리는 시간입니다.
-  statusEchoRetryDelayMs: 1200, // 상태 문구가 음성으로 잘못 인식됐을 때 무시하고 다시 듣기까지 기다리는 시간
+  statusEchoRetryDelayMs: 900, // 상태 문구가 음성으로 잘못 인식됐을 때 무시하고 다시 듣기까지 기다리는 시간
 };
 const SILENCE_TIMEOUT_MS = VOICE_TIMING.userSilenceMs;
 const AUTO_LISTEN_DELAY_MS = VOICE_TIMING.webAutoListenDelayMs;
@@ -34,6 +35,14 @@ const PRE_CALL_CHECK_QUESTIONS = [
   '오늘 드셔야 하는 약은 챙겨 드셨나요?',
   '어젯밤에는 잠을 편하게 주무셨나요?',
 ];
+const PRE_CALL_TTS_AUDIO = [
+  '/tts/precall_0.mp3',
+  '/tts/precall_1.mp3',
+  '/tts/precall_2.mp3',
+  '/tts/precall_3.mp3',
+];
+
+const getPreCallQuestionAudioSrc = (index) => PRE_CALL_TTS_AUDIO[index] || null;
 
 const getPreCallReaction = (questionIndex, answerText) => {
   const answer = (answerText || '').replace(/\s+/g, ' ').trim();
@@ -61,11 +70,6 @@ const getPreCallReaction = (questionIndex, answerText) => {
   if (hasNegativeSignal) return '잠을 편히 못 주무셨군요. 오늘은 조금 더 편안하게 쉬셨으면 좋겠어요.';
   if (hasPositiveSignal) return '잘 주무셨다니 참 다행이에요.';
   return '수면 상태도 알려주셔서 고마워요.';
-};
-
-const joinReactionAndQuestion = (reaction, question) => {
-  if (!question) return reaction;
-  return `${reaction} ${question}`;
 };
 
 const getMessageText = (msg) => msg?.parts?.[0]?.text || '';
@@ -364,6 +368,7 @@ function VoiceChatScreen({ onBack }) {
   const patientRecorderStreamRef = useRef(null);
   const patientAudioChunksRef = useRef([]);
   const pendingPatientAudioRef = useRef(null);
+  const cachedAudioRef = useRef(null);
   const patientNameRef = useRef('OO');
   const {
     supported: speechSupported,
@@ -371,8 +376,9 @@ function VoiceChatScreen({ onBack }) {
     stopListening: stopSpeechRecognition,
   } = useScribeSpeechRecognition({
     noResultMs: VOICE_TIMING.sttNoResultMs,
-    finalizeDelayMs: SILENCE_TIMEOUT_MS,
-    webSpeechSilenceMs: Math.max(900, SILENCE_TIMEOUT_MS - 300),
+    finalizeDelayMs: VOICE_TIMING.sttFinalizeMs,
+    webSpeechSilenceMs: SILENCE_TIMEOUT_MS,
+    preferWebSpeech: true,
   });
 
   useEffect(() => { uiStateRef.current = uiState; }, [uiState]);
@@ -993,6 +999,12 @@ function VoiceChatScreen({ onBack }) {
 
   const stopSpeaking = () => {
     cancelTTS();
+    if (cachedAudioRef.current) {
+      try {
+        cachedAudioRef.current.stop?.();
+      } catch {}
+      cachedAudioRef.current = null;
+    }
     ttsQueueRef.current = [];
     ttsProcessingRef.current = false;
     isSpeakingRef.current = false;
@@ -1025,6 +1037,38 @@ function VoiceChatScreen({ onBack }) {
     }
   };
 
+  const playCachedTTS = (audioSrc, options = {}) => new Promise((resolve) => {
+    if (!audioSrc) {
+      resolve(false);
+      return;
+    }
+
+    const audio = new Audio(audioSrc);
+    let settled = false;
+
+    const cleanup = (played) => {
+      if (settled) return;
+      settled = true;
+      try {
+        audio.pause();
+        audio.src = '';
+      } catch {}
+      if (cachedAudioRef.current === audio) cachedAudioRef.current = null;
+      if (cachedAudioRef.current?.audio === audio) cachedAudioRef.current = null;
+      resolve(played);
+    };
+
+    cachedAudioRef.current = {
+      audio,
+      stop: () => cleanup(false),
+    };
+
+    audio.onplay = () => options.onSpeechStart?.();
+    audio.onended = () => cleanup(true);
+    audio.onerror = () => cleanup(false);
+    audio.play().catch(() => cleanup(false));
+  });
+
   const processTTSQueue = async () => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
     if (ttsQueueRef.current.length === 0) {
@@ -1045,11 +1089,13 @@ function VoiceChatScreen({ onBack }) {
       textPreview: String(text || '').slice(0, 80),
       remainingQueueLength: ttsQueueRef.current.length,
     });
-    await tts(text, {
+    const speechOptions = {
+      preferBrowser: true,
       onSpeechStart: () => {
         if (!isMountedRef.current || isEndingCallRef.current) return;
         console.log('[VoiceTiming][TTS] 재생 시작:', {
           elapsedMs: Math.round(performance.now() - ttsStartAt),
+          cached: Boolean(item?.audioSrc),
         });
         isSpeakingRef.current = true;
         setStatus('말하고 있어요.');
@@ -1067,7 +1113,13 @@ function VoiceChatScreen({ onBack }) {
           else item.message.audio = summarizeTtsAudioForCallLog(item.message.audio, text);
         });
       },
-    });
+    };
+    const cachedPlayed = item?.audioSrc
+      ? await playCachedTTS(item.audioSrc, speechOptions)
+      : false;
+    if (!cachedPlayed) {
+      await tts(text, speechOptions);
+    }
     if (!isMountedRef.current || isEndingCallRef.current) return;
     console.log('[VoiceTiming][TTS] 완료:', {
       elapsedMs: Math.round(performance.now() - ttsStartAt),
@@ -1077,20 +1129,20 @@ function VoiceChatScreen({ onBack }) {
     processTTSQueue();
   };
 
-  const addToTTSQueue = (text, message = null) => {
+  const addToTTSQueue = (text, message = null, options = {}) => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
-    ttsQueueRef.current.push({ text, message });
+    ttsQueueRef.current.push({ text, message, audioSrc: options.audioSrc || null });
     if (!ttsProcessingRef.current) processTTSQueue();
   };
 
-  const speakAssistantText = (text, statusText = '천천히 말씀해 주세요.') => {
+  const speakAssistantText = (text, statusText = '천천히 말씀해 주세요.', options = {}) => {
     if (!isMountedRef.current || isEndingCallRef.current) return;
     const displayText = cleanStageDirections(text).trim();
     if (!displayText) return;
     const message = { role: 'model', parts: [{ text: displayText }] };
     chatHistoryRef.current.push(message);
     setCaption(`AI: ${displayText}`);
-    addToTTSQueue(displayText, message);
+    addToTTSQueue(displayText, message, options);
     setUiState('ready');
     setStatus(statusText);
   };
@@ -1099,7 +1151,9 @@ function VoiceChatScreen({ onBack }) {
     const index = preCallCheckRef.current.index;
     const question = PRE_CALL_CHECK_QUESTIONS[index];
     if (!question) return false;
-    speakAssistantText(question, '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.');
+    speakAssistantText(question, '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.', {
+      audioSrc: getPreCallQuestionAudioSrc(index),
+    });
     return true;
   };
 
@@ -1164,10 +1218,10 @@ function VoiceChatScreen({ onBack }) {
     if (!shouldRepeat) { preCallCheckRef.current.index += 1; }
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
       const nextQuestion = PRE_CALL_CHECK_QUESTIONS[preCallCheckRef.current.index];
-      speakAssistantText(
-        joinReactionAndQuestion(reactionText, nextQuestion),
-        '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.'
-      );
+      speakAssistantText(reactionText, '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.');
+      speakAssistantText(nextQuestion, '먼저 컨디션을 확인할게요. 천천히 말씀해 주세요.', {
+        audioSrc: getPreCallQuestionAudioSrc(preCallCheckRef.current.index),
+      });
       return;
     }
 

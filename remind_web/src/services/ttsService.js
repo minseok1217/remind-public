@@ -129,6 +129,7 @@ export const webSpeak = (text, generation = ttsGeneration, options = {}) =>
 export const tts = async (rawText, options = {}) => {
   const text = preprocessTTS(rawText);
   const generation = ttsGeneration;
+  if (options.preferBrowser) return webSpeak(text, generation, options);
   if (!ELEVENLABS_API_KEY) return webSpeak(text, generation, options);
   const abortController = new AbortController();
   currentAbortController = abortController;
