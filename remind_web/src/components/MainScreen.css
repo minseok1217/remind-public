@@ -377,8 +377,17 @@
     flex-direction: column;
   }
 
+  .call-list-container {
+    flex: none;
+  }
+
   .call-item {
     flex: none;
+    min-height: 60px;
+  }
+
+  .call-item:nth-child(n+4) {
+    display: none;
   }
 
   .card-section-title {
