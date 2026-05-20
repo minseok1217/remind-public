@@ -31,6 +31,8 @@ export const useScribeSpeechRecognition = ({
   const transcriptBufferRef = useRef('');
   const scribeFailedRef = useRef(false);
   const scribeConsecutiveFailsRef = useRef(0);
+  const listenStartedAtRef = useRef(0);
+  const activeProviderRef = useRef('none');
 
   const cleanupTimer = () => {
     clearTimeout(timeoutRef.current);
@@ -50,11 +52,20 @@ export const useScribeSpeechRecognition = ({
   const finish = (text) => {
     if (completedRef.current) return;
     completedRef.current = true;
+    const elapsedMs = listenStartedAtRef.current
+      ? Math.round(performance.now() - listenStartedAtRef.current)
+      : null;
     cleanupTimer();
     setIsListening(false);
     safeDisconnect();
 
     const trimmed = (text || '').trim();
+    console.log('[VoiceTiming][STT] 최종 처리:', {
+      provider: activeProviderRef.current,
+      elapsedMs,
+      hasText: Boolean(trimmed),
+      textLength: trimmed.length,
+    });
     if (trimmed) {
       scribeConsecutiveFailsRef.current = 0;
       onResultRef.current?.(trimmed);
@@ -97,8 +108,14 @@ export const useScribeSpeechRecognition = ({
   });
 
   const fetchScribeToken = async () => {
+    const startAt = performance.now();
     const response = await fetch(SCRIBE_TOKEN_ENDPOINT);
     const data = await response.json().catch(() => ({}));
+    console.log('[VoiceTiming][STT][Scribe] 토큰 응답:', {
+      elapsedMs: Math.round(performance.now() - startAt),
+      ok: response.ok,
+      hasToken: Boolean(data.token),
+    });
     if (!response.ok || !data.token) {
       scribeFailedRef.current = true;
       throw new Error(data.error || 'Scribe token request failed');
@@ -107,6 +124,7 @@ export const useScribeSpeechRecognition = ({
   };
 
   const startListeningWebSpeech = (onResult, onNoResult, onTranscript, silenceMs = webSpeechSilenceMs, sessionId) => {
+    activeProviderRef.current = 'webSpeech';
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       onNoResult?.();
@@ -135,6 +153,13 @@ export const useScribeSpeechRecognition = ({
       if (sessionIdRef.current !== sessionId) return;
       if (done) return;
       done = true;
+      console.log('[VoiceTiming][STT][WebSpeech] 완료:', {
+        sessionId,
+        elapsedMs: listenStartedAtRef.current
+          ? Math.round(performance.now() - listenStartedAtRef.current)
+          : null,
+        hasText: Boolean((text || '').trim()),
+      });
       clearSilenceTimer();
       try {
         rec.stop();
@@ -187,6 +212,7 @@ export const useScribeSpeechRecognition = ({
   };
 
   const startListeningAndroid = (onResult, onNoResult, onTranscript, sessionId, noResultTimeoutMs) => {
+    activeProviderRef.current = 'android';
     if (!window.AndroidSpeechBridge?.startListening) {
       console.warn('[SpeechDebug] AndroidSpeechBridge 없음');
       onNoResult?.();
@@ -218,6 +244,14 @@ export const useScribeSpeechRecognition = ({
       cleanupTimer();
       setIsListening(false);
       const trimmed = (text || '').trim();
+      console.log('[VoiceTiming][STT][Android] 완료:', {
+        sessionId,
+        elapsedMs: listenStartedAtRef.current
+          ? Math.round(performance.now() - listenStartedAtRef.current)
+          : null,
+        hasText: Boolean(trimmed),
+        textLength: trimmed.length,
+      });
       console.log(`[SpeechDebug] Android 최종 인식: sessionId=${sessionId}, hasText=${Boolean(trimmed)}, text=${trimmed}`);
       if (trimmed) onResult?.(trimmed);
       else onNoResult?.();
@@ -263,6 +297,8 @@ export const useScribeSpeechRecognition = ({
     completedRef.current = false;
     const sessionId = sessionIdRef.current + 1;
     sessionIdRef.current = sessionId;
+    listenStartedAtRef.current = performance.now();
+    activeProviderRef.current = 'pending';
     finalizeDelayRef.current = currentFinalizeDelayMs;
     transcriptBufferRef.current = '';
     onResultRef.current = onResult;
@@ -285,8 +321,10 @@ export const useScribeSpeechRecognition = ({
     setIsListening(true);
     timeoutRef.current = setTimeout(() => finish(''), currentNoResultMs);
     try {
+      activeProviderRef.current = 'elevenlabs-scribe';
       console.log('[SpeechDebug] Scribe 토큰 요청:', { sessionId, endpoint: SCRIBE_TOKEN_ENDPOINT });
       const token = await fetchScribeToken();
+      const connectStartAt = performance.now();
       console.log('[SpeechDebug] Scribe 연결 시작:', { sessionId });
       await scribe.connect({
         token,
@@ -301,6 +339,11 @@ export const useScribeSpeechRecognition = ({
           echoCancellation: true,
           noiseSuppression: true,
         },
+      });
+      console.log('[VoiceTiming][STT][Scribe] 연결 완료:', {
+        sessionId,
+        elapsedMs: Math.round(performance.now() - connectStartAt),
+        totalElapsedMs: Math.round(performance.now() - listenStartedAtRef.current),
       });
       const conn = scribe.getConnection?.();
       if (conn?.send) {

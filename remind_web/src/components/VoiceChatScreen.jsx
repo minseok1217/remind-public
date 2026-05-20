@@ -11,10 +11,10 @@ import { useScribeSpeechRecognition } from '../hooks/useScribeSpeechRecognition'
 
 const VOICE_TIMING = {
   userSilenceMs: 1800, // 사용자가 말을 멈춘 뒤 “발화 끝”으로 판단하는 시간입니다. 
-  webAutoListenDelayMs: 300, // AI 말이 끝난 뒤 앱에서 마이크를 켜기까지 기다리는 시간입니다.
+  webAutoListenDelayMs: 100, // AI 말이 끝난 뒤 앱에서 마이크를 켜기까지 기다리는 시간입니다.
   androidAutoListenDelayMs: 300, // 브라우저 웹에서만 쓰는 자동 듣기 지연입니다.
-  androidIncompleteRetryDelayMs: 500,// 앱에서 너무 짧거나 애매한 발화가 잡혔을 때 다시 듣기까지 기다리는 시간입니다.
-  statusEchoRetryDelayMs: 2600, // 상태 문구가 음성으로 잘못 인식됐을 때 무시하고 다시 듣기까지 기다리는 시간
+  androidIncompleteRetryDelayMs: 100,// 앱에서 너무 짧거나 애매한 발화가 잡혔을 때 다시 듣기까지 기다리는 시간입니다.
+  statusEchoRetryDelayMs: 1200, // 상태 문구가 음성으로 잘못 인식됐을 때 무시하고 다시 듣기까지 기다리는 시간
 };
 const SILENCE_TIMEOUT_MS = VOICE_TIMING.userSilenceMs;
 const AUTO_LISTEN_DELAY_MS = VOICE_TIMING.webAutoListenDelayMs;
@@ -25,9 +25,6 @@ const STATUS_ECHO_PHRASES = [
   '듣고 있어요',
   '말하고 있어요',
   '생각하고 있어요',
-  '준비 중',
-  '대답을 생각하는 중',
-  '확인하고 있어요',
 ];
 const PRE_CALL_CHECK_QUESTIONS = [
   '안녕하세요. 저는 리마인드 서비스 상담사입니다. 회상 요뻡을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
@@ -89,6 +86,14 @@ const summarizeTtsAudioForCallLog = (audio, text) => {
 };
 
 const buildConversationMessages = (chatHistory, patientName = 'OO') => {
+  const resolvedPatientName = String(patientName || '').trim() || 'OO';
+  console.log('[VoiceChat] buildConversationMessages 환자 이름 적용:', {
+    requestedPatientName: patientName,
+    resolvedPatientName,
+    usedFallbackOO: resolvedPatientName === 'OO',
+    historyLength: chatHistory?.length || 0,
+  });
+
   let patientTurn = 0;
   return (chatHistory || [])
     .map((msg, index) => {
@@ -99,7 +104,7 @@ const buildConversationMessages = (chatHistory, patientName = 'OO') => {
         id: `msg_${index}`,
         order: index,
         role,
-        speaker: role === 'patient' ? `${patientName}님` : 'AI',
+        speaker: role === 'patient' ? `${resolvedPatientName}님` : 'AI',
         text,
       };
       if (role === 'patient') {
@@ -975,13 +980,40 @@ function VoiceChatScreen({ onBack }) {
     return userId;
   };
 
+  const getCurrentPatientName = () => {
+    const name = String(patientNameRef.current || '').trim();
+    const resolvedName = name || auth.currentUser?.displayName || 'OO';
+    console.log('[VoiceChat] 현재 환자 이름 확인:', {
+      patientNameRef: patientNameRef.current,
+      authDisplayName: auth.currentUser?.displayName || null,
+      resolvedName,
+      usedFallbackOO: resolvedName === 'OO',
+    });
+    return resolvedName;
+  };
+
   const loadUserName = async (userId) => {
     try {
       const snap = await getDoc(doc(db, 'users', userId));
       const name = snap.exists() ? snap.data()?.name : null;
-      patientNameRef.current = name || auth.currentUser?.displayName || 'OO';
-    } catch {
-      patientNameRef.current = auth.currentUser?.displayName || 'OO';
+      patientNameRef.current = String(name || auth.currentUser?.displayName || 'OO').trim() || 'OO';
+      console.log('[VoiceChat] 환자 이름 로드 성공:', {
+        userId,
+        userDocExists: snap.exists(),
+        firestoreName: name || null,
+        authDisplayName: auth.currentUser?.displayName || null,
+        resolvedPatientName: patientNameRef.current,
+        usedFallbackOO: patientNameRef.current === 'OO',
+      });
+    } catch (error) {
+      patientNameRef.current = String(auth.currentUser?.displayName || 'OO').trim() || 'OO';
+      console.warn('[VoiceChat] 환자 이름 로드 실패, fallback 사용:', {
+        userId,
+        authDisplayName: auth.currentUser?.displayName || null,
+        resolvedPatientName: patientNameRef.current,
+        usedFallbackOO: patientNameRef.current === 'OO',
+        error,
+      });
     }
   };
 
@@ -1049,9 +1081,18 @@ function VoiceChatScreen({ onBack }) {
     if (!showPhoto) stopWaveAnimation();
     const item = ttsQueueRef.current.shift();
     const text = typeof item === 'string' ? item : item.text;
+    const ttsStartAt = performance.now();
+    console.log('[VoiceTiming][TTS] 요청 시작:', {
+      textLength: String(text || '').length,
+      textPreview: String(text || '').slice(0, 80),
+      remainingQueueLength: ttsQueueRef.current.length,
+    });
     await tts(text, {
       onSpeechStart: () => {
         if (!isMountedRef.current || isEndingCallRef.current) return;
+        console.log('[VoiceTiming][TTS] 재생 시작:', {
+          elapsedMs: Math.round(performance.now() - ttsStartAt),
+        });
         isSpeakingRef.current = true;
         setStatus('말하고 있어요.');
         if (!showPhoto) startSpeakingWave();
@@ -1070,6 +1111,9 @@ function VoiceChatScreen({ onBack }) {
       },
     });
     if (!isMountedRef.current || isEndingCallRef.current) return;
+    console.log('[VoiceTiming][TTS] 완료:', {
+      elapsedMs: Math.round(performance.now() - ttsStartAt),
+    });
     isSpeakingRef.current = false;
     if (!showPhoto) stopWaveAnimation();
     processTTSQueue();
@@ -1135,13 +1179,26 @@ function VoiceChatScreen({ onBack }) {
     const currentQuestion = PRE_CALL_CHECK_QUESTIONS[currentIndex];
 
     let reactionResult = null;
+    const reactionStartAt = performance.now();
     try {
+      console.log('[VoiceTiming][Gemini] 사전 체크 반응 요청 시작:', {
+        questionIndex: currentIndex,
+        answerLength: String(text || '').length,
+      });
       reactionResult = await generatePreCallReaction({
         question: currentQuestion,
         answer: text,
         questionIndex: currentIndex,
       });
+      console.log('[VoiceTiming][Gemini] 사전 체크 반응 응답 완료:', {
+        elapsedMs: Math.round(performance.now() - reactionStartAt),
+        usedFallback: false,
+      });
     } catch (e) {
+      console.warn('[VoiceTiming][Gemini] 사전 체크 반응 실패:', {
+        elapsedMs: Math.round(performance.now() - reactionStartAt),
+        error: e,
+      });
       console.error('generatePreCallReaction error:', e);
     }
 
@@ -1370,15 +1427,27 @@ function VoiceChatScreen({ onBack }) {
       stopMicStream();
       startPatientAudioRecording();
       console.log('[VoiceDebug] 음성인식 startSpeechRecognition 호출');
+      const sttStartAt = performance.now();
+      console.log('[VoiceTiming][STT] 앱 녹음/인식 시작:', {
+        androidBridge: isAndroidSpeechBridgeAvailable(),
+        speechSupported,
+      });
       startSpeechRecognition(
         (text) => {
           console.log('[VoiceDebug] 음성인식 onResult:', { text });
+          console.log('[VoiceTiming][STT] 앱 최종 인식 완료:', {
+            elapsedMs: Math.round(performance.now() - sttStartAt),
+            textLength: String(text || '').length,
+          });
           setIsRecording(false);
           isRecordingRef.current = false;
           finalizeRecognizedSpeech(text);
         },
         () => {
           console.warn('[VoiceDebug] 음성인식 onNoResult');
+          console.warn('[VoiceTiming][STT] 앱 인식 결과 없음:', {
+            elapsedMs: Math.round(performance.now() - sttStartAt),
+          });
           setIsRecording(false);
           isRecordingRef.current = false;
           stopPatientAudioRecording().then(() => {
@@ -1422,14 +1491,23 @@ function VoiceChatScreen({ onBack }) {
 
     let firstQuestion = '';
     try {
+      const geminiStartAt = performance.now();
+      console.log('[VoiceTiming][Gemini] 첫 사진 질문 요청 시작:', {
+        difficulty: conversationDifficultyRef.current,
+        hasContext: Boolean(enrichedContext),
+      });
       firstQuestion = await chatWithGemini(
         '사전 건강 확인과 자기소개는 이미 했습니다. 몸 상태, 식사, 약, 수면, 자기소개를 반복하지 말고 바로 사진을 보며 이어질 첫 질문만 해주세요.',
         [],
         enrichedContext,
         conversationDifficultyRef.current,
         0,
-        auth.currentUser.name
+        getCurrentPatientName()
       );
+      console.log('[VoiceTiming][Gemini] 첫 사진 질문 응답 완료:', {
+        elapsedMs: Math.round(performance.now() - geminiStartAt),
+        responseLength: String(firstQuestion || '').length,
+      });
     } catch (error) {
       console.warn('[VoiceChat] 첫 질문 생성 실패, 기본 질문 사용:', error);
     }
@@ -1505,7 +1583,7 @@ function VoiceChatScreen({ onBack }) {
       }
       const ownerId = await resolvePhotoOwnerId(user.uid);
       if (!isActiveStartup(startupId)) return;
-      await loadUserName(user.uid);
+      await loadUserName(ownerId);
       if (!isActiveStartup(startupId)) return;
       await loadConversationDifficulty(ownerId);
       if (!isActiveStartup(startupId)) return;
@@ -1605,14 +1683,26 @@ function VoiceChatScreen({ onBack }) {
     try {
       const elapsedMinutes = Math.floor(callSeconds / 60);
       const canEndByTime = elapsedMinutes >= CALL_END_MINUTES;
+      const geminiStartAt = performance.now();
+      console.log('[VoiceTiming][Gemini] 대화 응답 요청 시작:', {
+        textLength: String(text || '').length,
+        historyLength: chatHistoryRef.current.length,
+        hasPhoto,
+        difficulty: conversationDifficultyRef.current,
+        elapsedMinutes,
+      });
       const fullText = await chatWithGemini(
         text,
         chatHistoryRef.current,
         hasPhoto ? photoKeywords : null,
         conversationDifficultyRef.current,
         elapsedMinutes,
-        auth.currentUser.name
+        getCurrentPatientName()
       );
+      console.log('[VoiceTiming][Gemini] 대화 응답 완료:', {
+        elapsedMs: Math.round(performance.now() - geminiStartAt),
+        responseLength: String(fullText || '').length,
+      });
       await appendPatientMessage(text);
       noSpeechRetryCountRef.current = 0;
       console.log('[VoiceDebug] 사용자 발화 chatHistory 추가 완료:', {
