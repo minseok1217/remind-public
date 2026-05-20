@@ -2,88 +2,98 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // 보호자가 특정 환자와 연결되어 있는지 확인하는 함수
+    function familyLinkId(guardianId, patientId) {
+      return guardianId + "_" + patientId;
+    }
+
     function isGuardianOfPatient(guardianId, patientId) {
-      return exists(/databases/$(database)/documents/family_links/$(guardianId + "_" + patientId));
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/family_links/$(familyLinkId(guardianId, patientId)));
     }
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      // 모든 서명된 사용자가 사용자 문서 생성 가능 (환자 등록용)
       allow create: if isSignedIn();
-      // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
-      allow update, delete: if isSignedIn() && (request.auth.uid == userId || isGuardianOfPatient(request.auth.uid, userId));
+      allow update, delete: if isSignedIn()
+        && (request.auth.uid == userId || isGuardianOfPatient(request.auth.uid, userId));
+
+      match /photos/{photoId} {
+        allow read, write: if isSignedIn();
+      }
     }
+
     match /guardians/{guardianId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == guardianId;
     }
+
     match /patients/{patientId} {
       allow read: if isSignedIn();
-      // 환자 문서는 모든 서명된 사용자가 생성 가능 (환자 등록용)
       allow create: if isSignedIn();
-      // 보호자가 자신의 정보를 수정하거나, 보호자가 연결된 환자의 정보를 수정하는 경우 허용
-      allow update, delete: if isSignedIn() && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
+      allow update, delete: if isSignedIn()
+        && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
+
+      match /notification_tokens/{tokenId} {
+        allow read, write: if isSignedIn()
+          && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
+      }
     }
-    match /patients/{patientId}/notification_tokens/{tokenId} {
-      allow read, write: if isSignedIn() && (request.auth.uid == patientId || isGuardianOfPatient(request.auth.uid, patientId));
-    }
+
     match /family_links/{linkId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow read, create, update, delete: if isSignedIn();
     }
-    match /Memories/{memoryId} {
-      allow read, write: if isSignedIn();
+
+    match /temp_codes/{codeId} {
+      allow read, delete: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.patient_id == request.auth.uid
+        && request.resource.data.code == codeId
+        && request.resource.data.expires_at is timestamp;
     }
-    match /Call/{callId} {
-      allow read, write: if isSignedIn();
-    }
-    match /Conversation/{logId} {
-      allow read, write: if isSignedIn();
-    }
-    match /Report/{reportId} {
-      allow read, write: if isSignedIn();
-    }
-    match /users/{userId}/photos/{photoId} {
-      allow read, write: if isSignedIn();
-    }
-    match /guardians/{guardianId}/photos/{photoId} {
-      allow read, write: if isSignedIn();
-    }
+
     match /call_logs/{logId} {
       allow read, write: if isSignedIn();
     }
+
     match /photos/{photoId} {
       allow read, write: if isSignedIn();
     }
+
+    match /guardians/{guardianId}/photos/{photoId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /Memories/{memoryId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /Call/{callId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /Conversation/{logId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /Report/{reportId} {
+      allow read, write: if isSignedIn();
+    }
+
     match /cognitive_scores/{scoreId} {
       allow read, write: if isSignedIn();
     }
+
     match /orientation_images/{docId} {
       allow read: if isSignedIn();
     }
-    match /orientation_questions/{doc} {
-      allow read: if request.auth != null;
-    }
-    match /temp_codes/{codeId} {
-      // 환자만 임시 코드를 생성할 수 있습니다.
-      allow create: if isSignedIn() 
-                      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "환자" 
-                      && request.resource.data.patient_id == request.auth.uid 
-                      && request.resource.data.code == codeId 
-                      && request.resource.data.expires_at is timestamp; 
 
-      // 보호자는 유효한 코드를 읽고, 환자는 자신이 생성한 코드를 읽을 수 있습니다. (임시적으로 완화된 규칙 - 로그인만 확인)
-       allow read: if isSignedIn();
-
-      // 코드는 사용되거나 만료되면 삭제될 수 있습니다. (클라이언트에서 직접 삭제 허용)
-      allow delete: if isSignedIn();
+    match /orientation_questions/{docId} {
+      allow read: if isSignedIn();
     }
   }
 }
