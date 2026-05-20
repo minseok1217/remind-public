@@ -22,8 +22,8 @@ const sanitizeGeminiHistory = (history = []) =>
     })
     .filter(Boolean);
 
-export const CALL_END_MINUTES = 5;
-export const REFLECTION_START_MINUTES = 4;
+export const CALL_END_MINUTES = 13;
+export const REFLECTION_START_MINUTES = 10;
 
 const normalizeCaptionCategories = (items = []) =>
   (Array.isArray(items) ? items : [])
@@ -1014,6 +1014,14 @@ ${captionCategoryPrompt}
 - 현재 경과 시간이 ${CALL_END_MINUTES}분 이상이면 따뜻하게 마무리하고 반드시 [통화끝]을 출력한다.
 - 현재 경과 시간은 ${elapsedMinutes}분이다. 이 시간을 기준으로 종료 가능 여부를 판단한다.`;
 
+  const fastVoiceResponseRules = `
+[실시간 음성 응답 속도 규칙]
+- 실제 통화에서 빠르게 말할 수 있도록 답변을 짧게 유지하세요.
+- 따뜻한 공감 문장 1개와 질문 문장 1개까지만 사용하세요.
+- 통화를 마무리하는 경우가 아니면 한국어 35~80자 정도를 우선하세요.
+- 질문은 한 번에 하나만 또렷하게 하세요.
+- 설명, 목록, 지문, 반복 요약은 넣지 마세요.`;
+
   const systemPrompt = `${systemInstruction}
 ${photoInfo}[추가 규칙]
 - 괄호 안 지문/행동 표현 금지 (예: (웃으며), (조용히)).
@@ -1025,6 +1033,7 @@ ${photoRule}
 - 이미 OO님이 답한 내용으로 확인된 카테고리는 반복해서 묻지 말고, 다음 미확인 카테고리로 넘어가세요.
 - 보호자 지정 확인 카테고리가 정보 없음이면 일반 회상 질문으로 진행하세요.
 ${strictTimingRules}
+${fastVoiceResponseRules}
 - OO님이 반복적으로 피곤해하거나 종료를 원하면 공감하는 말과 함께 "통화를 그만하고 싶으신가요?"를 물어봄.
 - "통화를 그만하고 싶으신가요?" 질문에 긍정하면 따뜻하게 마무리하고 [통화끝] 출력. 부정하면 계속 진행
 - [현재 경과 시간: ${elapsedMinutes}분] 전략 타이밍에 맞게 대화 진행.`;
