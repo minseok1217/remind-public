@@ -506,57 +506,53 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
       </div>
       <div className="header-diver"></div>
 
-      {/* Content Grid */}
-      <div className="content-grid">
-        {/* Top Row - Two Cards */}
-        <div className="top-row">
-          {/* Today's Status Card */}
-          <div className="card-section">
-            <h2 className="card-section-title">오늘의 현황</h2>
-            <div className="today-card">
-              <div className="today-card-content">
-                <div className="today-card-text">{todayStatus?.hasCall ? '오늘 통화 완료' : '아직 오늘 통화가 없어요'}</div>
-                {todayStatus?.hasCall ? (
-                  <>
-                    <div className="today-card-desc today-card-desc-strong">오늘 통화를 완료했어요!</div>
-                    <div className="today-card-desc">{todayStatus?.message || ''}</div>
-                  </>
-                ) : (todayStatus?.insightLines?.length > 0 ? (
-                  <>
-                    <div className="today-card-desc today-card-desc-strong">최근 통화 요약</div>
-                    {todayStatus.insightLines.slice(0, 2).map((insight, index) => (
-                      <div key={index} className="today-card-desc">{insight}</div>
-                    ))}
-                  </>
-                ) : (
-                  <div className="today-card-desc">아직 오늘 통화가 없어요</div>
-                ))}
+      {/* Content Grid - 3 columns */}
+      <div className="three-col-grid">
+        {/* 오늘의 현황 */}
+        <div className="card-section">
+          <h2 className="card-section-title">오늘의 현황</h2>
+          <div className="today-card">
+            <div className="today-card-content">
+              <div className="today-card-text">{todayStatus?.hasCall ? '오늘 통화 완료' : '아직 오늘 통화가 없어요'}</div>
+              {todayStatus?.hasCall ? (
+                <>
+                  <div className="today-card-desc today-card-desc-strong">오늘 통화를 완료했어요!</div>
+                  <div className="today-card-desc">{todayStatus?.message || ''}</div>
+                </>
+              ) : (todayStatus?.insightLines?.length > 0 ? (
+                <>
+                  <div className="today-card-desc today-card-desc-strong">최근 통화 요약</div>
+                  {todayStatus.insightLines.slice(0, 2).map((insight, index) => (
+                    <div key={index} className="today-card-desc">{insight}</div>
+                  ))}
+                </>
+              ) : (
+                <div className="today-card-desc">아직 오늘 통화가 없어요</div>
+              ))}
+            </div>
+            <div className="today-card-footer">
+              <div>
+                <div className="call-time-label">통화 시간</div>
+                <div className="call-time-value">{todayStatus?.lastCallTime || '-'} {todayStatus?.lastCallDuration || '-'}</div>
               </div>
-              <div className="today-card-footer">
-                <div>
-                  <div className="call-time-label">통화 시간</div>
-                  <div className="call-time-value">{todayStatus?.lastCallTime || '-'} {todayStatus?.lastCallDuration || '-'}</div>
-                </div>
-                <button className="record-btn">기록 확인</button>
-              </div>
+              <button className="record-btn">기록 확인</button>
             </div>
           </div>
+        </div>
 
-          {/* Cognitive Status Card */}
-          <div className="card-section">
-            <h2 className="card-section-title">최근 인지 상태 요약</h2>
-            
-            <div className="status-card">
-              <div className="status-header">
-                <div>
-                  <div className="status-label">전반적인 상태</div>
-                  <div className="status-text">{cognitiveStatus?.statusLabel || '분석 중'}</div>
-                </div>
-                <div className="status-score">{cognitiveStatus?.score || 0}<span className="score-unit">점</span></div>
+        {/* 최근 인지 상태 요약 */}
+        <div className="card-section">
+          <h2 className="card-section-title">최근 인지 상태 요약</h2>
+          <div className="status-card">
+            <div className="status-header">
+              <div>
+                <div className="status-label">전반적인 상태</div>
+                <div className="status-text">{cognitiveStatus?.statusLabel || '분석 중'}</div>
               </div>
-                
-              <div className="stats-list">
-                {(cognitiveStatus?.recent || []).map((metric, index) => (
+              <div className="status-score">{cognitiveStatus?.score || 0}<span className="score-unit">점</span></div>
+            </div>
+            <div className="stats-list">
+              {(cognitiveStatus?.recent || []).map((metric, index) => (
                 <div key={index} className="metric-item">
                   <div className="metric-header">
                     <label className="metric-label">{metric.label}</label>
@@ -566,44 +562,40 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
                   </div>
                   {metric.score !== null && metric.score !== undefined && (
                     <div className="main-progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{ width: `${Math.min(metric.score, 100)}%` }}
-                      ></div>
+                      <div className="progress-fill" style={{ width: `${Math.min(metric.score, 100)}%` }} />
                     </div>
                   )}
                 </div>
               ))}
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Row - Call Records */}
-        <div className="card-section call-history-section">
+        {/* 최근 통화 기록 */}
+        <div className="card-section">
           <div className="card-section-header">
             <h2 className="card-section-title">최근 통화 기록</h2>
             <button className="view-all" onClick={onViewAllCallHistory}>전체 보기</button>
           </div>
-          <div className="call-list">
+          <div className="call-list-container">
             {callRecords.length === 0 ? (
-              <div className="no-records">
-                <p>아직 통화 기록이 없습니다.</p>
-              </div>
+              <div className="no-records">아직 통화 기록이 없습니다.</div>
             ) : (
-              callRecords.slice(0,3).map((record) => (
-              <div key={record.id} className="call-item">
-                <div className="call-list-icon">
-                  <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />
+              callRecords.slice(0, 5).map((record) => (
+                <div key={record.id} className="call-item">
+                  <div className="call-list-icon">
+                    <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />
+                  </div>
+                  <div className="call-info-content">
+                    <div className="call-detail-date">{record.date}</div>
+                    <div className="call-detail">시간: {record.time} &nbsp;·&nbsp; {record.duration}</div>
+                  </div>
+                  <span className={`call-status-value ${record.status === '분석 불가' ? 'status-disabled' : record.status === '주의 필요' ? 'status-warning' : 'status-good'}`}>
+                    {record.status}
+                  </span>
                 </div>
-                <div className="call-info-content">
-                  <div className="call-detail">날짜: {record.date}</div>
-                  <div className="call-detail">시간: {record.time}</div>
-                  <div className="call-detail">통화 시간: {record.duration}</div>
-                </div>
-                <span className={`call-status-value ${record.status=="분석 불가" ? 'status-disabled' : (record.status=="주의 필요" ? 'status-warning' : 'status-good')}`}>{record.status}</span>
-              </div>
-            )))}
+              ))
+            )}
           </div>
         </div>
       </div>
