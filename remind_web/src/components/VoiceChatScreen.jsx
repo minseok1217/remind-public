@@ -36,10 +36,10 @@ const PRE_CALL_CHECK_QUESTIONS = [
   '어젯밤에는 잠을 편하게 주무셨나요?',
 ];
 const PRE_CALL_TTS_AUDIO = [
-  '/tts/precall_0.mp3',
-  '/tts/precall_1.mp3',
-  '/tts/precall_2.mp3',
-  '/tts/precall_3.mp3',
+  '/tts/precall_0.mp3?v=ko-20260521-1',
+  '/tts/precall_1.mp3?v=ko-20260521-1',
+  '/tts/precall_2.mp3?v=ko-20260521-1',
+  '/tts/precall_3.mp3?v=ko-20260521-1',
 ];
 
 const getPreCallQuestionAudioSrc = (index) => PRE_CALL_TTS_AUDIO[index] || null;

@@ -1015,12 +1015,12 @@ ${captionCategoryPrompt}
 - 현재 경과 시간은 ${elapsedMinutes}분이다. 이 시간을 기준으로 종료 가능 여부를 판단한다.`;
 
   const fastVoiceResponseRules = `
-[Live voice response speed rules]
-- Keep each reply short enough to speak quickly in a live call.
-- Use one warm acknowledgement sentence and one question sentence at most.
-- Prefer 35 to 80 Korean characters unless the call is ending.
-- Ask only one clear question.
-- Do not add explanations, lists, stage directions, or repeated summaries.`;
+[실시간 음성 응답 속도 규칙]
+- 실제 통화에서 빠르게 말할 수 있도록 답변을 짧게 유지하세요.
+- 따뜻한 공감 문장 1개와 질문 문장 1개까지만 사용하세요.
+- 통화를 마무리하는 경우가 아니면 한국어 35~80자 정도를 우선하세요.
+- 질문은 한 번에 하나만 또렷하게 하세요.
+- 설명, 목록, 지문, 반복 요약은 넣지 마세요.`;
 
   const systemPrompt = `${systemInstruction}
 ${photoInfo}[추가 규칙]
