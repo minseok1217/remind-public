@@ -36,13 +36,22 @@ const PRE_CALL_CHECK_QUESTIONS = [
   '어젯밤에는 잠을 편하게 주무셨나요?',
 ];
 const PRE_CALL_TTS_AUDIO = [
-  '/tts/precall_0.mp3?v=ko-20260521-1',
-  '/tts/precall_1.mp3?v=ko-20260521-1',
-  '/tts/precall_2.mp3?v=ko-20260521-1',
-  '/tts/precall_3.mp3?v=ko-20260521-1',
+  '/tts/precall_0_ko.mp3?v=20260521-3',
+  '/tts/precall_1_ko.mp3?v=20260521-3',
+  '/tts/precall_2_ko.mp3?v=20260521-3',
+  '/tts/precall_3_ko.mp3?v=20260521-3',
 ];
 
 const getPreCallQuestionAudioSrc = (index) => PRE_CALL_TTS_AUDIO[index] || null;
+const CACHED_TTS_START_DELAY_MS = 120;
+const FIRST_CACHED_TTS_START_DELAY_MS = 450;
+const DEBUG_MIC_LEVELS = true;
+const MIC_LEVEL_DEBUG_INTERVAL_MS = 500;
+const MIC_LEVEL_DEBUG_SAMPLE_COUNT = 12;
+const WEB_SPEECH_SIGNAL_MISS_LIMIT = 2;
+const SCRIBE_FALLBACK_TURNS = 3;
+const ENABLE_PATIENT_AUDIO_RECORDING = false;
+const ENABLE_PHOTO_CONVERSATION_TTS_STREAMING = true;
 
 const getPreCallReaction = (questionIndex, answerText) => {
   const answer = (answerText || '').replace(/\s+/g, ' ').trim();
@@ -369,7 +378,13 @@ function VoiceChatScreen({ onBack }) {
   const patientAudioChunksRef = useRef([]);
   const pendingPatientAudioRef = useRef(null);
   const cachedAudioRef = useRef(null);
+  const cachedTtsPlayedOnceRef = useRef(false);
+  const micLevelDebugRef = useRef(null);
+  const lastMicSignalRef = useRef(false);
+  const webSpeechSignalMissCountRef = useRef(0);
+  const forceScribeTurnsRef = useRef(0);
   const patientNameRef = useRef('OO');
+  const photoConversationTtsStreamingRef = useRef(false);
   const {
     supported: speechSupported,
     startListening: startSpeechRecognition,
@@ -755,9 +770,64 @@ function VoiceChatScreen({ onBack }) {
     return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || '';
   };
 
+  const stopMicLevelDebug = () => {
+    const debug = micLevelDebugRef.current;
+    if (!debug) return;
+    if (debug.intervalId) clearInterval(debug.intervalId);
+    try { debug.source?.disconnect?.(); } catch {}
+    try { debug.audioCtx?.close?.(); } catch {}
+    micLevelDebugRef.current = null;
+  };
+
+  const startMicLevelDebug = async (stream, label = 'patient-recorder') => {
+    if (!DEBUG_MIC_LEVELS || !stream) return;
+    stopMicLevelDebug();
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+      let sampleIndex = 0;
+
+      const intervalId = setInterval(() => {
+        analyser.getByteTimeDomainData(data);
+        let sumSquares = 0;
+        let peak = 0;
+        for (let i = 0; i < data.length; i += 1) {
+          const centered = (data[i] - 128) / 128;
+          sumSquares += centered * centered;
+          peak = Math.max(peak, Math.abs(centered));
+        }
+        const rms = Math.sqrt(sumSquares / data.length);
+        sampleIndex += 1;
+        const hasSignal = rms > 0.01 || peak > 0.05;
+        if (hasSignal) lastMicSignalRef.current = true;
+        console.log('[VoiceDebug][MicLevel]', {
+          label,
+          sample: sampleIndex,
+          rms: Number(rms.toFixed(4)),
+          peak: Number(peak.toFixed(4)),
+          hasSignal,
+        });
+        if (sampleIndex >= MIC_LEVEL_DEBUG_SAMPLE_COUNT) {
+          stopMicLevelDebug();
+        }
+      }, MIC_LEVEL_DEBUG_INTERVAL_MS);
+
+      micLevelDebugRef.current = { audioCtx, source, intervalId };
+    } catch (error) {
+      console.warn('[VoiceDebug][MicLevel] init failed:', error);
+    }
+  };
+
   const startPatientAudioRecording = async () => {
     pendingPatientAudioRef.current = null;
     patientAudioChunksRef.current = [];
+    if (!ENABLE_PATIENT_AUDIO_RECORDING) {
+      return;
+    }
     if (isAndroidSpeechBridgeAvailable()) {
       return;
     }
@@ -775,6 +845,7 @@ function VoiceChatScreen({ onBack }) {
       const startedAt = Date.now();
       patientRecorderStreamRef.current = stream;
       patientRecorderRef.current = recorder;
+      startMicLevelDebug(stream);
 
       recorder.ondataavailable = (event) => {
         if (event.data?.size > 0) patientAudioChunksRef.current.push(event.data);
@@ -782,6 +853,7 @@ function VoiceChatScreen({ onBack }) {
       recorder.onstop = async () => {
         const chunks = patientAudioChunksRef.current;
         patientAudioChunksRef.current = [];
+        stopMicLevelDebug();
         stream.getTracks().forEach((track) => track.stop());
         if (patientRecorderStreamRef.current === stream) patientRecorderStreamRef.current = null;
         if (patientRecorderRef.current === recorder) patientRecorderRef.current = null;
@@ -802,6 +874,7 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const stopPatientAudioRecording = () => new Promise((resolve) => {
+    stopMicLevelDebug();
     const recorder = patientRecorderRef.current;
     const stream = patientRecorderStreamRef.current;
     if (!recorder) {
@@ -1044,29 +1117,56 @@ function VoiceChatScreen({ onBack }) {
     }
 
     const audio = new Audio(audioSrc);
+    audio.preload = 'auto';
     let settled = false;
+    let readyTimer = null;
+    let loadFallbackTimer = null;
+    let playScheduled = false;
 
-    const cleanup = (played) => {
+    const cleanup = (result) => {
       if (settled) return;
       settled = true;
+      if (readyTimer) clearTimeout(readyTimer);
+      if (loadFallbackTimer) clearTimeout(loadFallbackTimer);
       try {
         audio.pause();
         audio.src = '';
       } catch {}
       if (cachedAudioRef.current === audio) cachedAudioRef.current = null;
       if (cachedAudioRef.current?.audio === audio) cachedAudioRef.current = null;
-      resolve(played);
+      resolve(result);
     };
 
     cachedAudioRef.current = {
       audio,
-      stop: () => cleanup(false),
+      stop: () => cleanup('aborted'),
     };
 
     audio.onplay = () => options.onSpeechStart?.();
-    audio.onended = () => cleanup(true);
-    audio.onerror = () => cleanup(false);
-    audio.play().catch(() => cleanup(false));
+    audio.onended = () => cleanup('played');
+    audio.onerror = () => cleanup('failed');
+
+    const playWhenReady = () => {
+      if (settled || playScheduled) return;
+      playScheduled = true;
+      const startDelay = cachedTtsPlayedOnceRef.current
+        ? CACHED_TTS_START_DELAY_MS
+        : FIRST_CACHED_TTS_START_DELAY_MS;
+      readyTimer = setTimeout(() => {
+        if (settled) return;
+        cachedTtsPlayedOnceRef.current = true;
+        audio.play().catch(() => cleanup('failed'));
+      }, startDelay);
+    };
+
+    audio.oncanplaythrough = playWhenReady;
+    audio.onloadeddata = playWhenReady;
+    audio.load();
+    if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      playWhenReady();
+    } else {
+      loadFallbackTimer = setTimeout(playWhenReady, 1000);
+    }
   });
 
   const processTTSQueue = async () => {
@@ -1079,8 +1179,8 @@ function VoiceChatScreen({ onBack }) {
       return;
     }
     ttsProcessingRef.current = true;
-    isSpeakingRef.current = false;
-    if (!showPhoto) stopWaveAnimation();
+    const isContinuingSpeech = isSpeakingRef.current;
+    if (!isContinuingSpeech && !showPhoto) stopWaveAnimation();
     const item = ttsQueueRef.current.shift();
     const text = typeof item === 'string' ? item : item.text;
     const ttsStartAt = performance.now();
@@ -1090,7 +1190,10 @@ function VoiceChatScreen({ onBack }) {
       remainingQueueLength: ttsQueueRef.current.length,
     });
     const speechOptions = {
-      preferBrowser: true,
+      preferBrowser: false,
+      stream: ENABLE_PHOTO_CONVERSATION_TTS_STREAMING
+        && photoConversationTtsStreamingRef.current
+        && !item?.audioSrc,
       onSpeechStart: () => {
         if (!isMountedRef.current || isEndingCallRef.current) return;
         console.log('[VoiceTiming][TTS] 재생 시작:', {
@@ -1114,18 +1217,22 @@ function VoiceChatScreen({ onBack }) {
         });
       },
     };
-    const cachedPlayed = item?.audioSrc
+    const cachedResult = item?.audioSrc
       ? await playCachedTTS(item.audioSrc, speechOptions)
-      : false;
-    if (!cachedPlayed) {
+      : 'skipped';
+    if (cachedResult === 'failed' || cachedResult === 'skipped') {
       await tts(text, speechOptions);
+    } else if (cachedResult === 'aborted') {
+      return;
     }
     if (!isMountedRef.current || isEndingCallRef.current) return;
     console.log('[VoiceTiming][TTS] 완료:', {
       elapsedMs: Math.round(performance.now() - ttsStartAt),
     });
-    isSpeakingRef.current = false;
-    if (!showPhoto) stopWaveAnimation();
+    if (ttsQueueRef.current.length === 0) {
+      isSpeakingRef.current = false;
+      if (!showPhoto) stopWaveAnimation();
+    }
     processTTSQueue();
   };
 
@@ -1160,6 +1267,7 @@ function VoiceChatScreen({ onBack }) {
   const startPreCallCheck = ({ photoData = null, context = null, fallbackGreeting = '' } = {}) => {
     if (!isMountedRef.current || preCallStartedRef.current) return;
     preCallStartedRef.current = true;
+    photoConversationTtsStreamingRef.current = false;
     preCallCheckRef.current = {
       active: true,
       index: 0,
@@ -1396,6 +1504,32 @@ function VoiceChatScreen({ onBack }) {
       }
   };
 
+  const handleSttSuccess = (providerMode) => {
+    webSpeechSignalMissCountRef.current = 0;
+    console.log('[VoiceDebug][AdaptiveSTT] success:', {
+      providerMode,
+      remainingScribeTurns: forceScribeTurnsRef.current,
+    });
+  };
+
+  const handleSttNoResult = (providerMode, reason) => {
+    if (providerMode === 'webSpeech' && lastMicSignalRef.current) {
+      webSpeechSignalMissCountRef.current += 1;
+      if (webSpeechSignalMissCountRef.current >= WEB_SPEECH_SIGNAL_MISS_LIMIT) {
+        forceScribeTurnsRef.current = SCRIBE_FALLBACK_TURNS;
+        webSpeechSignalMissCountRef.current = 0;
+      }
+    }
+
+    console.warn('[VoiceDebug][AdaptiveSTT] no result:', {
+      providerMode,
+      reason,
+      hadMicSignal: lastMicSignalRef.current,
+      webSpeechSignalMissCount: webSpeechSignalMissCountRef.current,
+      forceScribeTurns: forceScribeTurnsRef.current,
+    });
+  };
+
   const startRecording = () => {
     if (isSpeakingRef.current || processingRef.current || isEndingCallRef.current || isRecordingRef.current) {
       return;
@@ -1410,12 +1544,20 @@ function VoiceChatScreen({ onBack }) {
       setStatus('듣고 있어요...');
       finalTranscriptRef.current = '';
       interimTranscriptRef.current = '';
+      lastMicSignalRef.current = false;
       stopMicStream();
       startPatientAudioRecording();
+      const preferWebSpeechForTurn = forceScribeTurnsRef.current <= 0;
+      const sttProviderMode = preferWebSpeechForTurn ? 'webSpeech' : 'scribe';
+      if (forceScribeTurnsRef.current > 0) {
+        forceScribeTurnsRef.current -= 1;
+      }
       const sttStartAt = performance.now();
       console.log('[VoiceTiming][STT] 앱 녹음/인식 시작:', {
         androidBridge: isAndroidSpeechBridgeAvailable(),
         speechSupported,
+        providerMode: sttProviderMode,
+        forceScribeTurnsRemaining: forceScribeTurnsRef.current,
       });
       startSpeechRecognition(
         (text) => {
@@ -1423,6 +1565,7 @@ function VoiceChatScreen({ onBack }) {
             elapsedMs: Math.round(performance.now() - sttStartAt),
             textLength: String(text || '').length,
           });
+          handleSttSuccess(sttProviderMode);
           setIsRecording(false);
           isRecordingRef.current = false;
           finalizeRecognizedSpeech(text);
@@ -1431,6 +1574,7 @@ function VoiceChatScreen({ onBack }) {
           console.warn('[VoiceTiming][STT] 앱 인식 결과 없음:', {
             elapsedMs: Math.round(performance.now() - sttStartAt),
           });
+          handleSttNoResult(sttProviderMode, 'speech-no-result');
           setIsRecording(false);
           isRecordingRef.current = false;
           stopPatientAudioRecording().then(() => {
@@ -1438,6 +1582,7 @@ function VoiceChatScreen({ onBack }) {
           });
         },
         {
+          preferWebSpeech: preferWebSpeechForTurn,
           onTranscript: (preview) => {
             finalTranscriptRef.current = preview;
             interimTranscriptRef.current = '';
@@ -1462,6 +1607,7 @@ function VoiceChatScreen({ onBack }) {
   const startPhotoConversation = async (photoData, context) => {
     if (firstQuestionAskedRef.current) return;
     firstQuestionAskedRef.current = true;
+    photoConversationTtsStreamingRef.current = true;
 
     const enrichedContext = {
       ...context,
@@ -1726,6 +1872,7 @@ function VoiceChatScreen({ onBack }) {
       stopSpeaking();
       stopWaveAnimation();
       stopMicStream();
+      stopMicLevelDebug();
       clearInterval(timerIntervalRef.current);
       stopSpeechRecognition();
     };
@@ -1769,6 +1916,20 @@ function VoiceChatScreen({ onBack }) {
   };
 
 const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking' : uiState;
+const statusLabel = currentStateKey === 'recording'
+  ? '듣고 있어요'
+  : currentStateKey === 'speaking'
+    ? '말하고 있어요'
+    : currentStateKey === 'processing'
+      ? '생각하고 있어요'
+      : '';
+const statusPillColor = currentStateKey === 'recording'
+  ? '#2a9e5e'
+  : currentStateKey === 'speaking'
+    ? '#d9487f'
+    : currentStateKey === 'processing'
+      ? '#7c3aed'
+      : '#4f6f5f';
 
   return (
     <div className="vc_voice-chat-screen">
@@ -1808,6 +1969,17 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
         ) : (
           <div className="vc_wave-container" data-state={currentStateKey}>
             <canvas ref={canvasRef} className="vc_wave-canvas" />
+          </div>
+        )}
+
+        {statusLabel && (
+          <div
+            className="vc_status-pill"
+            style={{ '--pill-color': statusPillColor }}
+            aria-live="polite"
+          >
+            <span className="vc_pill-dot" />
+            <span className="vc_pill-label">{statusLabel}</span>
           </div>
         )}
 

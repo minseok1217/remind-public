@@ -286,6 +286,7 @@ export const useScribeSpeechRecognition = ({
     const currentNoResultMs = options.noResultMs || noResultMs;
     const currentFinalizeDelayMs = options.finalizeDelayMs || finalizeDelayMs;
     const currentWebSpeechSilenceMs = options.webSpeechSilenceMs || webSpeechSilenceMs;
+    const currentPreferWebSpeech = options.preferWebSpeech ?? preferWebSpeech;
     safeDisconnect();
     try {
       webRecognitionRef.current?.stop();
@@ -309,13 +310,13 @@ export const useScribeSpeechRecognition = ({
       return;
     }
 
-    if ((preferWebSpeech && webSpeechSupported) || !scribeSupported || scribeFailedRef.current) {
+    if ((currentPreferWebSpeech && webSpeechSupported) || !scribeSupported || scribeFailedRef.current) {
       console.log('[SpeechDebug] Web Speech fallback reason:', {
         sessionId,
-        reason: preferWebSpeech && webSpeechSupported
+        reason: currentPreferWebSpeech && webSpeechSupported
           ? 'preferWebSpeech'
           : (!scribeSupported ? 'scribeUnsupported' : 'scribeFailed'),
-        preferWebSpeech,
+        preferWebSpeech: currentPreferWebSpeech,
         scribeSupported,
         scribeFailed: scribeFailedRef.current,
       });

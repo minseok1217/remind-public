@@ -27,6 +27,7 @@ function preprocessTTS(text) {
 let currentAudio = null;
 let currentAbortController = null;
 let ttsGeneration = 0;
+const STREAM_MIME_TYPE = 'audio/mpeg';
 
 // 원래 코드
 // export const cancelTTS = () => {
@@ -126,10 +127,148 @@ export const webSpeak = (text, generation = ttsGeneration, options = {}) =>
     }, 300);
   });
 
+const appendSourceBuffer = (sourceBuffer, chunk) =>
+  new Promise((resolve, reject) => {
+    const onUpdateEnd = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error('MediaSource append failed'));
+    };
+    const cleanup = () => {
+      sourceBuffer.removeEventListener('updateend', onUpdateEnd);
+      sourceBuffer.removeEventListener('error', onError);
+    };
+    sourceBuffer.addEventListener('updateend', onUpdateEnd, { once: true });
+    sourceBuffer.addEventListener('error', onError, { once: true });
+    sourceBuffer.appendBuffer(chunk);
+  });
+
+const ttsStream = async (text, generation, options = {}) => {
+  if (!ELEVENLABS_API_KEY || !window.MediaSource || !MediaSource.isTypeSupported(STREAM_MIME_TYPE)) {
+    return tts(text, { ...options, stream: false });
+  }
+
+  const abortController = new AbortController();
+  currentAbortController = abortController;
+  const mediaSource = new MediaSource();
+  const url = URL.createObjectURL(mediaSource);
+  const audio = new Audio(url);
+  currentAudio = audio;
+
+  let objectUrlRevoked = false;
+  const cleanup = () => {
+    if (objectUrlRevoked) return;
+    objectUrlRevoked = true;
+    try { audio.pause(); audio.src = ''; } catch {}
+    URL.revokeObjectURL(url);
+    if (currentAudio === audio) currentAudio = null;
+    if (currentAbortController === abortController) currentAbortController = null;
+  };
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let collectedChunks = [];
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      resolve();
+    };
+    const fallbackToStandardTTS = () => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      tts(text, { ...options, stream: false }).then(resolve);
+    };
+
+    audio.onplay = () => {
+      if (generation === ttsGeneration) options.onSpeechStart?.();
+    };
+    audio.onended = finish;
+    audio.onerror = finish;
+
+    mediaSource.addEventListener('sourceopen', async () => {
+      let sourceBuffer = null;
+      try {
+        if (generation !== ttsGeneration) {
+          finish();
+          return;
+        }
+
+        sourceBuffer = mediaSource.addSourceBuffer(STREAM_MIME_TYPE);
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?output_format=mp3_44100_128`,
+          {
+            method: 'POST',
+            signal: abortController.signal,
+            headers: {
+              'xi-api-key': ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+              Accept: STREAM_MIME_TYPE,
+            },
+            body: JSON.stringify({
+              text,
+              model_id: 'eleven_multilingual_v2',
+              voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+            }),
+          }
+        );
+
+        if (!response.ok || !response.body || generation !== ttsGeneration) {
+          if (generation === ttsGeneration) fallbackToStandardTTS();
+          else finish();
+          return;
+        }
+
+        const reader = response.body.getReader();
+        let startedPlayback = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || generation !== ttsGeneration) break;
+          if (!value?.length) continue;
+
+          const chunk = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+          collectedChunks.push(chunk);
+          await appendSourceBuffer(sourceBuffer, chunk);
+
+          if (!startedPlayback) {
+            startedPlayback = true;
+            audio.play().catch(() => {});
+          }
+        }
+
+        if (generation === ttsGeneration && collectedChunks.length) {
+          try {
+            const blob = new Blob(collectedChunks, { type: STREAM_MIME_TYPE });
+            Promise.resolve(options.onAudioBlob?.(blob, text)).catch(() => {});
+          } catch {}
+        }
+
+        if (mediaSource.readyState === 'open') {
+          try { mediaSource.endOfStream(); } catch {}
+        }
+      } catch (err) {
+        if (err?.name !== 'AbortError' && generation === ttsGeneration) {
+          try { if (mediaSource.readyState === 'open') mediaSource.endOfStream('network'); } catch {}
+          fallbackToStandardTTS();
+          return;
+        }
+        finish();
+      }
+    }, { once: true });
+  });
+};
+
 export const tts = async (rawText, options = {}) => {
   const text = preprocessTTS(rawText);
   const generation = ttsGeneration;
   if (options.preferBrowser) return webSpeak(text, generation, options);
+  if (options.stream) return ttsStream(text, generation, options);
   if (!ELEVENLABS_API_KEY) return webSpeak(text, generation, options);
   const abortController = new AbortController();
   currentAbortController = abortController;
