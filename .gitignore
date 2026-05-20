@@ -3,3 +3,4 @@ node_modules
 photo
 .env
 src/config.js
+remind_web/.firebase
