@@ -1646,13 +1646,13 @@ function VoiceChatScreen({ onBack }) {
           endSignalCountRef.current = 0;
           setUiState('ready');
           setStatus('아직 통화를 이어갈게요. 천천히 말씀해 주세요.');
-          scheduleAutoListen(getAutoListenDelay());
+          if (!displayText) scheduleAutoListen(getAutoListenDelay());
         }
       } else {
         endSignalCountRef.current = 0;
         setUiState('ready');
         setStatus('천천히 이어서 말씀해 주세요.');
-        scheduleAutoListen(getAutoListenDelay());
+        if (!displayText) scheduleAutoListen(getAutoListenDelay());
       }
     } catch (error) {
       console.error('❌ Gemini 오류:', error);
