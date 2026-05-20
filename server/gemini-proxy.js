@@ -137,14 +137,13 @@ app.get('/api/elevenlabs/scribe-token', async (req, res) => {
   }
   try {
     const response = await fetch(
-      'https://api.elevenlabs.io/v1/speech-to-text/streaming/create-signed-url',
+      'https://api.elevenlabs.io/v1/single-use-token/realtime_scribe',
       {
         method: 'POST',
         headers: {
           'xi-api-key': ELEVENLABS_API_KEY,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ expiry_time_seconds: 60 }),
       }
     );
     if (!response.ok) {
@@ -152,7 +151,9 @@ app.get('/api/elevenlabs/scribe-token', async (req, res) => {
       return res.status(response.status).json({ error: errText });
     }
     const data = await response.json();
-    return res.json({ token: data.signed_url || data.token });
+    return res.json({
+      token: data.token || data.single_use_token || data.access_token || null,
+    });
   } catch (err) {
     console.error('Scribe token error:', err);
     return res.status(500).json({ error: err.message });
