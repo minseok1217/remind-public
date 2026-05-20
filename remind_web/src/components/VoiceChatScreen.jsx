@@ -30,7 +30,7 @@ const STATUS_ECHO_PHRASES = [
   '확인하고 있어요',
 ];
 const PRE_CALL_CHECK_QUESTIONS = [
-  '안녕하세요. 저는 Remind 서비스 상담사입니다. 회상 요법을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
+  '안녕하세요. 저는 리마인드 서비스 상담사입니다. 회상 요뻡을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
   '오늘 식사는 잘 챙겨 드셨어요?',
   '오늘 드셔야 하는 약은 챙겨 드셨나요?',
   '어젯밤에는 잠을 편하게 주무셨나요?',
@@ -88,7 +88,7 @@ const summarizeTtsAudioForCallLog = (audio, text) => {
   return summarized ? { ...summarized, ttsText: text || null } : null;
 };
 
-const buildConversationMessages = (chatHistory) => {
+const buildConversationMessages = (chatHistory, patientName = 'OO') => {
   let patientTurn = 0;
   return (chatHistory || [])
     .map((msg, index) => {
@@ -99,7 +99,7 @@ const buildConversationMessages = (chatHistory) => {
         id: `msg_${index}`,
         order: index,
         role,
-        speaker: role === 'patient' ? 'OO님' : 'AI',
+        speaker: role === 'patient' ? `${patientName}님` : 'AI',
         text,
       };
       if (role === 'patient') {
@@ -363,6 +363,7 @@ function VoiceChatScreen({ onBack }) {
   const patientRecorderStreamRef = useRef(null);
   const patientAudioChunksRef = useRef([]);
   const pendingPatientAudioRef = useRef(null);
+  const patientNameRef = useRef('OO');
   const {
     supported: speechSupported,
     startListening: startSpeechRecognition,
@@ -974,6 +975,16 @@ function VoiceChatScreen({ onBack }) {
     return userId;
   };
 
+  const loadUserName = async (userId) => {
+    try {
+      const snap = await getDoc(doc(db, 'users', userId));
+      const name = snap.exists() ? snap.data()?.name : null;
+      patientNameRef.current = name || auth.currentUser?.displayName || 'OO';
+    } catch {
+      patientNameRef.current = auth.currentUser?.displayName || 'OO';
+    }
+  };
+
   const loadConversationDifficulty = async (ownerId) => {
     try {
       const snap = await getDoc(doc(db, 'patients', ownerId));
@@ -1199,11 +1210,11 @@ function VoiceChatScreen({ onBack }) {
         photoContext: usedPhotoContext,
         llmReport
       });
-      const messages = buildConversationMessages(chatHistoryRef.current);
+      const messages = buildConversationMessages(chatHistoryRef.current, patientNameRef.current);
       const patientUtterances = messages.filter((message) => message.role === 'patient');
       const reportWithEvidence = attachReportEvidence(analysis.report || llmReport || null, messages);
       const conversationText = chatHistoryRef.current.map((msg) => {
-        const role = msg.role === 'user' ? 'OO님' : 'AI';
+        const role = msg.role === 'user' ? `${patientNameRef.current}님` : 'AI';
         return `${role}: ${msg.parts[0]?.text || ''}`;
       }).join('\n');
       const previousCallLog = await loadLatestPreviousCallLog(user.uid);
@@ -1322,7 +1333,12 @@ function VoiceChatScreen({ onBack }) {
           index: preCallCheckRef.current.index,
           text,
         });
-        await handlePreCallAnswer(text);
+        processingRef.current = true;
+        try {
+          await handlePreCallAnswer(text);
+        } finally {
+          processingRef.current = false;
+        }
       } else {
         console.log('[VoiceDebug] Gemini 대화로 전달:', { text });
         await sendTextToGemini(text);
@@ -1488,6 +1504,8 @@ function VoiceChatScreen({ onBack }) {
         return;
       }
       const ownerId = await resolvePhotoOwnerId(user.uid);
+      if (!isActiveStartup(startupId)) return;
+      await loadUserName(user.uid);
       if (!isActiveStartup(startupId)) return;
       await loadConversationDifficulty(ownerId);
       if (!isActiveStartup(startupId)) return;
