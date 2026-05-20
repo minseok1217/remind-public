@@ -43,7 +43,7 @@ export const useScribeSpeechRecognition = ({
 
   const safeDisconnect = () => {
     try {
-      scribe.disconnect();
+      Promise.resolve(scribe.disconnect()).catch(() => {});
     } catch {
       // WebSocket may already be closed or not connected yet.
     }

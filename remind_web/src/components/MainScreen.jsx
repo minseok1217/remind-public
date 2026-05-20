@@ -497,7 +497,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
             <div className="main-header-content">
               <div className="user-type">보호자</div>
               <span className="greeting">안녕하세요! </span>
-              <span className="username">{patientInfo?.name || '환자'}환자 보호자님 </span>
+              <span className="username">{patientInfo?.name || '환자'}님과 연결되어 있습니다. </span>
             </div>
           ) : (
             <span className="username">안녕하세요! {patientInfo?.name || '사용자'}님</span>
