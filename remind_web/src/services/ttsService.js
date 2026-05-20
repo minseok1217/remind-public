@@ -89,8 +89,7 @@ export const cancelTTS = () => {
     if (window?.speechSynthesis?.cancel) {
       window.speechSynthesis.cancel();
     }
-  } catch (e) {
-    console.warn('cancelTTS error:', e);
+  } catch {
   }
 
   if (currentAudio) {
@@ -153,11 +152,12 @@ export const tts = async (rawText, options = {}) => {
     if (currentAbortController === abortController) currentAbortController = null;
     if (generation !== ttsGeneration) return;
     if (!r.ok) {
-      console.warn(`[TTS] ElevenLabs ${r.status} → webSpeak 전환`);
       return webSpeak(text, generation, options);
     }
     const blob = await r.blob();
-    await options.onAudioBlob?.(blob, text);
+    try {
+      Promise.resolve(options.onAudioBlob?.(blob, text)).catch(() => {});
+    } catch {}
     if (generation !== ttsGeneration) return;
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
@@ -187,7 +187,6 @@ export const tts = async (rawText, options = {}) => {
   } catch (err) {
     if (currentAbortController === abortController) currentAbortController = null;
     if (err?.name === 'AbortError' || generation !== ttsGeneration) return;
-    console.warn('[TTS] 네트워크 오류:', err);
     return webSpeak(text, generation, options);
   }
 };

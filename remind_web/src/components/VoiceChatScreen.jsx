@@ -87,12 +87,6 @@ const summarizeTtsAudioForCallLog = (audio, text) => {
 
 const buildConversationMessages = (chatHistory, patientName = 'OO') => {
   const resolvedPatientName = String(patientName || '').trim() || 'OO';
-  console.log('[VoiceChat] buildConversationMessages 환자 이름 적용:', {
-    requestedPatientName: patientName,
-    resolvedPatientName,
-    usedFallbackOO: resolvedPatientName === 'OO',
-    historyLength: chatHistory?.length || 0,
-  });
 
   let patientTurn = 0;
   return (chatHistory || [])
@@ -682,17 +676,12 @@ function VoiceChatScreen({ onBack }) {
 
   const scheduleAutoListen = (delay = AUTO_LISTEN_DELAY_MS) => {
     if (!autoListenEnabledRef.current || isEndingCallRef.current) {
-      console.log(`[VoiceDebug] 자동 듣기 예약 건너뜀: autoListen=${autoListenEnabledRef.current}, ending=${isEndingCallRef.current}`);
       return;
     }
     clearAutoListenTimer();
-    console.log(`[VoiceDebug] 자동 듣기 예약: delay=${delay}, androidBridge=${Boolean(window.AndroidSpeechBridge?.startListening)}`);
     autoListenTimerRef.current = setTimeout(() => {
       if (autoListenEnabledRef.current && !isEndingCallRef.current && !isRecordingRef.current && !processingRef.current && !isSpeakingRef.current && uiStateRef.current === 'ready') {
-        console.log('[VoiceDebug] 자동 듣기 시작 조건 충족');
         startRecording();
-      } else {
-        console.log(`[VoiceDebug] 자동 듣기 시작 조건 불충족: autoListen=${autoListenEnabledRef.current}, ending=${isEndingCallRef.current}, recording=${isRecordingRef.current}, processing=${processingRef.current}, speaking=${isSpeakingRef.current}, uiState=${uiStateRef.current}`);
       }
     }, delay);
   };
@@ -708,7 +697,6 @@ function VoiceChatScreen({ onBack }) {
   const handleNoSpeechRetry = (reason) => {
     noSpeechRetryCountRef.current += 1;
     const retryDelay = getNoSpeechRetryDelay();
-    console.warn(`[VoiceDebug] 음성 인식 결과 없음, 자동 재시도 지연: reason=${reason}, retryCount=${noSpeechRetryCountRef.current}, retryDelay=${retryDelay}, androidBridge=${Boolean(window.AndroidSpeechBridge?.startListening)}`);
 
     setUiState('ready');
     setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
@@ -752,7 +740,6 @@ function VoiceChatScreen({ onBack }) {
     pendingPatientAudioRef.current = null;
     patientAudioChunksRef.current = [];
     if (isAndroidSpeechBridgeAvailable()) {
-      console.log('[VoiceDebug] Android 네이티브 음성인식 사용 중: Web MediaRecorder 녹음 생략');
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
@@ -791,8 +778,7 @@ function VoiceChatScreen({ onBack }) {
         };
       };
       recorder.start();
-    } catch (error) {
-      console.warn('[VoiceChat] 환자 발화 녹음 시작 실패:', error);
+    } catch {
     }
   };
 
@@ -847,8 +833,7 @@ function VoiceChatScreen({ onBack }) {
         size: audio.size || null,
         durationMs: audio.durationMs || null,
       };
-    } catch (error) {
-      console.warn('[VoiceChat] 발화 녹음 Storage 업로드 실패:', error);
+    } catch {
       return summarizeAudioForCallLog(audio);
     }
   };
@@ -928,27 +913,15 @@ function VoiceChatScreen({ onBack }) {
 
   const buildFallbackPhotoFromOrientation = async () => {
     try {
-      console.log('[VoiceChat] 보호자 사진 없음/URL 없음 → orientation_images fallback 조회 시작');
       const snap = await getDocs(collection(db, 'orientation_images'));
       const docs = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
         .filter((item) => getPhotoUrl(item));
 
-      console.log('[VoiceChat] orientation_images 조회 결과:', {
-        totalDocs: snap.docs.length,
-        usableDocs: docs.length,
-      });
-
       if (docs.length === 0) return null;
 
       const selected = docs[Math.floor(Math.random() * docs.length)];
       const photoUrl = getPhotoUrl(selected);
-      console.log('[VoiceChat] orientation fallback 사진 선택:', {
-        id: selected.id,
-        type: selected.type,
-        hasUrl: Boolean(photoUrl),
-        urlPreview: photoUrl ? photoUrl.slice(0, 80) : '',
-      });
       const fallbackPhoto = {
         ...selected,
         id: `orientation_${selected.id}`,
@@ -968,8 +941,7 @@ function VoiceChatScreen({ onBack }) {
         photo: fallbackPhoto,
         context: extractPhotoContext(fallbackPhoto),
       };
-    } catch (error) {
-      console.warn('[VoiceChat] orientation_images fallback 로드 실패:', error);
+    } catch {
       return null;
     }
   };
@@ -983,12 +955,6 @@ function VoiceChatScreen({ onBack }) {
   const getCurrentPatientName = () => {
     const name = String(patientNameRef.current || '').trim();
     const resolvedName = name || auth.currentUser?.displayName || 'OO';
-    console.log('[VoiceChat] 현재 환자 이름 확인:', {
-      patientNameRef: patientNameRef.current,
-      authDisplayName: auth.currentUser?.displayName || null,
-      resolvedName,
-      usedFallbackOO: resolvedName === 'OO',
-    });
     return resolvedName;
   };
 
@@ -997,23 +963,8 @@ function VoiceChatScreen({ onBack }) {
       const snap = await getDoc(doc(db, 'users', userId));
       const name = snap.exists() ? snap.data()?.name : null;
       patientNameRef.current = String(name || auth.currentUser?.displayName || 'OO').trim() || 'OO';
-      console.log('[VoiceChat] 환자 이름 로드 성공:', {
-        userId,
-        userDocExists: snap.exists(),
-        firestoreName: name || null,
-        authDisplayName: auth.currentUser?.displayName || null,
-        resolvedPatientName: patientNameRef.current,
-        usedFallbackOO: patientNameRef.current === 'OO',
-      });
-    } catch (error) {
+    } catch {
       patientNameRef.current = String(auth.currentUser?.displayName || 'OO').trim() || 'OO';
-      console.warn('[VoiceChat] 환자 이름 로드 실패, fallback 사용:', {
-        userId,
-        authDisplayName: auth.currentUser?.displayName || null,
-        resolvedPatientName: patientNameRef.current,
-        usedFallbackOO: patientNameRef.current === 'OO',
-        error,
-      });
     }
   };
 
@@ -1022,12 +973,7 @@ function VoiceChatScreen({ onBack }) {
       const snap = await getDoc(doc(db, 'patients', ownerId));
       const difficulty = snap.exists() ? snap.data()?.difficulty : null;
       conversationDifficultyRef.current = difficulty || '중';
-      console.log('[VoiceChat] 대화 난이도 설정:', {
-        ownerId,
-        difficulty: conversationDifficultyRef.current,
-      });
-    } catch (error) {
-      console.warn('[VoiceChat] 난이도 로드 실패, 기본값 중 사용:', error);
+    } catch {
       conversationDifficultyRef.current = '중';
     }
   };
@@ -1061,8 +1007,7 @@ function VoiceChatScreen({ onBack }) {
         durationMs: null,
         ttsText: text || null,
       };
-    } catch (error) {
-      console.warn('[VoiceChat] AI 음성 Storage 업로드 실패:', error);
+    } catch {
       return null;
     }
   };
@@ -1199,7 +1144,6 @@ function VoiceChatScreen({ onBack }) {
         elapsedMs: Math.round(performance.now() - reactionStartAt),
         error: e,
       });
-      console.error('generatePreCallReaction error:', e);
     }
 
     const reactionText = reactionResult?.reaction || getPreCallReaction(currentIndex, text);
@@ -1229,8 +1173,7 @@ function VoiceChatScreen({ onBack }) {
       const photoRef = doc(db, 'users', ownerId, 'photos', photoId);
       await updateDoc(photoRef, { callStatus: '통화후', tag: '통화 후', lastCallDate: new Date().toISOString() });
       currentPhotoIdRef.current = null;
-    } catch (error) {
-      console.error('❌ 상태 업데이트 오류:', error);
+    } catch {
     }
   };
 
@@ -1243,8 +1186,7 @@ function VoiceChatScreen({ onBack }) {
         .sort((a, b) => getDateMillis(b.callDate || b.createdAt) - getDateMillis(a.callDate || a.createdAt));
 
       return callLogs[0] || null;
-    } catch (error) {
-      console.warn('[VoiceChat] 이전 call_logs 조회 실패:', error);
+    } catch {
       return null;
     }
   };
@@ -1342,31 +1284,22 @@ function VoiceChatScreen({ onBack }) {
         status: analysis.status.label, cognitiveScore: analysis.scores.cognitive, createdAt: serverTimestamp()
       });
       await addDoc(collection(db, 'call_logs'), callLogData);
-    } catch (error) {
+    } catch {
       callLogSavedRef.current = false;
-      console.error('❌ 통화 기록 저장 오류:', error);
     }
   };
 
   const finalizeRecognizedSpeech = async (recognizedText = '') => {
-    console.log('[VoiceDebug] finalizeRecognizedSpeech 호출:', {
-      recognizedText,
-      finalTranscript: finalTranscriptRef.current,
-      interimTranscript: interimTranscriptRef.current,
-    });
     clearSilenceTimer();
     await stopPatientAudioRecording();
     const text = (recognizedText || `${finalTranscriptRef.current} ${interimTranscriptRef.current}`).replace(/\s+/g, ' ').trim();
-    console.log('[VoiceDebug] 최종 사용자 발화 정리:', { text, hasText: Boolean(text) });
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     if (!text) {
-      console.warn('[VoiceDebug] 최종 발화 없음 → 다시 듣기 예약');
       handleNoSpeechRetry('empty-final-text');
       return;
     }
     if (isStatusEchoUtterance(text)) {
-      console.warn(`[VoiceDebug] 상태 문구 에코 무시: text=${text}`);
       setUiState('ready');
       setStatus('천천히 말씀해 주세요.');
       pendingPatientAudioRef.current = null;
@@ -1374,7 +1307,6 @@ function VoiceChatScreen({ onBack }) {
       return;
     }
     if (isLikelyIncompleteUtterance(text)) {
-      console.warn('[VoiceDebug] 불완전 발화로 판단:', { text });
       setCaption(`당신: ${text}`);
       setUiState('ready');
       setStatus('천천히 이어서 말씀해 주세요.');
@@ -1386,10 +1318,6 @@ function VoiceChatScreen({ onBack }) {
     setUiState('processing');
       setStatus(preCallCheckRef.current.active ? '확인하고 있어요...' : '대답을 생각하는 중...');
       if (preCallCheckRef.current.active) {
-        console.log('[VoiceDebug] 사전 체크 답변 처리로 전달:', {
-          index: preCallCheckRef.current.index,
-          text,
-        });
         processingRef.current = true;
         try {
           await handlePreCallAnswer(text);
@@ -1397,21 +1325,12 @@ function VoiceChatScreen({ onBack }) {
           processingRef.current = false;
         }
       } else {
-        console.log('[VoiceDebug] Gemini 대화로 전달:', { text });
         await sendTextToGemini(text);
       }
   };
 
   const startRecording = () => {
-    console.log('[VoiceDebug] startRecording 요청:', {
-      isSpeaking: isSpeakingRef.current,
-      processing: processingRef.current,
-      isEndingCall: isEndingCallRef.current,
-      isRecording: isRecordingRef.current,
-      uiState: uiStateRef.current,
-    });
     if (isSpeakingRef.current || processingRef.current || isEndingCallRef.current || isRecordingRef.current) {
-      console.warn('[VoiceDebug] startRecording 차단됨');
       return;
     }
     try {
@@ -1426,7 +1345,6 @@ function VoiceChatScreen({ onBack }) {
       interimTranscriptRef.current = '';
       stopMicStream();
       startPatientAudioRecording();
-      console.log('[VoiceDebug] 음성인식 startSpeechRecognition 호출');
       const sttStartAt = performance.now();
       console.log('[VoiceTiming][STT] 앱 녹음/인식 시작:', {
         androidBridge: isAndroidSpeechBridgeAvailable(),
@@ -1434,7 +1352,6 @@ function VoiceChatScreen({ onBack }) {
       });
       startSpeechRecognition(
         (text) => {
-          console.log('[VoiceDebug] 음성인식 onResult:', { text });
           console.log('[VoiceTiming][STT] 앱 최종 인식 완료:', {
             elapsedMs: Math.round(performance.now() - sttStartAt),
             textLength: String(text || '').length,
@@ -1444,7 +1361,6 @@ function VoiceChatScreen({ onBack }) {
           finalizeRecognizedSpeech(text);
         },
         () => {
-          console.warn('[VoiceDebug] 음성인식 onNoResult');
           console.warn('[VoiceTiming][STT] 앱 인식 결과 없음:', {
             elapsedMs: Math.round(performance.now() - sttStartAt),
           });
@@ -1456,20 +1372,17 @@ function VoiceChatScreen({ onBack }) {
         },
         {
           onTranscript: (preview) => {
-            console.log('[VoiceDebug] 음성인식 preview:', { preview });
             finalTranscriptRef.current = preview;
             interimTranscriptRef.current = '';
             setCaption(`당신: ${preview}`);
           },
         }
       );
-    } catch (err) {
-      console.error('❌ 음성인식 시작 오류:', err);
+    } catch {
     }
   };
 
   const stopRecording = () => {
-    console.log('[VoiceDebug] stopRecording');
     clearSilenceTimer();
     stopSpeechRecognition();
     stopPatientAudioRecording().then(() => {
@@ -1508,8 +1421,7 @@ function VoiceChatScreen({ onBack }) {
         elapsedMs: Math.round(performance.now() - geminiStartAt),
         responseLength: String(firstQuestion || '').length,
       });
-    } catch (error) {
-      console.warn('[VoiceChat] 첫 질문 생성 실패, 기본 질문 사용:', error);
+    } catch {
     }
 
     if (!firstQuestion) {
@@ -1547,16 +1459,10 @@ function VoiceChatScreen({ onBack }) {
     const fallback = await buildFallbackPhotoFromOrientation();
     if (!isActiveStartup(startupId)) return false;
     if (!fallback) {
-      console.warn('[VoiceChat] orientation fallback 사진도 찾지 못했습니다.');
       return false;
     }
 
     const { photo, context } = fallback;
-    console.log('[VoiceChat] fallback 사진으로 대화 시작:', {
-      id: photo.id,
-      url: photo.url,
-      description: context.description || context.detailedDescription,
-    });
     setCurrentPhoto(photo);
     currentPhotoRef.current = photo;
     currentPhotoIdRef.current = null;
@@ -1573,11 +1479,7 @@ function VoiceChatScreen({ onBack }) {
   const loadPhotoAndStart = async (startupId) => {
     try {
       const user = auth.currentUser;
-      console.log('[VoiceChat] loadPhotoAndStart 시작:', {
-        authUid: user?.uid || null,
-      });
       if (!user) {
-        console.warn('[VoiceChat] auth.currentUser가 없어 사진을 조회하지 못했습니다.');
         setStatus('로그인이 필요합니다.');
         return;
       }
@@ -1587,28 +1489,13 @@ function VoiceChatScreen({ onBack }) {
       if (!isActiveStartup(startupId)) return;
       await loadConversationDifficulty(ownerId);
       if (!isActiveStartup(startupId)) return;
-      console.log('[VoiceChat] 사진 ownerId 결정:', {
-        loginUid: user.uid,
-        ownerId,
-        isFallbackToSelf: ownerId === user.uid,
-      });
       currentPhotoOwnerIdRef.current = ownerId;
       const photosRef = collection(db, 'users', ownerId, 'photos');
       const snapshot = await getDocs(photosRef);
       if (!isActiveStartup(startupId)) return;
       const photos = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log('[VoiceChat] users/{ownerId}/photos 조회 결과:', {
-        ownerId,
-        totalPhotos: photos.length,
-        photoIds: photos.map((p) => p.id),
-      });
       const pendingPhotos = photos.filter(isUncalledPhoto);
-      console.log('[VoiceChat] 선택 가능한 사진:', {
-        pendingPhotos: pendingPhotos.length,
-        totalPhotos: photos.length,
-      });
       if (photos.length === 0) {
-        console.warn('[VoiceChat] 보호자/환자 등록 사진이 없어 fallback을 시도합니다.');
         const usedFallback = await startWithFallbackPhoto(startupId);
         if (!isActiveStartup(startupId)) return;
         if (!usedFallback) startConversationWithoutPhoto();
@@ -1629,21 +1516,6 @@ function VoiceChatScreen({ onBack }) {
         photoData = sortedByLRU[0];
       }
       const photoUrl = getPhotoUrl(photoData);
-      console.log('[VoiceChat] 사용자 사진 선택:', {
-        id: photoData.id,
-        callStatus: photoData.callStatus,
-        tag: photoData.tag,
-        hasUrl: Boolean(photoUrl),
-        urlPreview: photoUrl ? photoUrl.slice(0, 80) : '',
-        availableUrlFields: {
-          photoURL: Boolean(photoData.photoURL),
-          imageUrl: Boolean(photoData.imageUrl),
-          imageURL: Boolean(photoData.imageURL),
-          photoUrl: Boolean(photoData.photoUrl),
-          url: Boolean(photoData.url),
-          image: Boolean(photoData.image),
-        },
-      });
       const context = extractPhotoContext(photoData);
       const selectedPhoto = { ...photoData, id: photoData.id, ownerId, url: photoUrl };
       if (!isActiveStartup(startupId)) return;
@@ -1658,14 +1530,12 @@ function VoiceChatScreen({ onBack }) {
       if (photoUrl) {
         startPreCallCheck({ photoData, context });
       } else {
-        console.warn('[VoiceChat] 선택된 사용자 사진에 URL이 없어 fallback을 시도합니다:', photoData.id);
         const usedFallback = await startWithFallbackPhoto(startupId);
         if (!isActiveStartup(startupId)) return;
         if (!usedFallback) startConversationWithoutPhoto();
       }
-    } catch (error) {
+    } catch {
       if (!isActiveStartup(startupId)) return;
-      console.error('❌ 사진 로드 오류:', error);
       const usedFallback = await startWithFallbackPhoto(startupId);
       if (!isActiveStartup(startupId)) return;
       if (!usedFallback) startConversationWithoutPhoto('오늘 하루 중 기억에 남는 일을 천천히 들려주세요.');
@@ -1673,12 +1543,6 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const sendTextToGemini = async (text) => {
-    console.log('[VoiceDebug] sendTextToGemini 시작:', {
-      text,
-      historyLength: chatHistoryRef.current.length,
-      hasPhoto,
-      difficulty: conversationDifficultyRef.current,
-    });
     processingRef.current = true;
     try {
       const elapsedMinutes = Math.floor(callSeconds / 60);
@@ -1705,9 +1569,6 @@ function VoiceChatScreen({ onBack }) {
       });
       await appendPatientMessage(text);
       noSpeechRetryCountRef.current = 0;
-      console.log('[VoiceDebug] 사용자 발화 chatHistory 추가 완료:', {
-        historyLength: chatHistoryRef.current.length,
-      });
       const assistantText = canEndByTime && !fullText.includes('[END_CALL]') && !fullText.includes('[통화끝]')
         ? '오늘 대화는 여기서 마무리할게요. 함께 이야기해 주셔서 고마워요. 건강하게 쉬세요. [통화끝]'
         : fullText;
@@ -1715,12 +1576,6 @@ function VoiceChatScreen({ onBack }) {
       chatHistoryRef.current.push(assistantMessage);
       const hasEndTag = assistantText.includes('[END_CALL]') || assistantText.includes('[통화끝]');
       const displayText = cleanStageDirections(assistantText.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
-      console.log('[VoiceDebug] Gemini 응답 수신:', {
-        fullText,
-        assistantText,
-        displayText,
-        hasEndTag,
-      });
       if (displayText) { setCaption(`AI: ${displayText}`); addToTTSQueue(displayText, assistantMessage); }
       if (hasEndTag) {
         const userWantsToEnd = containsEndIntent(text);
@@ -1745,7 +1600,6 @@ function VoiceChatScreen({ onBack }) {
         if (!displayText) scheduleAutoListen(getAutoListenDelay());
       }
     } catch (error) {
-      console.error('❌ Gemini 오류:', error);
       setStatus('잘 못 들었어요. 다시 말씀해 주세요.');
       setCaption(`에러: ${error.message}`);
       setUiState('ready');
@@ -1776,7 +1630,7 @@ function VoiceChatScreen({ onBack }) {
 
     saveCallLog()
       .then(() => (hasPhoto ? markPhotoAsCompleted() : null))
-      .catch((error) => console.error('❌ 시간 제한 종료 저장 오류:', error))
+      .catch(() => {})
       .finally(() => {
         setTimeout(() => {
           alert('대화를 종료합니다. 건강하세요!');
@@ -1825,12 +1679,6 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const handleMicClick = () => {
-    console.log('[VoiceDebug] 마이크 버튼 클릭:', {
-      isSpeaking: isSpeakingRef.current,
-      isRecording,
-      uiState,
-      autoListenEnabled,
-    });
     // AI가 말하는 중 → 즉시 끊고 녹음 시작
     if (isSpeakingRef.current) {
       stopSpeaking();
@@ -1885,12 +1733,6 @@ const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking
               src={currentPhoto.url}
               alt="추억 사진"
               onError={(e) => {
-                console.error('[VoiceChat] 이미지 렌더링 실패:', {
-                  url: currentPhoto.url,
-                  photoId: currentPhoto.id,
-                  ownerId: currentPhoto.ownerId,
-                  source: currentPhoto.source || 'user_photo',
-                });
                 e.target.style.display = 'none';
                 setShowPhoto(false);
               }}

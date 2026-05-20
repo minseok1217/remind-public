@@ -49,7 +49,7 @@ export const useScribeSpeechRecognition = ({
     }
   };
 
-  const finish = (text) => {
+  const finish = (text, reason = 'result') => {
     if (completedRef.current) return;
     completedRef.current = true;
     const elapsedMs = listenStartedAtRef.current
@@ -65,13 +65,14 @@ export const useScribeSpeechRecognition = ({
       elapsedMs,
       hasText: Boolean(trimmed),
       textLength: trimmed.length,
+      reason,
     });
     if (trimmed) {
       scribeConsecutiveFailsRef.current = 0;
       onResultRef.current?.(trimmed);
     } else {
-      scribeConsecutiveFailsRef.current += 1;
-      if (scribeConsecutiveFailsRef.current >= 2) {
+      if (reason === 'scribe-error') {
+        scribeConsecutiveFailsRef.current += 1;
         scribeFailedRef.current = true;
       }
       onNoResultRef.current?.();
@@ -85,7 +86,7 @@ export const useScribeSpeechRecognition = ({
     onTranscriptRef.current?.(transcriptBufferRef.current);
     clearTimeout(finalizeTimerRef.current);
     finalizeTimerRef.current = setTimeout(() => {
-      finish(transcriptBufferRef.current);
+      finish(transcriptBufferRef.current, 'finalize-delay');
     }, finalizeDelayRef.current);
   };
 
@@ -99,26 +100,32 @@ export const useScribeSpeechRecognition = ({
     noVerbatim: true,
     onCommittedTranscript: (data) => appendTranscript(data.text),
     onCommittedTranscriptWithTimestamps: (data) => appendTranscript(data.text),
-    onError: () => finish(''),
-    onAuthError: () => finish(''),
-    onQuotaExceededError: () => finish(''),
-    onRateLimitedError: () => finish(''),
-    onInputError: () => finish(''),
-    onInsufficientAudioActivityError: () => finish(''),
+    onError: () => finish('', 'scribe-error'),
+    onAuthError: () => finish('', 'scribe-error'),
+    onQuotaExceededError: () => finish('', 'scribe-error'),
+    onRateLimitedError: () => finish('', 'scribe-error'),
+    onInputError: () => finish('', 'scribe-error'),
+    onInsufficientAudioActivityError: () => finish('', 'scribe-error'),
   });
 
   const fetchScribeToken = async () => {
     const startAt = performance.now();
     const response = await fetch(SCRIBE_TOKEN_ENDPOINT);
-    const data = await response.json().catch(() => ({}));
+    const contentType = response.headers.get('content-type') || '';
+    const rawText = await response.text();
+    const data = contentType.includes('application/json')
+      ? JSON.parse(rawText || '{}')
+      : {};
     console.log('[VoiceTiming][STT][Scribe] 토큰 응답:', {
       elapsedMs: Math.round(performance.now() - startAt),
       ok: response.ok,
       hasToken: Boolean(data.token),
+      contentType,
+      responseKeys: Object.keys(data),
     });
     if (!response.ok || !data.token) {
       scribeFailedRef.current = true;
-      throw new Error(data.error || 'Scribe token request failed');
+      throw new Error(data.error || `Scribe token request failed: contentType=${contentType || 'unknown'}`);
     }
     return data.token;
   };
@@ -214,16 +221,13 @@ export const useScribeSpeechRecognition = ({
   const startListeningAndroid = (onResult, onNoResult, onTranscript, sessionId, noResultTimeoutMs) => {
     activeProviderRef.current = 'android';
     if (!window.AndroidSpeechBridge?.startListening) {
-      console.warn('[SpeechDebug] AndroidSpeechBridge 없음');
       onNoResult?.();
       return;
     }
 
-    console.log(`[SpeechDebug] Android 네이티브 음성인식 시작 요청: sessionId=${sessionId}`);
     setIsListening(true);
     timeoutRef.current = setTimeout(() => {
       if (sessionIdRef.current !== sessionId) return;
-      console.warn(`[SpeechDebug] Android 음성인식 타임아웃: sessionId=${sessionId}, timeoutMs=${noResultTimeoutMs}`);
       try {
         window.AndroidSpeechBridge.stopListening?.();
       } catch {
@@ -235,7 +239,6 @@ export const useScribeSpeechRecognition = ({
 
     window.__androidSpeechOnTranscript = (text) => {
       if (sessionIdRef.current !== sessionId) return;
-      console.log(`[SpeechDebug] Android 중간 인식: sessionId=${sessionId}, text=${text}`);
       onTranscript?.(text || '');
     };
 
@@ -252,7 +255,6 @@ export const useScribeSpeechRecognition = ({
         hasText: Boolean(trimmed),
         textLength: trimmed.length,
       });
-      console.log(`[SpeechDebug] Android 최종 인식: sessionId=${sessionId}, hasText=${Boolean(trimmed)}, text=${trimmed}`);
       if (trimmed) onResult?.(trimmed);
       else onNoResult?.();
     };
@@ -261,7 +263,6 @@ export const useScribeSpeechRecognition = ({
       if (sessionIdRef.current !== sessionId) return;
       cleanupTimer();
       setIsListening(false);
-      console.warn(`[SpeechDebug] Android 인식 결과 없음: sessionId=${sessionId}`);
       onNoResult?.();
     };
 
@@ -269,7 +270,6 @@ export const useScribeSpeechRecognition = ({
       if (sessionIdRef.current !== sessionId) return;
       cleanupTimer();
       setIsListening(false);
-      console.warn(`[SpeechDebug] Android 음성인식 오류: sessionId=${sessionId}, code=${code}, label=${label || 'unknown'}`);
       onNoResult?.();
     };
 
@@ -278,7 +278,6 @@ export const useScribeSpeechRecognition = ({
     } catch {
       cleanupTimer();
       setIsListening(false);
-      console.error('[SpeechDebug] AndroidSpeechBridge.startListening 호출 실패');
       onNoResult?.();
     }
   };
@@ -305,27 +304,31 @@ export const useScribeSpeechRecognition = ({
     onNoResultRef.current = onNoResult;
     onTranscriptRef.current = options.onTranscript || null;
 
-    console.log(`[SpeechDebug] startListening: sessionId=${sessionId}, android=${androidSpeechSupported}, scribe=${scribeSupported}, webSpeech=${webSpeechSupported}, scribeFailed=${scribeFailedRef.current}, preferWebSpeech=${preferWebSpeech}`);
-
     if (androidSpeechSupported) {
       startListeningAndroid(onResult, onNoResult, options.onTranscript, sessionId, currentNoResultMs);
       return;
     }
 
     if ((preferWebSpeech && webSpeechSupported) || !scribeSupported || scribeFailedRef.current) {
-      console.log('[SpeechDebug] Web Speech 인식 경로 사용:', { sessionId });
+      console.log('[SpeechDebug] Web Speech fallback reason:', {
+        sessionId,
+        reason: preferWebSpeech && webSpeechSupported
+          ? 'preferWebSpeech'
+          : (!scribeSupported ? 'scribeUnsupported' : 'scribeFailed'),
+        preferWebSpeech,
+        scribeSupported,
+        scribeFailed: scribeFailedRef.current,
+      });
       startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs, sessionId);
       return;
     }
 
     setIsListening(true);
-    timeoutRef.current = setTimeout(() => finish(''), currentNoResultMs);
+    timeoutRef.current = setTimeout(() => finish('', 'no-result-timeout'), currentNoResultMs);
     try {
       activeProviderRef.current = 'elevenlabs-scribe';
-      console.log('[SpeechDebug] Scribe 토큰 요청:', { sessionId, endpoint: SCRIBE_TOKEN_ENDPOINT });
       const token = await fetchScribeToken();
       const connectStartAt = performance.now();
-      console.log('[SpeechDebug] Scribe 연결 시작:', { sessionId });
       await scribe.connect({
         token,
         modelId: 'scribe_v2_realtime',
@@ -356,8 +359,13 @@ export const useScribeSpeechRecognition = ({
           }
         };
       }
-    } catch {
-      console.warn('[SpeechDebug] Scribe 실패, Web Speech fallback 시도:', { sessionId });
+    } catch (error) {
+      scribeFailedRef.current = true;
+      console.log('[SpeechDebug] Web Speech fallback reason:', {
+        sessionId,
+        reason: 'scribeTokenOrConnectFailed',
+        error: error?.message || String(error),
+      });
       cleanupTimer();
       setIsListening(false);
       startListeningWebSpeech(onResult, onNoResult, options.onTranscript, currentWebSpeechSilenceMs, sessionId);
@@ -365,7 +373,6 @@ export const useScribeSpeechRecognition = ({
   };
 
   const stopListening = () => {
-    console.log('[SpeechDebug] stopListening');
     sessionIdRef.current += 1;
     completedRef.current = true;
     cleanupTimer();
