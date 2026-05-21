@@ -17,6 +17,23 @@ const LOCATION_OPTIONS = ['집', '산', '바다', '공원', '해외', '기타'];
 // 단계 표시기용
 const STEP_LABELS = ['사진 선택', '정보 입력', 'AI 질문', '완료'];
 const STEP_IDX = { upload: 0, step1: 1, confirm_ai: 2, step2: 2, complete: 3 };
+const PHOTO_UPLOAD_LOG = '[PHOTO_UPLOAD_DEBUG]';
+const PHOTO_TIMEOUT_MS = {
+  connectedPatient: 10000,
+  backgroundUpload: 25000,
+  storage: 18000,
+  rest: 18000,
+  compress: 12000,
+  firestore: 12000,
+};
+
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+    ),
+  ]);
 
 
 function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
@@ -109,6 +126,14 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // ─────────────────────────────────────
 
   // Canvas로 이미지 압축 → base64 data URL 반환 (Firebase Storage 불가 시 폴백)
+  const readFileAsDataURL = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => resolve(event.target.result);
+      reader.onerror = () => reject(reader.error || new Error('파일 읽기 실패'));
+      reader.readAsDataURL(file);
+    });
+
   const compressImageToDataURL = (file) =>
     new Promise((resolve, reject) => {
       const img = new Image();
@@ -129,17 +154,25 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
   // Firebase Storage REST API로 직접 업로드 (SDK 412 우회)
   const uploadViaRestAPI = async (filePath, file) => {
-    const token = await currentUser.getIdToken(true);
+    const token = await withTimeout(
+      currentUser.getIdToken(true),
+      PHOTO_TIMEOUT_MS.connectedPatient,
+      'firebase-token'
+    );
     const bucket = 'remind-aa99f.firebasestorage.app';
     const encodedPath = encodeURIComponent(filePath);
 
-    const res = await fetch(
-      `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedPath}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': file.type || 'image/jpeg', 'Authorization': `Firebase ${token}` },
-        body: file,
-      }
+    const res = await withTimeout(
+      fetch(
+        `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodedPath}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'image/jpeg', 'Authorization': `Firebase ${token}` },
+          body: file,
+        }
+      ),
+      PHOTO_TIMEOUT_MS.rest,
+      'storage-rest-upload'
     );
     if (!res.ok) {
       const errText = await res.text();
@@ -152,9 +185,21 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // [Step 0 → Step 1] 사진을 즉시 업로드하고 Firestore 초안 문서 생성
   const uploadPhotoEarly = async (fileArg) => {
     const file = fileArg || selectedFile;
+    console.log(PHOTO_UPLOAD_LOG, 'uploadPhotoEarly:start', {
+      hasFile: Boolean(file),
+      fileName: file?.name,
+      fileType: file?.type,
+      fileSize: file?.size,
+      currentUserId: currentUser?.uid,
+    });
     const rand = Math.random().toString(36).slice(2, 8);
     const fileName = `${Date.now()}_${rand}_${file.name}`;
-    const patientId = await getConnectedPatientId(currentUser.uid);
+    const patientId = await withTimeout(
+      getConnectedPatientId(currentUser.uid),
+      PHOTO_TIMEOUT_MS.connectedPatient,
+      'connected-patient'
+    );
+    console.log(PHOTO_UPLOAD_LOG, 'connectedPatientId:resolved', { patientId });
     if (!patientId) throw new Error('연결된 환자 ID를 찾을 수 없습니다.');
     const filePath = `users/${patientId}/photos/${fileName}`;
 
@@ -164,30 +209,61 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     // 1차: Firebase SDK
     try {
       const storageRef = ref(storage, filePath);
-      const snapshot = await uploadBytes(storageRef, file);
-      downloadURL = await getDownloadURL(snapshot.ref);
+      const snapshot = await withTimeout(
+        uploadBytes(storageRef, file),
+        PHOTO_TIMEOUT_MS.storage,
+        'storage-sdk-upload'
+      );
+      downloadURL = await withTimeout(
+        getDownloadURL(snapshot.ref),
+        PHOTO_TIMEOUT_MS.storage,
+        'storage-sdk-download-url'
+      );
+      console.log(PHOTO_UPLOAD_LOG, 'storageUpload:sdk:success', {
+        filePath,
+        hasDownloadURL: Boolean(downloadURL),
+      });
     } catch (sdkErr) {
       console.warn('Firebase SDK 업로드 실패, REST API 시도:', sdkErr.message);
+      console.warn(PHOTO_UPLOAD_LOG, 'storageUpload:sdk:failed', {
+        filePath,
+        error: sdkErr?.message || String(sdkErr),
+      });
     }
 
     // 2차: REST API (SDK 412 우회)
     if (!downloadURL) {
       try {
         downloadURL = await uploadViaRestAPI(filePath, file);
+        console.log(PHOTO_UPLOAD_LOG, 'storageUpload:rest:success', {
+          filePath,
+          hasDownloadURL: Boolean(downloadURL),
+        });
       } catch (restErr) {
         console.warn('REST API도 실패, Firestore 직접 저장으로 전환:', restErr.message);
+        console.warn(PHOTO_UPLOAD_LOG, 'storageUpload:rest:failed', {
+          filePath,
+          error: restErr?.message || String(restErr),
+        });
       }
     }
 
     // 3차 폴백: Canvas 압축 후 data URL을 Firestore에 직접 저장
     if (!downloadURL) {
       console.warn('Firebase Storage 사용 불가 — Firebase Console에서 Storage 버킷을 재연결하세요.');
-      downloadURL = await compressImageToDataURL(file);
+      downloadURL = await withTimeout(
+        compressImageToDataURL(file),
+        PHOTO_TIMEOUT_MS.compress,
+        'image-compress'
+      );
       storedInFirestore = true;
+      console.log(PHOTO_UPLOAD_LOG, 'storageUpload:dataUrlFallback:success', {
+        dataUrlLength: downloadURL?.length || 0,
+      });
     }
 
     const userPhotosRef = collection(db, 'users', patientId, 'photos');
-    const docRef = await addDoc(userPhotosRef, {
+    const docRef = await withTimeout(addDoc(userPhotosRef, {
       imageUrl: downloadURL,
       photoURL: downloadURL,
       uploadDate: new Date(),
@@ -198,6 +274,12 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
       callStatus: '통화전',
       analyzed: false,
       storedInFirestore,   // Storage 복구 후 마이그레이션 식별용
+    }), PHOTO_TIMEOUT_MS.firestore, 'firestore-add-photo');
+    console.log(PHOTO_UPLOAD_LOG, 'firestore:addDoc:success', {
+      patientId,
+      docId: docRef.id,
+      storedInFirestore,
+      hasImageUrl: Boolean(downloadURL),
     });
     return docRef.id;
   };
@@ -209,19 +291,23 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     const starters = buildConversationStarters(step1Data, answersData);
     const desc = caption || buildSimpleCaption(step1Data);
     const captionCategories = buildCaptionCategoriesFromStep1(step1Data);
-    await updateDoc(photoDocRef, {
-      description: desc,
-      detailedDescription: desc,
-      analyzed: true,
-      year: step1Data?.year || null,
-      people: step1Data?.people?.length ? step1Data.people : null,
-      location: step1Data?.location || null,
-      freeText: step1Data?.freeText || null,
-      finalCaption: caption || null,
-      conversationStarters: starters,
-      captionCategories,
-      answerKeywords: captionCategories,
-    });
+    await withTimeout(
+      updateDoc(photoDocRef, {
+        description: desc,
+        detailedDescription: desc,
+        analyzed: true,
+        year: step1Data?.year || null,
+        people: step1Data?.people?.length ? step1Data.people : null,
+        location: step1Data?.location || null,
+        freeText: step1Data?.freeText || null,
+        finalCaption: caption || null,
+        conversationStarters: starters,
+        captionCategories,
+        answerKeywords: captionCategories,
+      }),
+      PHOTO_TIMEOUT_MS.firestore,
+      'firestore-update-caption'
+    );
   };
 
   // 백그라운드 AI 분석 (emotion, conversationStarters 보강 + 대화 기반 추가 키워드 추출)
@@ -307,9 +393,53 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // 플로우 핸들러
   // ─────────────────────────────────────
 
-  // docId 확보 (항상 Promise 반환 — state에 있으면 즉시 resolve, 없으면 업로드 완료 대기)
-  const resolveDocId = () =>
-    photoDocId ? Promise.resolve(photoDocId) : (docIdPromiseRef.current ?? Promise.resolve(null));
+  // docId 확보: AI 질문을 건너뛰어도 저장 경로가 독립적으로 완료되도록 보장합니다.
+  const resolveDocId = async () => {
+    console.log(PHOTO_UPLOAD_LOG, 'resolveDocId:start', {
+      hasPhotoDocId: Boolean(photoDocId),
+      hasUploadPromise: Boolean(docIdPromiseRef.current),
+      hasSelectedFile: Boolean(selectedFile),
+    });
+    if (photoDocId) return photoDocId;
+
+    if (docIdPromiseRef.current) {
+      try {
+        const docId = await withTimeout(
+          docIdPromiseRef.current,
+          PHOTO_TIMEOUT_MS.backgroundUpload,
+          'background-photo-upload'
+        );
+        if (docId) setPhotoDocId(docId);
+        console.log(PHOTO_UPLOAD_LOG, 'resolveDocId:fromPromise', { docId });
+        return docId;
+      } catch {
+        console.warn(PHOTO_UPLOAD_LOG, 'resolveDocId:promiseFailedRetrying');
+        docIdPromiseRef.current = null;
+      }
+    }
+
+    if (!selectedFile) return null;
+    console.log(PHOTO_UPLOAD_LOG, 'resolveDocId:startFallbackUpload');
+
+    const uploadPromise = uploadPhotoEarly();
+    docIdPromiseRef.current = uploadPromise;
+    try {
+        const docId = await withTimeout(
+          uploadPromise,
+          PHOTO_TIMEOUT_MS.backgroundUpload,
+          'fallback-photo-upload'
+        );
+        if (docId) setPhotoDocId(docId);
+        console.log(PHOTO_UPLOAD_LOG, 'resolveDocId:fallbackUploadSuccess', { docId });
+        return docId;
+    } catch (error) {
+      docIdPromiseRef.current = null;
+      console.error(PHOTO_UPLOAD_LOG, 'resolveDocId:fallbackUploadFailed', {
+        error: error?.message || String(error),
+      });
+      throw error;
+    }
+  };
 
   const startQuestionPrefetch = (step1DataForQuestions) => {
     const requestId = questionRequestIdRef.current + 1;
@@ -336,6 +466,11 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // STEP 0: 사진 선택 → 즉시 step1 이동 (업로드 + AI 질문 생성은 백그라운드)
   const handleUploadNext = () => {
     if (!selectedFile) { alert('사진을 선택해주세요.'); return; }
+    console.log(PHOTO_UPLOAD_LOG, 'handleUploadNext', {
+      fileName: selectedFile?.name,
+      fileType: selectedFile?.type,
+      fileSize: selectedFile?.size,
+    });
 
     // 즉시 step1으로 이동 (딜레이 없음)
     setStep('step1');
@@ -367,6 +502,11 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
   // STEP confirm_ai: "아니오" → 완료 화면 (저장 확인 후 상태 업데이트)
   const handleSkipAI = () => {
     const caption = buildSimpleCaption(savedStep1);
+    console.log(PHOTO_UPLOAD_LOG, 'handleSkipAI:start', {
+      hasPhotoDocId: Boolean(photoDocId),
+      hasUploadPromise: Boolean(docIdPromiseRef.current),
+      captionLength: caption?.length || 0,
+    });
     setFinalCaption(caption);
     setStep('complete');
     setSaveStatus('saving');
@@ -379,10 +519,17 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
         const patientId = await getConnectedPatientId(currentUser.uid);
         if (!patientId) throw new Error('연결된 환자 정보를 찾을 수 없습니다. 환자 연결 상태를 확인해주세요.');
         await updateCaption(patientId, docId, savedStep1, [], caption);
+        console.log(PHOTO_UPLOAD_LOG, 'handleSkipAI:saveSuccess', {
+          patientId,
+          docId,
+        });
         setSaveStatus('success');
         runBackgroundAnalysis(patientId, docId, caption, savedStep1, []);
       } catch (err) {
         console.error('저장 실패:', err);
+        console.error(PHOTO_UPLOAD_LOG, 'handleSkipAI:saveFailed', {
+          error: err?.message || String(err),
+        });
         setSaveStatus('error');
         setSaveError(err.message);
       }
@@ -546,12 +693,39 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
             accept="image/*"
             onChange={(e) => {
               const file = e.target.files?.[0];
+              console.log(PHOTO_UPLOAD_LOG, 'singleInput:onChange', {
+                fileCount: e.target.files?.length || 0,
+                fileName: file?.name,
+                fileType: file?.type,
+                fileSize: file?.size,
+              });
               if (!file) return;
               setSelectedFile(file);
-              setPreviewURL(URL.createObjectURL(file));
-              const reader = new FileReader();
-              reader.onload = (ev) => setImageBase64(ev.target.result.split(',')[1]);
-              reader.readAsDataURL(file);
+              setPreviewURL(null);
+              readFileAsDataURL(file)
+                .then((dataUrl) => {
+                  console.log(PHOTO_UPLOAD_LOG, 'singleInput:fileReader:success', {
+                    dataUrlLength: dataUrl?.length || 0,
+                  });
+                  setPreviewURL(dataUrl);
+                  setImageBase64(String(dataUrl).split(',')[1] || '');
+                })
+                .catch((error) => {
+                  console.error(PHOTO_UPLOAD_LOG, 'singleInput:fileReader:failed', {
+                    error: error?.message || String(error),
+                  });
+                  try {
+                    const objectUrl = URL.createObjectURL(file);
+                    setPreviewURL(objectUrl);
+                    console.log(PHOTO_UPLOAD_LOG, 'singleInput:objectUrlFallback', {
+                      objectUrl,
+                    });
+                  } catch (objectUrlError) {
+                    console.error(PHOTO_UPLOAD_LOG, 'singleInput:objectUrlFallback:failed', {
+                      error: objectUrlError?.message || String(objectUrlError),
+                    });
+                  }
+                });
             }}
             style={{ display: 'none' }}
           />
@@ -597,9 +771,28 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
             multiple
             onChange={(e) => {
               const files = Array.from(e.target.files || []);
+              console.log(PHOTO_UPLOAD_LOG, 'batchInput:onChange', {
+                fileCount: files.length,
+                fileNames: files.map((file) => file.name),
+              });
               if (!files.length) return;
-              setBatchFiles(files.map(f => ({ file: f, previewURL: URL.createObjectURL(f) })));
-              setStep('batch_info');
+              Promise.all(files.map((file) =>
+                readFileAsDataURL(file)
+                  .then((dataUrl) => ({ file, previewURL: dataUrl }))
+                  .catch((error) => {
+                    console.error(PHOTO_UPLOAD_LOG, 'batchInput:fileReader:failed', {
+                      fileName: file.name,
+                      error: error?.message || String(error),
+                    });
+                    return { file, previewURL: URL.createObjectURL(file) };
+                  })
+              )).then((items) => {
+                console.log(PHOTO_UPLOAD_LOG, 'batchInput:previewsReady', {
+                  count: items.length,
+                });
+                setBatchFiles(items);
+                setStep('batch_info');
+              });
             }}
             style={{ display: 'none' }}
           />
@@ -934,9 +1127,35 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
             </p>
           </div>
 
+          {saveStatus === 'saving' && (
+            <div className="save-status-box saving">
+              <div className="ai-spinner small" />
+              <span>사진을 저장하는 중입니다...</span>
+            </div>
+          )}
+
+          {saveStatus === 'error' && (
+            <div className="save-status-box error">
+              <strong>저장에 실패했습니다.</strong>
+              <span>{saveError || '네트워크 연결과 환자 연결 상태를 확인해주세요.'}</span>
+            </div>
+          )}
+
           <div className="action-row">
-            <button className="btn-secondary" onClick={onGoToManagement}>사진 관리</button>
-            <button className="btn-primary" onClick={onBack}>홈으로</button>
+            <button
+              className="btn-secondary"
+              onClick={onGoToManagement}
+              disabled={saveStatus !== 'success'}
+            >
+              사진 관리
+            </button>
+            <button
+              className="btn-primary"
+              onClick={onBack}
+              disabled={saveStatus === 'saving'}
+            >
+              홈으로
+            </button>
           </div>
         </div>
     </div>
