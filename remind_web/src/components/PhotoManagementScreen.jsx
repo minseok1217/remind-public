@@ -9,6 +9,7 @@ import { getConnectedPatientId } from '../services/familyLinkService'; // Add th
 
 const STATUS_PRE = '통화전';
 const STATUS_POST = '통화후';
+const PHOTO_MANAGEMENT_LOG = '[PHOTO_MANAGEMENT_DEBUG]';
 
 const buildShortCaption = (photo) => {
   const parts = [];
@@ -35,6 +36,10 @@ function PhotoManagementScreen({ currentUser, onBack }) {
     if (currentUser) {
       const fetchPatientIdAndLoadPhotos = async () => {
         const connectedPatientId = await getConnectedPatientId(currentUser.uid);
+        console.log(PHOTO_MANAGEMENT_LOG, 'connectedPatientId:resolved', {
+          currentUserId: currentUser.uid,
+          connectedPatientId,
+        });
         setPatientId(connectedPatientId);
         if (connectedPatientId) {
           loadPhotos(connectedPatientId); // Pass patientId to loadPhotos
@@ -53,9 +58,11 @@ function PhotoManagementScreen({ currentUser, onBack }) {
       const targetId = id || patientId; // Use passed id or state patientId
       if (!targetId) {
         console.warn('환자 ID를 찾을 수 없어 사진을 불러오지 못했습니다.');
+        console.warn(PHOTO_MANAGEMENT_LOG, 'loadPhotos:missingPatientId');
         setIsLoading(false);
         return;
       }
+      console.log(PHOTO_MANAGEMENT_LOG, 'loadPhotos:start', { targetId });
       const userPhotosRef = collection(db, 'users', targetId, 'photos'); // Use patientId here
       const snapshot = await getDocs(userPhotosRef);
       
@@ -64,9 +71,17 @@ function PhotoManagementScreen({ currentUser, onBack }) {
         ...doc.data()
       }));
 
+      console.log(PHOTO_MANAGEMENT_LOG, 'loadPhotos:success', {
+        targetId,
+        count: photoList.length,
+        photoIds: photoList.map((photo) => photo.id),
+      });
       setPhotos(photoList);
     } catch (error) {
       console.error('사진 불러오기 실패:', error);
+      console.error(PHOTO_MANAGEMENT_LOG, 'loadPhotos:failed', {
+        error: error?.message || String(error),
+      });
     }
     setIsLoading(false);
   };

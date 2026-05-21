@@ -478,6 +478,40 @@
   margin: 0;
 }
 
+.save-status-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.save-status-box.saving {
+  color: #006b3d;
+  background: #f0fdf4;
+  border: 1px solid #c8f1dc;
+}
+
+.save-status-box.error {
+  flex-direction: column;
+  align-items: flex-start;
+  color: #b42318;
+  background: #fff4f2;
+  border: 1px solid #ffd5cf;
+}
+
+.ai-spinner.small {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+  border-top-width: 2px;
+  flex: 0 0 auto;
+}
+
 /* 수집된 정보 태그 */
 .info-tags {
   display: flex;
@@ -593,6 +627,13 @@
 }
 
 .btn-secondary:hover { background: #f0fdf4; }
+
+.btn-secondary:disabled {
+  color: #aaa;
+  border-color: #ddd;
+  background: #f7f7f7;
+  cursor: not-allowed;
+}
 
 /* ── AI 질문 확인 박스 ── */
 .confirm-box {
