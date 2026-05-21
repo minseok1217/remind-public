@@ -22,8 +22,8 @@ const sanitizeGeminiHistory = (history = []) =>
     })
     .filter(Boolean);
 
-export const CALL_END_MINUTES = 15;
-export const REFLECTION_START_MINUTES = 12;
+export const CALL_END_MINUTES = 7;
+export const REFLECTION_START_MINUTES = 5;
 
 const normalizeCaptionCategories = (items = []) =>
   (Array.isArray(items) ? items : [])
@@ -667,6 +667,8 @@ const getSystemInstruction = (level, imageName, photoTypeKo, patientName = 'OO')
 - OO님이 새로운 정보를 말하면 반드시 그 정보에서 출발해 다음 질문을 만든다.
   예) OO님: "민석이랑 놀았어" → AI: "민석이 친구와 주로 어디서 놀았나요?"
 - OO님이 답변을 안 하거나 짧게 답하면 같은 주제를 다른 각도로 다시 물어본다.
+- 기존 사진 주제에서 이탈하면 "이제 다시 사진에 대해 이야기 해볼게요" 라는 말과 함께 사진의 주제로 돌아온다.
+- 꼬리 물기를 할때 최대한 캡션에 있는 내용으로 유도한다.
 
 [기대 응답 수준]
 - OO님이 구체적인 인물·장소·사건을 자발적으로 서술하도록 유도한다.
