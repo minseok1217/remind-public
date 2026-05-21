@@ -33,6 +33,13 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
   const [todayStatus, setTodayStatus] = useState(null);
   const [cognitiveStatus, setCognitiveStatus] = useState(null);
   const [callRecords, setCallRecords] = useState([]);
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -591,7 +598,7 @@ function MainScreen({ currentUser, onViewAllCallHistory }) {
                 <p>아직 통화 기록이 없습니다.</p>
               </div>
             ) : (
-              callRecords.slice(0,3).map((record) => (
+              callRecords.slice(0, width > 1200 ? 4 : 3).map((record) => (
               <div key={record.id} className="call-item">
                 <div className="call-list-icon">
                   <img src={call_icon} className="call_icon_img" alt="전화 아이콘" />

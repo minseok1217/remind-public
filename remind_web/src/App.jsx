@@ -93,14 +93,14 @@ function App() {
     localStorage.setItem('loggedInAccountType', accountType); // Add this line
   };
 
-  useEffect(() => {
-    // 스플래시 화면 표시 후 숨기기
-    const splashTimer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2000);
+  // useEffect(() => {
+  //   // 스플래시 화면 표시 후 숨기기
+  //   const splashTimer = setTimeout(() => {
+  //     setShowSplash(false);
+  //   }, 2000);
 
-    return () => clearTimeout(splashTimer);
-  }, []);
+  //   return () => clearTimeout(splashTimer);
+  // }, []);
 
   // K-MMSE 필요 여부 체크 (환자 전용 / 30일마다 재검사)
   const checkKMMSENeeded = async (uid) => {
@@ -244,17 +244,12 @@ function App() {
   };
 
   // 스플래시 화면 표시
-  if (showSplash) {
-    return <SplashScreen />;
-  }
+  // if (showSplash) {
+  //   return <SplashScreen />;
+  // }
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner"></div>
-        <p>로딩 중...</p>
-      </div>
-    );
+    return <SplashScreen />;
   }
 
   // 로그인하지 않은 경우

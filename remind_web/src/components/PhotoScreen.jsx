@@ -58,6 +58,8 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
 
   // ── 완료 ──
   const [finalCaption, setFinalCaption] = useState('');
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'success' | 'error'
+  const [saveError, setSaveError] = useState(null);
 
   // ─────────────────────────────────────
   // 헬퍼
@@ -362,24 +364,27 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     setStep('confirm_ai');
   };
 
-  // STEP confirm_ai: "아니오" → 즉시 완료 화면 (저장은 백그라운드)
+  // STEP confirm_ai: "아니오" → 완료 화면 (저장 확인 후 상태 업데이트)
   const handleSkipAI = () => {
     const caption = buildSimpleCaption(savedStep1);
     setFinalCaption(caption);
     setStep('complete');
+    setSaveStatus('saving');
+    setSaveError(null);
 
-    // 백그라운드: docId 확정 후 저장
     (async () => {
       try {
         const docId = await resolveDocId();
-        if (docId) {
-          const patientId = await getConnectedPatientId(currentUser.uid);
-          if (!patientId) throw new Error("연결된 환자 ID를 찾을 수 없습니다.");
-          await updateCaption(patientId, docId, savedStep1, [], caption);
-          runBackgroundAnalysis(patientId, docId, caption, savedStep1, []);
-        }
+        if (!docId) throw new Error('사진 업로드에 실패했습니다. 네트워크 연결을 확인해주세요.');
+        const patientId = await getConnectedPatientId(currentUser.uid);
+        if (!patientId) throw new Error('연결된 환자 정보를 찾을 수 없습니다. 환자 연결 상태를 확인해주세요.');
+        await updateCaption(patientId, docId, savedStep1, [], caption);
+        setSaveStatus('success');
+        runBackgroundAnalysis(patientId, docId, caption, savedStep1, []);
       } catch (err) {
-        console.error('백그라운드 저장 실패:', err);
+        console.error('저장 실패:', err);
+        setSaveStatus('error');
+        setSaveError(err.message);
       }
     })();
   };
@@ -441,23 +446,29 @@ function PhotoScreen({ currentUser, onBack, onGoToManagement }) {
     advanceOrFinish(updated, currentQIdx);
   };
 
-  // 최종: 즉시 완료 화면 → simpleCaption 즉시 저장 → AI 캡션으로 업데이트
+  // 최종: 완료 화면 → 저장 확인 후 상태 업데이트 → AI 캡션으로 업데이트
   const runFinish = (step1Data, answers) => {
     const simpleCaption = buildSimpleCaption(step1Data);
     setFinalCaption(simpleCaption);
     setStep('complete');
+    setSaveStatus('saving');
+    setSaveError(null);
 
     (async () => {
       let docId = null;
       let patientId = null;
       try {
         docId = await resolveDocId();
+        if (!docId) throw new Error('사진 업로드에 실패했습니다. 네트워크 연결을 확인해주세요.');
         patientId = await getConnectedPatientId(currentUser.uid);
-        if (!patientId) throw new Error("연결된 환자 ID를 찾을 수 없습니다.");
-        // simpleCaption 먼저 저장 — AI가 실패해도 최소한 캡션은 남음
-        if (docId) await updateCaption(patientId, docId, step1Data, answers, simpleCaption);
+        if (!patientId) throw new Error('연결된 환자 정보를 찾을 수 없습니다. 환자 연결 상태를 확인해주세요.');
+        await updateCaption(patientId, docId, step1Data, answers, simpleCaption);
+        setSaveStatus('success');
       } catch (err) {
-        console.error('초기 캡션 저장 실패:', err);
+        console.error('저장 실패:', err);
+        setSaveStatus('error');
+        setSaveError(err.message);
+        return;
       }
 
       // AI 캡션 생성 (30초 타임아웃)
