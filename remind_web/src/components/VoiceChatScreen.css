@@ -111,7 +111,7 @@
 
 /* ── 사진 표시: 정사각형, 가로 넓게 ──────────────────────────── */
 .vc_photo-display {
-  width: min(80vw, 312px);
+  width: min(80vw, 500px);
   aspect-ratio: 1 / 1;
   border-radius: 20px;
   overflow: hidden;

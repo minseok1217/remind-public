@@ -22,8 +22,8 @@ const sanitizeGeminiHistory = (history = []) =>
     })
     .filter(Boolean);
 
-export const CALL_END_MINUTES = 13;
-export const REFLECTION_START_MINUTES = 10;
+export const CALL_END_MINUTES = 15;
+export const REFLECTION_START_MINUTES = 12;
 
 const normalizeCaptionCategories = (items = []) =>
   (Array.isArray(items) ? items : [])

@@ -29,7 +29,7 @@ import info_icon_on from './assets/info_icon_on.png';
 import info_icon_off from './assets/info_icon_off.png'; 
 
 
-const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = true; // 지남력 훈련 스킵 여부 true면 안함 (디버그용)
+const SKIP_ORIENTATION_TRAINING_FOR_DEBUG = false; // 지남력 훈련 스킵 여부 true면 안함 (디버그용)
 
 function App() {
   const [activeNav, setActiveNav] = useState('home');
@@ -291,6 +291,7 @@ function App() {
   // 로그인된 경우
   return (
     <div className="app-container">
+      {userRole === '보호자' && (
       <aside className="sidebar">
           <div className="app-logo">
             <div className="logo-icon">R</div>
@@ -351,7 +352,7 @@ function App() {
               <span className="nav-label">계정 관리</span>
             </button>
           </nav>
-        </aside>
+        </aside>)}
 
       <main className="main-content">
         {activeNav === 'home' && (loggedInAccountType === 'patient' ? 

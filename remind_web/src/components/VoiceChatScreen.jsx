@@ -719,24 +719,25 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const handleNoSpeechRetry = (reason) => {
-    noSpeechRetryCountRef.current += 1;
+  noSpeechRetryCountRef.current += 1;
 
-    if (noSpeechRetryCountRef.current > VOICE_TIMING.maxNoSpeechRetries) {
-      setAutoListenEnabled(false);
-      setUserPaused(true);
-      setUiState('ready');
-      setStatus('소리가 잘 들리지 않아 자동 듣기를 잠시 멈췄어요.');
-      pendingPatientAudioRef.current = null;
-      return;
-    }
-
-    const retryDelay = getNoSpeechRetryDelay();
-
+  if (noSpeechRetryCountRef.current > VOICE_TIMING.maxNoSpeechRetries) {
+    // 카운터 리셋 추가 — 다음 수동 재개 시 다시 retry 가능하게
+    noSpeechRetryCountRef.current = 0;
+    setAutoListenEnabled(false);
+    setUserPaused(true);
     setUiState('ready');
-    setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
+    setStatus('소리가 잘 들리지 않아 자동 듣기를 잠시 멈췄어요.');
     pendingPatientAudioRef.current = null;
-    scheduleAutoListen(retryDelay);
-  };
+    return;
+  }
+
+  const retryDelay = getNoSpeechRetryDelay();
+  setUiState('ready');
+  setStatus('잘 안 들렸어요. 천천히 다시 말씀해 주세요.');
+  pendingPatientAudioRef.current = null;
+  scheduleAutoListen(retryDelay);
+};
 
   const cleanStageDirections = (text) => {
     return text.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, (match) => (match === '[END_CALL]' ? match : '')).replace(/\s{2,}/g, ' ').trim();
@@ -1893,27 +1894,28 @@ function VoiceChatScreen({ onBack }) {
   };
 
   const handleMicClick = () => {
-    // AI가 말하는 중 → 즉시 끊고 녹음 시작
-    if (isSpeakingRef.current) {
-      stopSpeaking();
-      isSpeakingRef.current = false;
-      setUserPaused(false);
-      setAutoListenEnabled(true);
-      startRecording();
-      return;
-    }    if (isRecording) {
-      // 사용자가 버튼 눌러 멈춤 → waiting dots 표시
-      setAutoListenEnabled(false);
-      setUserPaused(true);
-      stopRecording();
-      setUiState('ready');
-      setStatus('자동 듣기를 멈췄어요. 다시 누르면 재개합니다.');
-      return;
-    }
-    setAutoListenEnabled(true);
+  if (isSpeakingRef.current) {
+    stopSpeaking();
+    isSpeakingRef.current = false;
     setUserPaused(false);
+    setAutoListenEnabled(true);
+    noSpeechRetryCountRef.current = 0;  // ← 추가
     startRecording();
-  };
+    return;
+  }
+  if (isRecording) {
+    setAutoListenEnabled(false);
+    setUserPaused(true);
+    stopRecording();
+    setUiState('ready');
+    setStatus('자동 듣기를 멈췄어요. 다시 누르면 재개합니다.');
+    return;
+  }
+  setAutoListenEnabled(true);
+  setUserPaused(false);
+  noSpeechRetryCountRef.current = 0;  // ← 추가
+  startRecording();
+};
 
 const currentStateKey = isSpeakingRef.current && uiState === 'ready' ? 'speaking' : uiState;
 const statusLabel = currentStateKey === 'recording'
