@@ -990,6 +990,26 @@ export const chatWithGemini = async (message, history = [], photoContext = null,
 ${captionCategoryPrompt}
 
 이 정보를 바탕으로 OO님과 사진에 대해 따뜻하게 대화하세요.`;
+
+if (photoContext) {
+    console.log('[Gemini] 사진 정보 전달됨:', {
+      turn: safeHistory.length,
+      photoContext: {
+        detailedDescription: photoContext.detailedDescription,
+        description: photoContext.description,
+        people: photoContext.people,
+        location: photoContext.location,
+        emotion: photoContext.emotion,
+        situation: photoContext.situation,
+        conversationStarters: photoContext.conversationStarters,
+        captionCategories: photoContext.captionCategories,
+        answerKeywords: photoContext.answerKeywords,
+        finalCaption: photoContext.finalCaption,
+      },
+      captionCategoryPrompt,
+      photoInfo,  // 실제 Gemini에 들어가는 텍스트
+    });
+  }
   }
 
 

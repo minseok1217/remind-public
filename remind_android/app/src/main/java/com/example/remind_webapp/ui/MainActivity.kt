@@ -28,14 +28,13 @@ import android.net.Uri
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.webkit.ConsoleMessage
-import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
-import android.webkit.WebChromeClient
+import android.widget.LinearLayout
+import android.widget.TextView
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
-
+    private var isOpened = false
     private var backPressedTime: Long = 0
     private lateinit var webViewManager: WebViewManager
     private var startPage: String? = null
@@ -56,6 +55,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_main)
+
+        val buttonArea = findViewById<LinearLayout>(R.id.buttonArea)
+        val handle = findViewById<TextView>(R.id.handle)
+
+        buttonArea.post {
+            buttonArea.translationX = buttonArea.width.toFloat()
+        }
+
+        handle.setOnClickListener {
+            if (isOpened) {
+                buttonArea.animate()
+                    .translationX(buttonArea.width.toFloat())
+                    .setDuration(300)
+                    .start()
+                handle.text = "❮"
+            } else {
+                buttonArea.animate()
+                    .translationX(0f)
+                    .setDuration(300)
+                    .start()
+                handle.text = "❯" }
+            isOpened = !isOpened
+        }
 
         startPage = intent.getStringExtra("START_PAGE")
 
@@ -107,6 +129,34 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
+
+        val b1 = findViewById<android.widget.Button>(R.id.b1)
+        val b2 = findViewById<android.widget.Button>(R.id.b2)
+        val b3 = findViewById<android.widget.Button>(R.id.b3)
+
+        b1.setOnClickListener {
+            Log.d("TEST_LOG", "b1 클릭")
+            val jsCode = "window.openKMMSEScreenPage()"
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(jsCode, null)
+            }
+        }
+
+        b2.setOnClickListener {
+            Log.d("TEST_LOG", "b2 클릭")
+            val jsCode = "window.openOrientationTrainingScreenPage2()"
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(jsCode, null)
+            }
+        }
+
+        b3.setOnClickListener {
+            Log.d("TEST_LOG", "b3 클릭")
+            val jsCode = "window.openVoiceChatScreenPage2()"
+            webViewManager.getWebView().post {
+                webViewManager.getWebView().evaluateJavascript(jsCode, null)
+            }
+        }
 
         SplashActivity.instance?.finish()
     }

@@ -46,6 +46,8 @@ function App() {
   const [callPhase, setCallPhase] = useState('orientation');
   const [showCallButton, setShowCallButton] = useState(true);
   const forceOrientationRef = useRef(false);
+  const forceOrientationAlwaysRef = useRef(false);
+  const forceVoiceAlwaysRef = useRef(false);
   const [pendingNotificationNav, setPendingNotificationNav] = useState(false);
 
   const getOrientDateKey = (uid = currentUser?.uid) =>
@@ -60,9 +62,19 @@ function App() {
   useEffect(() => {
     if (activeNav !== 'call') {
       setCallPhase('orientation');
+
+    } else if (forceVoiceAlwaysRef.current) {
+      forceVoiceAlwaysRef.current = false;
+      setCallPhase('voice');
+
+    } else if (forceOrientationAlwaysRef.current) {
+      forceOrientationAlwaysRef.current = false;
+      setCallPhase('orientation');
+
     } else if (forceOrientationRef.current) {
       forceOrientationRef.current = false;
       setCallPhase(isOrientationDoneToday() ? 'voice' : 'orientation');
+
     } else if (isOrientationDoneToday()) {
       setCallPhase('voice');
     }
@@ -224,9 +236,28 @@ function App() {
       openCall({ forceOrientation: true });
     };
 
+    window.openOrientationTrainingScreenPage2 = () => {
+      forceOrientationAlwaysRef.current = true;
+      setCallPhase('orientation');
+      setActiveNav('call');
+    };
+
+    window.openVoiceChatScreenPage2 = () => {
+      forceVoiceAlwaysRef.current = true;
+      setCallPhase('voice');
+      setActiveNav('call');
+    };
+
+    window.openKMMSEScreenPage = () => {
+      setShowKMMSE(true);
+    };
+
     return () => {
       delete window.openVoiceChatScreenPage;
+      delete window.openVoiceChatScreenPage2;
       delete window.openOrientationTrainingScreenPage;
+      delete window.openOrientationTrainingScreenPage2;
+      delete window.openKMMSEScreenPage;
     };
   }, [currentUser]);
 

@@ -16,13 +16,9 @@ import android.os.Looper
 import android.app.NotificationManager
 
 class AlarmActivity : AppCompatActivity() {
-
     private lateinit var keyguardManager: KeyguardManager
-
     private var mediaPlayer: MediaPlayer? = null
-
     private val timeoutHandler = Handler(Looper.getMainLooper())
-
     private val autoRejectRunnable = Runnable {
         stopRingtone()
         finish()
@@ -44,8 +40,6 @@ class AlarmActivity : AppCompatActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-
-        setContentView(R.layout.activity_alarm)
 
         startRingtone()
 

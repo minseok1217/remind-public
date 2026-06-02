@@ -13,6 +13,7 @@
     "@elevenlabs/elevenlabs-js": "^2.46.0",
     "@elevenlabs/react": "^1.6.0",
     "@google/generative-ai": "^0.24.1",
+    "dotenv": "^17.4.2",
     "firebase": "^12.8.0",
     "react": "^19.2.0",
     "react-datepicker": "^9.1.0",
