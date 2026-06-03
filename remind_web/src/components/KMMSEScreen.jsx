@@ -162,7 +162,8 @@ const getDifficulty = (score, maxScore) => {
   return { level: '하', label: '중등도', color: '#ef4444' };
 };
 
-const buildSteps = (memoryWords, followPhrase, loc = {}) => {
+const buildSteps = (memoryWords, followPhrase, loc = {}, options = {}) => {
+  const { showIntroNarration = true } = options;
   const now = new Date();
   const dayNames = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
   const seasons = [null,'겨울','겨울','봄','봄','봄','여름','여름','여름','가을','가을','가을','겨울'];
@@ -170,14 +171,14 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
   const day = dayNames[now.getDay()], season = seasons[mo];
 
   return [
-    {
+    ...(showIntroNarration ? [{
       type: 'narration',
       title: '시작 전 안내',
       text: `안녕하세요, 어르신. '리마인드' 서비스를 시작하기에 앞서, 어르신의 현재 기억력을 확인해보는 시간을 가지려고 합니다.
       \n\n지금부터 몇 가지 질문을 드릴 거예요. 시험이라고 생각하지 마시고, 편안하게 대답해 주시면 됩니다.\n\n잘 모르겠다면 '잘 모르겠어요'라고 말씀하셔도 괜찮습니다.
       \n\n준비가 되셨다면 시작하겠습니다.`,
       btnLabel: '시작하기',
-    },
+    }] : []),
     {
       type: 'section_narration',
       title: '영역 1 / 시간·장소 지남력',
@@ -293,7 +294,13 @@ const buildSteps = (memoryWords, followPhrase, loc = {}) => {
 // ─────────────────────────────────────────────
 // 메인 컴포넌트
 // ─────────────────────────────────────────────
-export default function KMMSEScreen({ currentUser, existingDifficulty, onComplete }) {
+export default function KMMSEScreen({
+  currentUser,
+  existingDifficulty,
+  onComplete,
+  showIntroNarration = true,
+  readIntroNarration = false,
+}) {
   const memoryWords = useRef(pickRandom(WORD_BANK, 3)).current;
   const followPhrase = useRef(
     existingDifficulty === '상' ? pickRandom(TONGUE_TWISTERS) : pickRandom(PROVERBS)
@@ -338,11 +345,11 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
       } catch (e) {
         console.warn('위치 정보 로드 실패:', e);
       }
-      setSteps(buildSteps(memoryWords, followPhrase, loc));
+      setSteps(buildSteps(memoryWords, followPhrase, loc, { showIntroNarration }));
       setLoadingLocation(false);
     };
     load();
-  }, []);
+  }, [currentUser.uid, followPhrase, memoryWords, showIntroNarration]);
 
   const STEPS = steps || [];
 
@@ -643,7 +650,7 @@ export default function KMMSEScreen({ currentUser, existingDifficulty, onComplet
             <button
               className="kmmse-btn-primary"
               onClick={async () => {
-                if (enableNarration && currentStep.text) {
+                if (readIntroNarration && enableNarration && currentStep.text) {
                   setIsSpeaking(true);
                   await tts(currentStep.text);
                   setIsSpeaking(false);

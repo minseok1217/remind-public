@@ -261,30 +261,31 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
         return pool.length > 0 ? pool[0] : shuffle(docs.filter((d) => d.type === type))[0];
       };
 
-      const objectDoc  = pickOne('object');
-      const placeDoc   = pickOne('place');
-      const jobDoc     = pickOne('job');
-      const nameDocs   = [objectDoc, placeDoc, jobDoc].filter(Boolean);
+      const jobDoc = pickOne('job');
 
-      // 설명 문제용: 이름 문제와 겹치지 않는 문서에서 타입별 1개
-      const usedIds = new Set(nameDocs.map((d) => d.id));
-      const pickOneExcluding = (type) => {
-        const pool = shuffle(docs.filter((d) => d.type === type && !usedIds.has(d.id)));
-        return pool.length > 0 ? pool[0] : shuffle(docs.filter((d) => d.type === type && d.id !== pickOne(type)?.id))[0];
+      // 설명 문제용: 이름 문제와 가능하면 다른 직업 문서를 사용
+      const pickOneExcluding = (type, excludedId) => {
+        const freshPool = shuffle(docs.filter((d) =>
+          d.type === type && d.id !== excludedId && !recentIds.includes(d.id)
+        ));
+        if (freshPool.length > 0) return freshPool[0];
+
+        const pool = shuffle(docs.filter((d) => d.type === type && d.id !== excludedId));
+        return pool.length > 0 ? pool[0] : null;
       };
 
-      const descDocs = [pickOneExcluding('object'), pickOneExcluding('place'), pickOneExcluding('job')].filter(Boolean);
+      const descJobDoc = pickOneExcluding('job', jobDoc?.id) || jobDoc;
 
-      if (nameDocs.length === 0) throw new Error('문서 부족');
+      if (!jobDoc) throw new Error('직업 문서 부족');
 
-      // ── 이름 맞추기 3문제 ──
+      // ── 직업 이름 맞추기 1문제 ──
       const NAME_QUESTION = {
         job:    '이분의 직업은 무엇인가요?',
         place:  '이곳의 이름은 무엇인가요?',
         object: '이 물건의 이름은 무엇인가요?',
       };
 
-      const nameQs = nameDocs.map((doc) => ({
+      const nameQs = [jobDoc].map((doc) => ({
         id: doc.id,
         type: 'name',
         imageUrl: getImageUrl(doc),
@@ -295,17 +296,18 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
         explanation: `정답은 "${doc.name}"${eyo(doc.name)}!`,
       }));
 
-      // ── 설명 맞추기 3문제 (같은 type의 다른 사진 설명을 보기로 활용) ──
+      // ── 직업 설명 맞추기 1문제 ──
       const DESC_QUESTION = {
         job:    '이분은 어떤 일을 하는 사람인가요?',
         place:  '이곳은 어떤 일을 하는 곳인가요?',
         object: '이 물건은 무엇에 쓰이는 것인가요?',
       };
 
-      const descQs = descDocs.map((doc) => {
+      const descQs = [descJobDoc].filter(Boolean).map((doc) => {
         const correctDesc = doc.description || '';
         const sameType = docs.filter((d) => d.type === doc.type && d.id !== doc.id && d.description);
-        const distractors = shuffle(sameType).slice(0, 2).map((d) => d.description);
+        const fallbackPool = docs.filter((d) => d.id !== doc.id && d.description);
+        const distractors = shuffle(sameType.length >= 2 ? sameType : fallbackPool).slice(0, 2).map((d) => d.description);
         const opts = shuffle([correctDesc, ...distractors]);
         while (opts.length < 3) opts.push('알 수 없음');
         const correctIdx = opts.indexOf(correctDesc);
@@ -322,7 +324,7 @@ export default function OrientationTrainingScreen({ currentUser, onComplete, onB
         };
       });
 
-      const allQs = shuffle([...nameQs, ...descQs]);
+      const allQs = [...nameQs, ...descQs];
       if (!mountedRef.current) return;
       setQuestions(allQs);
       questionsRef.current = allQs;

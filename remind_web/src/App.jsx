@@ -42,6 +42,7 @@ function App() {
   const [subScreen, setSubScreen] = useState(null); // { type: 'callHistory' | 'callDetail', data: {} }
   const [showKMMSE, setShowKMMSE] = useState(false);
   const [kmmseExistingDifficulty, setKmmseExistingDifficulty] = useState(null);
+  const [showKMMSEIntroNarration, setShowKMMSEIntroNarration] = useState(true);
   // 환자 통화 플로우: 'orientation' → 'voice'
   const [callPhase, setCallPhase] = useState('orientation');
   const [showCallButton, setShowCallButton] = useState(true);
@@ -119,6 +120,7 @@ function App() {
     try {
       const patientSnap = await getDoc(doc(db, 'patients', uid));
       if (!patientSnap.exists()) {
+        setShowKMMSEIntroNarration(true);
         setShowKMMSE(true);
         setKmmseExistingDifficulty(null);
         return;
@@ -129,12 +131,14 @@ function App() {
 
       if (!lastDate) {
         // 한 번도 검사 안 한 경우
+        setShowKMMSEIntroNarration(true);
         setShowKMMSE(true);
         setKmmseExistingDifficulty(null);
       } else {
         // 30일 초과 시 재검사
         const daysSince = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
         if (daysSince > 30) {
+          setShowKMMSEIntroNarration(true);
           setShowKMMSE(true);
           setKmmseExistingDifficulty(diff);
         } else {
@@ -248,7 +252,11 @@ function App() {
       setActiveNav('call');
     };
 
-    window.openKMMSEScreenPage = () => {
+    window.openKMMSEScreenPage = (options = {}) => {
+      const showIntroNarration = typeof options === 'boolean'
+        ? options
+        : options.showIntroNarration !== false;
+      setShowKMMSEIntroNarration(showIntroNarration);
       setShowKMMSE(true);
     };
 
@@ -314,6 +322,8 @@ function App() {
       <KMMSEScreen
         currentUser={currentUser}
         existingDifficulty={kmmseExistingDifficulty}
+        showIntroNarration={showKMMSEIntroNarration}
+        readIntroNarration={false}
         onComplete={() => setShowKMMSE(false)}
       />
     );

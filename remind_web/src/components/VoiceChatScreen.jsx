@@ -2,7 +2,7 @@
 import { auth, db, storage } from '../firebase';
 import { collection, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { CALL_END_MINUTES, chatWithGemini, evaluateConversationReport, generateCallInsightLines, generatePreCallReaction } from '../services/geminiService';
+import { chatWithGemini, evaluateConversationReport, generateCallInsightLines, generatePreCallReaction } from '../services/geminiService';
 import { analyzeConversation } from '../services/conversationAnalysisService';
 import { getConnectedPatientId } from '../services/familyLinkService';
 import './VoiceChatScreen.css';
@@ -23,6 +23,7 @@ const SILENCE_TIMEOUT_MS = VOICE_TIMING.userSilenceMs;
 const AUTO_LISTEN_DELAY_MS = VOICE_TIMING.webAutoListenDelayMs;
 const isAndroidSpeechBridgeAvailable = () => Boolean(window.AndroidSpeechBridge?.startListening);
 const getAutoListenDelay = () => isAndroidSpeechBridgeAvailable() ? VOICE_TIMING.androidAutoListenDelayMs : AUTO_LISTEN_DELAY_MS;
+const CALL_END_MINUTES = 3;
 const CALL_END_SECONDS = CALL_END_MINUTES * 60;
 const STATUS_ECHO_PHRASES = [
   '듣고 있어요',
@@ -30,16 +31,10 @@ const STATUS_ECHO_PHRASES = [
   '생각하고 있어요',
 ];
 const PRE_CALL_CHECK_QUESTIONS = [
-  '안녕하세요. 저는 리마인드 서비스 상담사입니다. 회상 요뻡을 진행하기 전에 몸 상태를 먼저 여쭤볼게요. 오늘 몸은 좀 어떠세요?',
-  '오늘 식사는 잘 챙겨 드셨어요?',
-  '오늘 드셔야 하는 약은 챙겨 드셨나요?',
-  '어젯밤에는 잠을 편하게 주무셨나요?',
+  '안녕하세요. 저는 리마인드 서비스 상담사입니다. 회상 훈련을 진행하기 전에 컨디션만 간단히 여쭤볼게요. 오늘 컨디션은 어떠세요?',
 ];
 const PRE_CALL_TTS_AUDIO = [
-  '/tts/precall_0_ko.mp3?v=20260521-3',
-  '/tts/precall_1_ko.mp3?v=20260521-3',
-  '/tts/precall_2_ko.mp3?v=20260521-3',
-  '/tts/precall_3_ko.mp3?v=20260521-3',
+  '/tts/precall_condition_ko.mp3?v=20260603-1',
 ];
 
 const getPreCallQuestionAudioSrc = (index) => PRE_CALL_TTS_AUDIO[index] || null;
@@ -52,33 +47,17 @@ const WEB_SPEECH_SIGNAL_MISS_LIMIT = 2;
 const SCRIBE_FALLBACK_TURNS = 3;
 const ENABLE_PATIENT_AUDIO_RECORDING = false;
 const ENABLE_PHOTO_CONVERSATION_TTS_STREAMING = true;
+const PHOTO_MEMORY_QUESTION_GUIDANCE =
+  '사진을 본 느낌이나 소감은 묻지 말고, 사진 속 인물, 장소, 상황과 관련된 구체적인 기억 질문을 이어가세요.';
 
-const getPreCallReaction = (questionIndex, answerText) => {
+const getPreCallReaction = (answerText) => {
   const answer = (answerText || '').replace(/\s+/g, ' ').trim();
   const hasNegativeSignal = /아파|아프|불편|힘들|피곤|못|안\s*좋|나빠|어지|속상|걱정|별로|굶|거르|안\s*먹|못\s*먹|안\s*잤|못\s*잤|잠.*안|깼/.test(answer);
   const hasPositiveSignal = /좋|괜찮|편하|먹었|챙|잤|잘|응|네|예/.test(answer);
 
-  if (questionIndex === 0) {
-    if (hasNegativeSignal) return '말씀해 주셔서 고마워요. 불편한 곳이 있으셨군요.';
-    if (hasPositiveSignal) return '괜찮으시다니 다행이에요.';
-    return '그렇군요, 오늘 몸 상태를 알려주셔서 고마워요.';
-  }
-
-  if (questionIndex === 1) {
-    if (hasNegativeSignal) return '식사를 챙기기 어려우셨군요. 무리하지 않으셔도 괜찮아요.';
-    if (hasPositiveSignal) return '식사 챙기셨다니 다행이에요.';
-    return '알려주셔서 고마워요.';
-  }
-
-  if (questionIndex === 2) {
-    if (hasNegativeSignal) return '약은 가끔 헷갈릴 수 있어요. 보호자분께도 확인해 보면 좋겠어요.';
-    if (hasPositiveSignal) return '약도 챙기셨군요, 잘하셨어요.';
-    return '네, 약에 대해서도 말씀해 주셔서 고마워요.';
-  }
-
-  if (hasNegativeSignal) return '잠을 편히 못 주무셨군요. 오늘은 조금 더 편안하게 쉬셨으면 좋겠어요.';
-  if (hasPositiveSignal) return '잘 주무셨다니 참 다행이에요.';
-  return '수면 상태도 알려주셔서 고마워요.';
+  if (hasNegativeSignal) return '말씀해 주셔서 고마워요. 오늘은 무리하지 않고 천천히 이야기해 볼게요.';
+  if (hasPositiveSignal) return '컨디션이 괜찮으시다니 다행이에요.';
+  return '그렇군요, 오늘 컨디션을 알려주셔서 고마워요.';
 };
 
 const getMessageText = (msg) => msg?.parts?.[0]?.text || '';
@@ -1322,7 +1301,7 @@ function VoiceChatScreen({ onBack }) {
       });
     }
 
-    const reactionText = reactionResult?.reaction || getPreCallReaction(currentIndex, text);
+    const reactionText = reactionResult?.reaction || getPreCallReaction(text);
     const shouldRepeat = reactionResult?.shouldRepeat ?? false;
     if (!shouldRepeat) { preCallCheckRef.current.index += 1; }
     if (preCallCheckRef.current.index < PRE_CALL_CHECK_QUESTIONS.length) {
@@ -1624,7 +1603,7 @@ function VoiceChatScreen({ onBack }) {
         hasContext: Boolean(enrichedContext),
       });
       firstQuestion = await chatWithGemini(
-        '사전 건강 확인과 자기소개는 이미 했습니다. 몸 상태, 식사, 약, 수면, 자기소개를 반복하지 말고 바로 사진을 보며 이어질 첫 질문만 해주세요.',
+        `사전 컨디션 확인과 자기소개는 이미 했습니다. 컨디션 확인과 자기소개를 반복하지 말고 바로 사진을 보며 이어질 첫 질문만 해주세요. ${PHOTO_MEMORY_QUESTION_GUIDANCE}`,
         [],
         enrichedContext,
         conversationDifficultyRef.current,
@@ -1641,8 +1620,8 @@ function VoiceChatScreen({ onBack }) {
     if (!firstQuestion) {
       const description = enrichedContext.detailedDescription || enrichedContext.description || photoData.description || '';
       firstQuestion = description
-        ? `이제 ${description} 사진을 같이 볼게요. 이 사진을 보니 어떤 느낌이 드세요?`
-        : '이제 이 사진을 같이 볼게요. 이 사진을 보니 어떤 느낌이 드세요?';
+        ? `이제 ${description} 사진을 같이 볼게요. 사진 속에서 기억나는 일이나 떠오르는 이야기를 들려주세요.`
+        : '이제 이 사진을 같이 볼게요. 사진 속에서 기억나는 일이나 떠오르는 이야기를 들려주세요.';
     }
 
     const displayText = cleanStageDirections(firstQuestion.replace('[END_CALL]', '').replace('[통화끝]', '')).trim();
@@ -1769,8 +1748,11 @@ function VoiceChatScreen({ onBack }) {
         difficulty: conversationDifficultyRef.current,
         elapsedMinutes,
       });
+      const geminiUserMessage = hasPhoto
+        ? `${text}\n\n[진행 지침: ${PHOTO_MEMORY_QUESTION_GUIDANCE}]`
+        : text;
       const fullText = await chatWithGemini(
-        text,
+        geminiUserMessage,
         chatHistoryRef.current,
         hasPhoto ? photoKeywords : null,
         conversationDifficultyRef.current,
