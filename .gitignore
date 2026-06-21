@@ -35,3 +35,8 @@ remind_web/.firebase
 *.njsproj
 *.sln
 *.sw?
+
+# open source libraries
+submit/
+
+.obsidian/
